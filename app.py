@@ -606,12 +606,22 @@ def consultation_interface():
     # Show consultation form outside the expander if a patient is selected
     if st.session_state.get('current_consultation'):
         st.markdown("---")
-        # Find the selected patient's information
-        for patient in waiting_patients:
-            visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp = patient
-            if visit_id == st.session_state.current_consultation:
-                consultation_form(visit_id, patient_id, name)
-                break
+        # Get patient information for the selected consultation
+        conn = sqlite3.connect(db.db_name)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT v.visit_id, v.patient_id, p.name
+            FROM visits v
+            JOIN patients p ON v.patient_id = p.patient_id
+            WHERE v.visit_id = ?
+        ''', (st.session_state.current_consultation,))
+        
+        selected_patient = cursor.fetchone()
+        conn.close()
+        
+        if selected_patient:
+            visit_id, patient_id, name = selected_patient
+            consultation_form(visit_id, patient_id, name)
 
 def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     st.markdown(f"### Consultation for {patient_name}")
