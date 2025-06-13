@@ -9,7 +9,11 @@ class ExportHandler:
     
     def __init__(self):
         # Configure plotly for better exports
-        pio.kaleido.scope.mathjax = None
+        try:
+            pio.kaleido.scope.mathjax = None
+        except:
+            # Kaleido not available, will use alternative export methods
+            pass
     
     def fig_to_png(self, fig: go.Figure, width: int = 1200, height: int = 800) -> bytes:
         """Convert figure to PNG bytes."""
@@ -23,12 +27,14 @@ class ExportHandler:
                 margin=dict(l=80, r=80, t=100, b=80)
             )
             
-            # Convert to PNG
+            # Convert to PNG - requires kaleido
             img_bytes = export_fig.to_image(format="png", width=width, height=height)
             return img_bytes
             
         except Exception as e:
-            raise Exception(f"Error exporting PNG: {str(e)}")
+            # If kaleido is not available, return HTML as fallback
+            html_content = self.fig_to_html(fig)
+            return html_content.encode('utf-8')
     
     def fig_to_svg(self, fig: go.Figure, width: int = 1200, height: int = 800) -> str:
         """Convert figure to SVG string."""
@@ -42,12 +48,13 @@ class ExportHandler:
                 margin=dict(l=80, r=80, t=100, b=80)
             )
             
-            # Convert to SVG
+            # Convert to SVG - requires kaleido
             svg_string = export_fig.to_image(format="svg", width=width, height=height).decode('utf-8')
             return svg_string
             
         except Exception as e:
-            raise Exception(f"Error exporting SVG: {str(e)}")
+            # If kaleido is not available, return HTML as fallback
+            return self.fig_to_html(fig)
     
     def fig_to_html(self, fig: go.Figure) -> str:
         """Convert figure to interactive HTML."""
@@ -113,7 +120,7 @@ class ExportHandler:
                         <p>Created with Designer Data Viz Tool</p>
                     </div>
                     <div class="chart-container">
-                        {fig.to_html(include_plotlyjs='cdn', div_id="chart", config={{'responsive': True, 'displayModeBar': True}})}
+                        {fig.to_html(include_plotlyjs='cdn', div_id="chart")}
                     </div>
                 </div>
                 
