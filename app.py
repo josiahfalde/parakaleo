@@ -388,11 +388,18 @@ def new_patient_form():
                 st.info(f"**Patient ID:** {patient_id}")
                 st.info(f"**Visit ID:** {visit_id}")
                 
-                # Show vital signs form
-                st.markdown("### Record Vital Signs")
-                vital_signs_form(visit_id)
+                # Store visit_id in session state to show vital signs form
+                st.session_state.pending_vitals = visit_id
+                st.session_state.patient_name = name.strip()
+                st.rerun()
             else:
                 st.error("Please enter the patient's name.")
+    
+    # Show vital signs form outside the main form if there's a pending visit
+    if 'pending_vitals' in st.session_state:
+        st.markdown("### Record Vital Signs")
+        st.info(f"Recording vitals for **{st.session_state.patient_name}** (Visit ID: {st.session_state.pending_vitals})")
+        vital_signs_form(st.session_state.pending_vitals)
 
 def existing_patient_search():
     st.markdown("### Find Existing Patient")
@@ -429,9 +436,10 @@ def existing_patient_search():
                             st.success(f"✅ New visit created for {patient['name']}")
                             st.info(f"**Visit ID:** {visit_id}")
                             
-                            # Show vital signs form
-                            st.markdown("### Record Vital Signs")
-                            vital_signs_form(visit_id)
+                            # Store visit_id in session state to show vital signs form
+                            st.session_state.pending_vitals = visit_id
+                            st.session_state.patient_name = patient['name']
+                            st.rerun()
         else:
             st.warning("No patients found matching your search.")
 
@@ -473,6 +481,14 @@ def vital_signs_form(visit_id: str):
             conn.close()
             
             st.success("✅ Vital signs recorded! Patient is ready for consultation.")
+            
+            # Clear the pending vitals from session state
+            if 'pending_vitals' in st.session_state:
+                del st.session_state.pending_vitals
+            if 'patient_name' in st.session_state:
+                del st.session_state.patient_name
+            
+            st.rerun()
 
 def patient_queue_view():
     st.markdown("### Current Patient Queue")
