@@ -598,11 +598,20 @@ def consultation_interface():
                             st.session_state.current_consultation = visit_id
                             st.rerun()
                 
-                # Show consultation form if this patient is selected
-                if st.session_state.get('current_consultation') == visit_id:
-                    consultation_form(visit_id, patient_id, name)
+                # Show consultation button only
+                # Consultation form will be shown outside the expander
     else:
         st.info("No patients waiting for consultation.")
+    
+    # Show consultation form outside the expander if a patient is selected
+    if st.session_state.get('current_consultation'):
+        st.markdown("---")
+        # Find the selected patient's information
+        for patient in waiting_patients:
+            visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp = patient
+            if visit_id == st.session_state.current_consultation:
+                consultation_form(visit_id, patient_id, name)
+                break
 
 def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     st.markdown(f"### Consultation for {patient_name}")
