@@ -1513,10 +1513,16 @@ def consultation_interface():
                         st.metric("Temperature", f"{temp}°F")
                     with col4:
                         if st.button(f"Start Consultation", key=f"consult_{visit_id}"):
-                            st.session_state.current_consultation = visit_id
+                            # Store consultation details in session state for new page
+                            st.session_state.active_consultation = {
+                                'visit_id': visit_id,
+                                'patient_id': patient_id,
+                                'patient_name': name
+                            }
                             # Update doctor status to show they are with this patient
                             db = get_db_manager()
                             db.update_doctor_status(st.session_state.doctor_name, "with_patient", patient_id, name)
+                            st.session_state.page = 'consultation_form'
                             st.rerun()
                 
                 # Show consultation button only
@@ -1524,42 +1530,41 @@ def consultation_interface():
     else:
         st.info("No patients waiting for consultation.")
     
-    # Show consultation form outside the expander if a patient is selected
-    if st.session_state.get('current_consultation'):
-        st.markdown("---")
-        # Get patient information for the selected consultation
-        conn = sqlite3.connect("clinic_database.db")
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT v.visit_id, v.patient_id, p.name
-            FROM visits v
-            JOIN patients p ON v.patient_id = p.patient_id
-            WHERE v.visit_id = ?
-        ''', (st.session_state.current_consultation,))
-        
-        selected_patient = cursor.fetchone()
-        conn.close()
-        
-        if selected_patient:
-            visit_id, patient_id, name = selected_patient
-            consultation_form(visit_id, patient_id, name)
+
 
 def consultation_form(visit_id: str, patient_id: str, patient_name: str):
+    # Back button to return to consultation interface
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("← Back to Queue", type="secondary"):
+            st.session_state.page = 'doctor'
+            if 'active_consultation' in st.session_state:
+                del st.session_state.active_consultation
+            # Update doctor status back to available
+            db = get_db_manager()
+            db.update_doctor_status(st.session_state.doctor_name, "available")
+            st.rerun()
+    
     st.markdown(f"### Consultation for {patient_name}")
     
-    # Get patient history
-    conn = sqlite3.connect(db.db_name)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT * FROM patients WHERE patient_id = ?', (patient_id,))
-    patient_info = cursor.fetchone()
-    
-    if patient_info:
-        with st.expander("Patient Information"):
-            st.write(f"**Medical History:** {patient_info[6] or 'None recorded'}")
-            st.write(f"**Allergies:** {patient_info[7] or 'None recorded'}")
+    # Get the logged-in doctor's name
+    doctor_name = st.session_state.get('doctor_name', 'Unknown Doctor')
+    st.info(f"**Doctor:** {doctor_name} | **Patient ID:** {patient_id} | **Visit ID:** {visit_id}")
     
     with st.form(f"consultation_{visit_id}"):
+        # History Section (above chief complaint)
+        st.markdown("#### Patient History")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            surgical_history = st.text_area("Surgical History", placeholder="Previous surgeries, procedures...")
+            medical_history = st.text_area("Medical History", placeholder="Chronic conditions, past illnesses...")
+        
+        with col2:
+            allergies = st.text_area("Allergies", placeholder="Drug allergies, food allergies...")
+            current_medications = st.text_area("Current Medications", placeholder="Current medications and dosages...")
+        
+        st.markdown("---")
         # Auto-fill doctor name from logged-in session
         doctor_name = st.session_state.get('doctor_name', '')
         st.text_input("Doctor Name", value=doctor_name, disabled=True)
@@ -1587,7 +1592,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         st.markdown("#### Prescriptions")
         
         # Get preset medications and deduplicate by name
-        preset_meds = db.get_preset_medications()
+        db_manager = get_db_manager()
+        preset_meds = db_manager.get_preset_medications()
         
         # Deduplicate medications by name (keep first occurrence)
         unique_meds = {}
@@ -1681,7 +1687,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 try:
                     # Use the database manager methods instead of direct connection
                     # Save consultation
-                    db_conn = sqlite3.connect(db.db_name, timeout=10.0)
+                    db_conn = sqlite3.connect(db_manager.db_name, timeout=10.0)
                     db_conn.execute('BEGIN IMMEDIATE')
                     cursor = db_conn.cursor()
                     
@@ -1741,10 +1747,26 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     # Update doctor status back to available
                     db.update_doctor_status(st.session_state.doctor_name, "available")
                     
-                    # Clear current consultation
+                    # Clear current consultation and return to doctor interface
                     if 'current_consultation' in st.session_state:
                         del st.session_state.current_consultation
+                    if 'active_consultation' in st.session_state:
+                        del st.session_state.active_consultation
                     
+                    # Save patient history to database
+                    db_conn = sqlite3.connect(db.db_name)
+                    cursor = db_conn.cursor()
+                    cursor.execute('''
+                        UPDATE patients 
+                        SET medical_history = ?, allergies = ?
+                        WHERE patient_id = ?
+                    ''', (f"Surgical: {surgical_history}\nMedical: {medical_history}", 
+                          f"Allergies: {allergies}\nCurrent Meds: {current_medications}", 
+                          patient_id))
+                    db_conn.commit()
+                    db_conn.close()
+                    
+                    st.session_state.page = 'doctor'
                     st.rerun()
                     
                 except Exception as e:
