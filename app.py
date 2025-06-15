@@ -283,6 +283,20 @@ class DatabaseManager:
             )
         ''')
         
+        # Create patient_photos table for symptom documentation
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patient_photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visit_id TEXT,
+                patient_id TEXT,
+                photo_data BLOB,
+                photo_description TEXT,
+                captured_time TEXT,
+                FOREIGN KEY (visit_id) REFERENCES visits (visit_id),
+                FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+            )
+        ''')
+        
         # Create preset_medications table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS preset_medications (
@@ -441,7 +455,7 @@ class DatabaseManager:
         
         return patient_id
     
-    def check_duplicate_patient(self, name: str, age: int = None, phone: str = None) -> dict:
+    def check_duplicate_patient(self, name: str, age: Optional[int] = None, phone: Optional[str] = None) -> dict:
         """Check for potential duplicate patients based on name, age, and phone"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -510,6 +524,46 @@ class DatabaseManager:
         # Create new visit
         visit_id = self.create_visit(existing_patient_id)
         return visit_id
+    
+    def save_patient_photo(self, visit_id: str, patient_id: str, photo_data: bytes, description: str = "") -> int:
+        """Save a patient photo for symptom documentation"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO patient_photos (visit_id, patient_id, photo_data, photo_description, captured_time)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (visit_id, patient_id, photo_data, description, datetime.now().isoformat()))
+        
+        photo_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return photo_id or 0
+    
+    def get_patient_photos(self, patient_id: str) -> List[Dict]:
+        """Get all photos for a patient"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, visit_id, photo_description, captured_time
+            FROM patient_photos
+            WHERE patient_id = ?
+            ORDER BY captured_time DESC
+        ''', (patient_id,))
+        
+        photos = []
+        for row in cursor.fetchall():
+            photos.append({
+                'id': row[0],
+                'visit_id': row[1],
+                'description': row[2],
+                'captured_time': row[3]
+            })
+        
+        conn.close()
+        return photos
     
     def add_family_member(self, parent_id: str, location_code: str, **kwargs) -> str:
         """Add a family member under a parent"""
@@ -1282,7 +1336,7 @@ def new_patient_form():
             if st.form_submit_button("Check for Existing Patient", type="primary"):
                 if name.strip():
                     # Check for duplicate patients
-                    duplicates = db.check_duplicate_patient(name.strip(), age, phone.strip() if phone else None)
+                    duplicates = db.check_duplicate_patient(name.strip(), age if age else None, phone.strip() if phone else None)
                     
                     st.session_state.duplicate_check_results = duplicates
                     st.session_state.new_patient_data = {
@@ -1804,6 +1858,56 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         
         chief_complaint = st.text_area("Chief Complaint", placeholder="What brought the patient in today?")
         symptoms = st.text_area("Symptoms", placeholder="Describe symptoms observed/reported")
+        
+        # Photo documentation section for symptoms
+        st.markdown("#### 📸 Photo Documentation")
+        st.info("Capture photos of visible symptoms or affected areas to enhance diagnosis and treatment documentation.")
+        
+        # Camera input for symptom documentation
+        photo_file = st.camera_input("Take a photo of symptoms/affected area", key=f"symptom_photo_{visit_id}")
+        
+        if photo_file is not None:
+            # Display the captured photo
+            st.image(photo_file, caption="Captured symptom photo", width=300)
+            
+            # Add description for the photo
+            photo_description = st.text_input("Photo Description", 
+                                             placeholder="Describe what the photo shows (e.g., rash on left arm, swollen ankle, etc.)",
+                                             key=f"photo_desc_{visit_id}")
+            
+            # Store photo data in session state for later saving
+            if f"symptom_photos_{visit_id}" not in st.session_state:
+                st.session_state[f"symptom_photos_{visit_id}"] = []
+            
+            if st.button("Save Photo", key=f"save_photo_{visit_id}"):
+                if photo_description.strip():
+                    # Convert photo to bytes
+                    photo_bytes = photo_file.getvalue()
+                    
+                    # Add to session state temporarily
+                    st.session_state[f"symptom_photos_{visit_id}"].append({
+                        'data': photo_bytes,
+                        'description': photo_description.strip()
+                    })
+                    
+                    st.success(f"Photo saved: {photo_description.strip()}")
+                    st.rerun()
+                else:
+                    st.error("Please add a description for the photo.")
+        
+        # Display previously saved photos for this visit
+        if f"symptom_photos_{visit_id}" in st.session_state and st.session_state[f"symptom_photos_{visit_id}"]:
+            st.markdown("**Saved Photos for this visit:**")
+            for i, photo in enumerate(st.session_state[f"symptom_photos_{visit_id}"]):
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    st.write(f"Photo {i+1}")
+                with col2:
+                    st.write(f"📷 {photo['description']}")
+                    if st.button(f"Remove", key=f"remove_photo_{visit_id}_{i}"):
+                        st.session_state[f"symptom_photos_{visit_id}"].pop(i)
+                        st.rerun()
+        
         diagnosis = st.text_area("Diagnosis", placeholder="Your diagnosis")
         treatment_plan = st.text_area("Treatment Plan", placeholder="Recommended treatment")
         notes = st.text_area("Additional Notes", placeholder="Any additional observations")
