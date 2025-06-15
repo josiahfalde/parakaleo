@@ -584,12 +584,16 @@ class DatabaseManager:
         conn.close()
         
         # Add the family member
+        # Remove relationship from kwargs to avoid duplicate parameter
+        family_member_data = kwargs.copy()
+        relationship = family_member_data.pop('relationship', 'child')
+        
         patient_id = self.add_patient(
             location_code,
             family_id=family_id,
             parent_id=parent_id,
-            relationship=kwargs.get('relationship', 'child'),
-            **kwargs
+            relationship=relationship,
+            **family_member_data
         )
         
         return patient_id
@@ -3624,7 +3628,7 @@ def patient_management():
                 </div>
             </div>
         </div>
-        """.format(patient_to_delete['patient_name'], patient_to_delete['patient_id']), unsafe_allow_html=True)
+        """.format(patient_to_delete['patient_name'], patient_to_delete['patient_id']).replace('{', '{{').replace('}', '}}'), unsafe_allow_html=True)
         
         # Create modal dialog using Streamlit modal approach
         with st.container():
