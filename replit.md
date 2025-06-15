@@ -100,6 +100,14 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
 
 ## Changelog
 
+- June 15, 2025. Family structure redesign and navigation improvements
+  - Completely redesigned family registration to create proper family units instead of individual patient records
+  - Added families table with family_id, family_name, head_of_household, and address tracking
+  - Enhanced patients table with family_id links, is_independent flag, and separation_date for age 18+ transitions
+  - Moved back button from top right to top left next to hamburger menu as requested
+  - Fixed family vital signs workflow to process each family member sequentially
+  - Implemented create_family() and add_family_member() methods for proper family management
+  - Children are now properly linked to parents within family files but separable at age 18
 - June 15, 2025. Modern UI redesign and navigation improvements
   - Implemented BackpackEMR-inspired design with gradient buttons and hover animations
   - Added always-visible back button system with fixed positioning outside scroll area
