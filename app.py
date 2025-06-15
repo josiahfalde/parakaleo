@@ -1008,7 +1008,61 @@ def show_loading_screen():
         st.session_state.loading_shown = True
         st.rerun()
 
+def initialize_navigation():
+    """Initialize navigation history tracking"""
+    if 'nav_history' not in st.session_state:
+        st.session_state.nav_history = []
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 'home'
+
+def add_to_history(page_name):
+    """Add current page to navigation history"""
+    if 'nav_history' not in st.session_state:
+        st.session_state.nav_history = []
+    
+    # Avoid adding the same page consecutively
+    if not st.session_state.nav_history or st.session_state.nav_history[-1] != page_name:
+        st.session_state.nav_history.append(page_name)
+    
+    st.session_state.current_page = page_name
+
+def go_back():
+    """Navigate back to previous page"""
+    if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
+        # Remove current page
+        st.session_state.nav_history.pop()
+        # Get previous page
+        previous_page = st.session_state.nav_history[-1]
+        st.session_state.current_page = previous_page
+        
+        # Handle navigation based on previous page
+        if previous_page == 'home':
+            st.session_state.user_role = None
+        elif previous_page == 'role_selection':
+            st.session_state.user_role = None
+        elif previous_page.startswith('triage'):
+            st.session_state.user_role = 'triage'
+        elif previous_page.startswith('doctor'):
+            st.session_state.user_role = 'doctor'
+        elif previous_page.startswith('pharmacy'):
+            st.session_state.user_role = 'pharmacy'
+        elif previous_page.startswith('lab'):
+            st.session_state.user_role = 'lab'
+        elif previous_page.startswith('admin'):
+            st.session_state.user_role = 'admin'
+        
+        st.rerun()
+
+def show_back_button():
+    """Display universal back button on all pages"""
+    if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
+        if st.button("← Back", key="universal_back_btn", help="Go to previous page"):
+            go_back()
+
 def main():
+    # Initialize navigation
+    initialize_navigation()
+    
     # Show loading screen on first load
     show_loading_screen()
     
@@ -1437,6 +1491,8 @@ def location_setup():
                     st.error("Please enter a city name.")
 
 def triage_interface():
+    add_to_history('triage')
+    show_back_button()
     st.markdown("## 🩺 Triage Station")
     
     tab1, tab2, tab3 = st.tabs(["New Patient", "Existing Patient", "Patient Queue"])
@@ -2091,6 +2147,8 @@ def patient_queue_view():
         st.info("No patients in queue for today.")
 
 def doctor_interface():
+    add_to_history('doctor')
+    show_back_button()
     st.markdown(f"## 👨‍⚕️ Doctor Consultation - {st.session_state.doctor_name}")
     
     # Update doctor status and show real-time status of all doctors
@@ -3200,6 +3258,8 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
     conn.close()
 
 def pharmacy_interface():
+    add_to_history('pharmacy')
+    show_back_button()
     st.markdown("## 💊 Pharmacy Station")
     
     tab1, tab2, tab3 = st.tabs(["Ready to Fill", "Awaiting Lab Results", "Filled Prescriptions"])
@@ -3466,6 +3526,8 @@ def filled_prescriptions():
         st.info("No prescriptions filled today.")
 
 def lab_interface():
+    add_to_history('lab')
+    show_back_button()
     st.markdown("## 🔬 Laboratory")
     
     tab1, tab2 = st.tabs(["Pending Tests", "Lab Results"])
@@ -3821,6 +3883,8 @@ def patient_management():
             st.info("No patients in the system yet.")
 
 def admin_interface():
+    add_to_history('admin')
+    show_back_button()
     st.markdown("## Admin Dashboard")
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Patient Management", "Doctor Management", "Medication Management", "Reports", "Settings"])
