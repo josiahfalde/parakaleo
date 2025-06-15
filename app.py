@@ -1549,41 +1549,84 @@ def new_patient_form():
                         st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
                         st.rerun()
             
-            # Create visits for family members
-            st.markdown("#### Create Visits")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Create Visit for Parent", type="primary"):
-                    visit_id = db.create_visit(st.session_state.family_parent_id)
-                    st.session_state.pending_vitals = visit_id
-                    st.session_state.patient_name = st.session_state.family_parent_name
-                    st.success("Visit created for parent")
-                    st.rerun()
-            
-            with col2:
-                if st.button("Finish Family Registration", type="secondary"):
-                    if 'family_parent_id' in st.session_state:
-                        del st.session_state.family_parent_id
-                    if 'family_parent_name' in st.session_state:
-                        del st.session_state.family_parent_name
-                    st.success("Family registration completed!")
-                    st.rerun()
-            
-            # Show family members for visit creation
-            if family_members and len(family_members) > 1:
-                st.markdown("**Create visits for children:**")
+            # Automatically create visits for entire family when family registration is complete
+            st.markdown("#### Create Family Visits")
+            if st.button("Create Visits for Entire Family", type="primary", use_container_width=True):
+                family_visits = []
+                
+                # Create visit for parent
+                parent_visit_id = db.create_visit(st.session_state.family_parent_id)
+                family_visits.append({
+                    'patient_id': st.session_state.family_parent_id,
+                    'patient_name': st.session_state.family_parent_name,
+                    'visit_id': parent_visit_id,
+                    'relationship': 'parent'
+                })
+                
+                # Create visits for all children
                 for member in family_members:
                     if member['relationship'] != 'parent':
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.write(f"👶 {member['name']} ({member['age']} yrs)")
-                        with col2:
-                            if st.button(f"Create Visit", key=f"visit_{member['patient_id']}"):
-                                visit_id = db.create_visit(member['patient_id'])
-                                st.session_state.pending_vitals = visit_id
-                                st.session_state.patient_name = member['name']
-                                st.success(f"Visit created for {member['name']}")
-                                st.rerun()
+                        child_visit_id = db.create_visit(member['patient_id'])
+                        family_visits.append({
+                            'patient_id': member['patient_id'],
+                            'patient_name': member['name'],
+                            'visit_id': child_visit_id,
+                            'relationship': member['relationship']
+                        })
+                
+                # Store family consultation data
+                st.session_state.family_consultation = {
+                    'parent_id': st.session_state.family_parent_id,
+                    'parent_name': st.session_state.family_parent_name,
+                    'family_visits': family_visits
+                }
+                
+                st.success(f"✅ Created visits for entire family ({len(family_visits)} members)")
+                st.info("Family is ready for consultation. Doctor will see parent first, then children.")
+                
+                # Clear family registration state
+                if 'family_parent_id' in st.session_state:
+                    del st.session_state.family_parent_id
+                if 'family_parent_name' in st.session_state:
+                    del st.session_state.family_parent_name
+                
+                st.rerun()
+            
+            # Individual visit creation (backup option)
+            with st.expander("Create Individual Visits (if needed)", expanded=False):
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Create Visit for Parent Only", type="secondary"):
+                        visit_id = db.create_visit(st.session_state.family_parent_id)
+                        st.session_state.pending_vitals = visit_id
+                        st.session_state.patient_name = st.session_state.family_parent_name
+                        st.success("Visit created for parent")
+                        st.rerun()
+                
+                with col2:
+                    if st.button("Finish Without Visits", type="secondary"):
+                        if 'family_parent_id' in st.session_state:
+                            del st.session_state.family_parent_id
+                        if 'family_parent_name' in st.session_state:
+                            del st.session_state.family_parent_name
+                        st.success("Family registration completed!")
+                        st.rerun()
+                
+                # Show family members for individual visit creation
+                if family_members and len(family_members) > 1:
+                    st.markdown("**Create individual visits for children:**")
+                    for member in family_members:
+                        if member['relationship'] != 'parent':
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.write(f"👶 {member['name']} ({member['age']} yrs) - ID: {member['patient_id']}")
+                            with col2:
+                                if st.button(f"Create Visit", key=f"visit_{member['patient_id']}"):
+                                    visit_id = db.create_visit(member['patient_id'])
+                                    st.session_state.pending_vitals = visit_id
+                                    st.session_state.patient_name = member['name']
+                                    st.success(f"Visit created for {member['name']}")
+                                    st.rerun()
     
     # Show vital signs form outside the main form if there's a pending visit
     if 'pending_vitals' in st.session_state:
@@ -1838,28 +1881,45 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     doctor_name = st.session_state.get('doctor_name', 'Unknown Doctor')
     st.info(f"**Doctor:** {doctor_name} | **Patient ID:** {patient_id} | **Visit ID:** {visit_id}")
     
-    with st.form(f"consultation_{visit_id}"):
-        # History Section (above chief complaint)
-        st.markdown("#### Patient History")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            surgical_history = st.text_area("Surgical History", placeholder="Previous surgeries, procedures...")
-            medical_history = st.text_area("Medical History", placeholder="Chronic conditions, past illnesses...")
-        
-        with col2:
-            allergies = st.text_area("Allergies", placeholder="Drug allergies, food allergies...")
-            current_medications = st.text_area("Current Medications", placeholder="Current medications and dosages...")
-        
-        st.markdown("---")
-        # Auto-fill doctor name from logged-in session
-        doctor_name = st.session_state.get('doctor_name', '')
-        st.text_input("Doctor Name", value=doctor_name, disabled=True)
-        
-        chief_complaint = st.text_area("Chief Complaint", placeholder="What brought the patient in today?")
-        symptoms = st.text_area("Symptoms", placeholder="Describe symptoms observed/reported")
-        
-        # Photo documentation section for symptoms
+    # Check if this is a family consultation
+    is_family_consultation = 'family_consultation' in st.session_state and st.session_state.family_consultation['parent_id'] == patient_id
+    
+    if is_family_consultation:
+        st.info("👨‍👩‍👧‍👦 Family Consultation - Complete parent consultation first, then children will appear below")
+    
+    # Use tabs for consultation sections including optional photo documentation
+    tab1, tab2, tab3 = st.tabs(["📋 Consultation", "📸 Photo Documentation", "🔬 Lab & Prescriptions"])
+    
+    with tab1:
+        with st.form(f"consultation_{visit_id}"):
+            # History Section (above chief complaint)
+            st.markdown("#### Patient History")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                surgical_history = st.text_area("Surgical History", placeholder="Previous surgeries, procedures...")
+                medical_history = st.text_area("Medical History", placeholder="Chronic conditions, past illnesses...")
+            
+            with col2:
+                allergies = st.text_area("Allergies", placeholder="Drug allergies, food allergies...")
+                current_medications = st.text_area("Current Medications", placeholder="Current medications and dosages...")
+            
+            st.markdown("---")
+            # Auto-fill doctor name from logged-in session
+            doctor_name = st.session_state.get('doctor_name', '')
+            st.text_input("Doctor Name", value=doctor_name, disabled=True)
+            
+            chief_complaint = st.text_area("Chief Complaint", placeholder="What brought the patient in today?")
+            symptoms = st.text_area("Symptoms", placeholder="Describe symptoms observed/reported")
+            diagnosis = st.text_area("Diagnosis", placeholder="Your diagnosis")
+            treatment_plan = st.text_area("Treatment Plan", placeholder="Recommended treatment")
+            notes = st.text_area("Additional Notes", placeholder="Any additional observations")
+            
+            # Submit button for consultation tab
+            consultation_submitted = st.form_submit_button("Save Consultation Details", type="secondary")
+    
+    with tab2:
+        # Photo documentation section (now in its own tab)
         st.markdown("#### 📸 Photo Documentation")
         st.info("Capture photos of visible symptoms or affected areas to enhance diagnosis and treatment documentation.")
         
@@ -1907,17 +1967,129 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     if st.button(f"Remove", key=f"remove_photo_{visit_id}_{i}"):
                         st.session_state[f"symptom_photos_{visit_id}"].pop(i)
                         st.rerun()
-        
-        diagnosis = st.text_area("Diagnosis", placeholder="Your diagnosis")
-        treatment_plan = st.text_area("Treatment Plan", placeholder="Recommended treatment")
-        notes = st.text_area("Additional Notes", placeholder="Any additional observations")
-        
-        st.markdown("#### Lab Tests")
-        lab_tests = []
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.checkbox("Urinalysis"):
+    
+    with tab3:
+        with st.form(f"lab_prescriptions_{visit_id}"):
+            st.markdown("#### Lab Tests")
+            lab_tests = []
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.checkbox("Urinalysis"):
+                    lab_tests.append("Urinalysis")
+            with col2:
+                if st.checkbox("Blood Glucose"):
+                    lab_tests.append("Blood Glucose")
+            with col3:
+                if st.checkbox("Pregnancy Test"):
+                    lab_tests.append("Pregnancy Test")
+            
+            st.markdown("#### Prescriptions")
+            
+            # Get preset medications and deduplicate by name
+            db_manager = get_db_manager()
+            preset_meds = db_manager.get_preset_medications()
+            
+            # Deduplicate medications by name (keep first occurrence)
+            unique_meds = {}
+            for med in preset_meds:
+                med_name = med['medication_name']
+                if med_name not in unique_meds:
+                    unique_meds[med_name] = med
+            
+            deduplicated_meds = list(unique_meds.values())
+            med_categories = list(set(med['category'] for med in deduplicated_meds))
+            
+            selected_medications = []
+            
+            for category in sorted(med_categories):
+                with st.expander(f"{category} Medications"):
+                    category_meds = [med for med in deduplicated_meds if med['category'] == category]
+                    
+                    for med in category_meds:
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            selected = st.checkbox(f"{med['medication_name']}", key=f"med_{med['id']}_{visit_id}")
+                        
+                        with col2:
+                            # Show dosage field for pharmacy clarity
+                            col2a, col2b = st.columns(2)
+                            with col2a:
+                                pharmacy_dosage = st.text_input("Dosage for Pharmacy", 
+                                                              placeholder="e.g., 500mg twice daily for 7 days",
+                                                              key=f"pharma_dose_{med['id']}_{visit_id}")
+                            with col2b:
+                                indication = st.text_input("Indication", 
+                                                         placeholder="e.g., UTI, hypertension",
+                                                         key=f"indication_{med['id']}_{visit_id}")
+                        
+                        if selected:
+                            col3, col4, col5 = st.columns([1, 1, 1])
+                            
+                            with col3:
+                                dosages = med['common_dosages'].split(', ')
+                                selected_dosage = st.selectbox("Dosage", dosages, key=f"dosage_{med['id']}_{visit_id}")
+                            
+                            with col4:
+                                frequency = st.selectbox("Frequency", 
+                                                        ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"], 
+                                                        key=f"freq_{med['id']}_{visit_id}")
+                            
+                            with col5:
+                                duration = st.selectbox("Duration", 
+                                                       ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"], 
+                                                       key=f"dur_{med['id']}_{visit_id}")
+                            
+                            instructions = st.text_input("Special Instructions", key=f"inst_{med['id']}_{visit_id}")
+                            
+                            # Flexible "awaiting lab results" checkbox - doctor can decide for any medication
+                            awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}_{visit_id}", value=False) else "no"
+                            
+                            selected_medications.append({
+                                'id': med['id'],
+                                'name': med['medication_name'],
+                                'dosage': selected_dosage,
+                                'frequency': frequency,
+                                'duration': duration,
+                                'instructions': instructions,
+                                'awaiting_lab': awaiting_lab,
+                                'pharmacy_notes': pharmacy_dosage,
+                                'indication': indication
+                            })
+            
+            # Custom medication section
+            with st.expander("Add Custom Medication"):
+                custom_med_name = st.text_input("Custom Medication Name", key=f"custom_name_{visit_id}")
+                if custom_med_name:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        custom_dosage = st.text_input("Dosage", key=f"custom_dosage_{visit_id}")
+                    with col2:
+                        custom_frequency = st.text_input("Frequency", key=f"custom_frequency_{visit_id}")
+                    with col3:
+                        custom_duration = st.text_input("Duration", key=f"custom_duration_{visit_id}")
+                    
+                    custom_instructions = st.text_input("Instructions", key=f"custom_instructions_{visit_id}")
+                    custom_awaiting = st.checkbox("Pending Lab", key=f"custom_awaiting_{visit_id}")
+                    custom_indication = st.text_input("Indication", key=f"custom_indication_{visit_id}")
+                    
+                    selected_medications.append({
+                        'id': None,
+                        'name': custom_med_name,
+                        'dosage': custom_dosage,
+                        'frequency': custom_frequency,
+                        'duration': custom_duration,
+                        'instructions': custom_instructions,
+                        'awaiting_lab': "yes" if custom_awaiting else "no",
+                        'pharmacy_notes': "",
+                        'indication': custom_indication
+                    })
+            
+            st.markdown("#### Ophthalmology Referral")
+            needs_ophthalmology = st.checkbox("Patient needs to see ophthalmologist after receiving medications", key=f"ophth_{visit_id}")
+            
+            if st.form_submit_button("Complete Consultation", type="primary"):
                 lab_tests.append("Urinalysis")
         with col2:
             if st.checkbox("Blood Glucose"):
@@ -2701,7 +2873,7 @@ def pregnancy_form(test_id: int):
 def completed_lab_tests():
     st.markdown("### Today's Lab Results")
     
-    conn = sqlite3.connect(db.db_name)
+    conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
     cursor.execute('''
