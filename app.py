@@ -970,7 +970,7 @@ def get_db_manager():
 db = get_db_manager()
 
 def show_loading_screen():
-    """Display loading screen with Parakaleo logo for iPad"""
+    """Display loading screen for the medical application"""
     if 'loading_shown' not in st.session_state:
         st.session_state.loading_shown = False
     
@@ -979,10 +979,7 @@ def show_loading_screen():
         with placeholder.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                try:
-                    st.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=200)
-                except FileNotFoundError:
-                    st.markdown('<div style="text-align: center; margin-top: 100px;">🔗</div>', unsafe_allow_html=True)
+                st.markdown('<div style="text-align: center; margin-top: 100px; font-size: 60px;">🏥</div>', unsafe_allow_html=True)
                 st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
         
@@ -995,10 +992,15 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Display header with hospital emoji and back arrow
-    col1, col2, col3 = st.columns([1, 1, 6])
-    with col1:
-        if st.button("←", key="back_button", help="Previous page"):
+    # Header with improved navigation layout
+    st.markdown('<h1 style="text-align: center; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align: center; color: #666; margin-bottom: 20px;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
+    
+    # Navigation buttons in a cleaner horizontal layout
+    nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
+    
+    with nav_col1:
+        if st.button("← Back", key="back_button", help="Previous page", use_container_width=True):
             # Navigate back based on current state
             if st.session_state.get('page') == 'consultation_form':
                 st.session_state.page = 'doctor'
@@ -1010,8 +1012,8 @@ def main():
                 st.session_state.clinic_location = None
             st.rerun()
     
-    with col2:
-        if st.button("🏥", key="home_button", help="Return to role selection"):
+    with nav_col2:
+        if st.button("🏥 Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
@@ -1023,9 +1025,11 @@ def main():
                 del st.session_state.active_consultation
             st.rerun()
     
-    with col3:
-        st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
-        st.markdown("*Mission Trip Patient Management*")
+    with nav_col3:
+        if st.button("📍 Location", key="location_button", help="Change clinic location", use_container_width=True):
+            st.session_state.clinic_location = None
+            st.session_state.user_role = None
+            st.rerun()
     
     st.markdown("---")
     
@@ -1046,14 +1050,7 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        # Show Parakaleo logo after loading completes
-        try:
-            with open("parakaleo_logo.svg", "r") as f:
-                logo_svg = f.read()
-            st.markdown(f'<div style="text-align: center; margin-bottom: 30px;">{logo_svg}</div>', unsafe_allow_html=True)
-        except FileNotFoundError:
-            st.markdown('<h1 style="text-align: center; color: #1f77b4; margin-bottom: 30px;">ParakaleoMed</h1>', unsafe_allow_html=True)
-        
+        st.markdown('<div style="text-align: center; margin-bottom: 30px; font-size: 80px;">🏥</div>', unsafe_allow_html=True)
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
@@ -1113,18 +1110,13 @@ def main():
     elif st.session_state.user_role == "admin":
         admin_interface()
     
-    # Sidebar header with Parakaleo logo
-    try:
-        st.sidebar.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=120)
-        st.sidebar.markdown('<h3 style="text-align: center; color: #333; margin-top: 10px;">ParakaleoMed</h3>', unsafe_allow_html=True)
-    except FileNotFoundError:
-        # Fallback if PNG not found
-        st.sidebar.markdown('''
-        <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 35px;">🔗</div>
-            <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
-        </div>
-        ''', unsafe_allow_html=True)
+    # Sidebar header
+    st.sidebar.markdown('''
+    <div style="text-align: center; margin-bottom: 20px;">
+        <div style="font-size: 35px;">🏥</div>
+        <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
+    </div>
+    ''', unsafe_allow_html=True)
     
     # Role change button
     st.sidebar.markdown("---")
