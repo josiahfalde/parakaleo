@@ -1118,11 +1118,11 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Universal back button positioned in top-right area
+    # Universal back button positioned in top-left area next to menu
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create a container for the back button in top-right
-        back_col1, back_col2, back_col3 = st.columns([8, 1, 1])
-        with back_col3:
+        # Create a container for the back button in top-left
+        back_col1, back_col2, back_col3 = st.columns([1, 1, 8])
+        with back_col1:
             if st.button("← Back", key="universal_back_btn", help="Go back", use_container_width=True):
                 go_back()
     
@@ -1139,10 +1139,10 @@ def main():
         background-color: transparent !important;
         border: none !important;
         padding: 8px !important;
-        margin-left: 60px !important;
+        margin-left: 10px !important;
         position: fixed !important;
         top: 15px !important;
-        right: 20px !important;
+        left: 60px !important;
         z-index: 998 !important;
     }
     
@@ -1155,6 +1155,29 @@ def main():
         font-size: 24px !important;
         color: #333 !important;
         display: block !important;
+    }
+    
+    /* Back button styling - positioned next to menu */
+    button[title="Go back"] {
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #475569 !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        position: fixed !important;
+        top: 15px !important;
+        left: 10px !important;
+        z-index: 999 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    button[title="Go back"]:hover {
+        background-color: #f1f5f9 !important;
+        border-color: #cbd5e1 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
     }
     
     /* BackpackEMR-inspired button styling - clean and professional */
@@ -2079,7 +2102,9 @@ def triage_interface():
     
     # Check if we need to collect family vital signs
     if ('family_vital_signs_queue' in st.session_state and 
-        st.session_state.family_vital_signs_queue):
+        st.session_state.family_vital_signs_queue and
+        len(st.session_state.family_vital_signs_queue) > 0):
+        st.info(f"Family vital signs workflow active - {len(st.session_state.family_vital_signs_queue)} members")
         family_vital_signs_collection()
         return
     
@@ -2421,7 +2446,8 @@ def new_patient_form():
                             'patient_id': member['patient_id'],
                             'patient_name': member['name'],
                             'visit_id': child_visit_id,
-                            'relationship': member['relationship']
+                            'relationship': member['relationship'],
+                            'age': member.get('age', None)
                         })
                 
                 # Store family consultation data
@@ -2434,10 +2460,13 @@ def new_patient_form():
                 st.success(f"✅ Created visits for entire family ({len(family_visits)} members)")
                 st.info("Family is ready for vital signs and consultation. Each family member needs vital signs recorded.")
                 
-                # Store family visits for vital signs processing
+                # Store family visits for vital signs processing - ensure each member gets their own form
                 st.session_state.family_vital_signs_queue = family_visits.copy()
                 st.session_state.current_family_vital_index = 0
                 st.session_state.family_workflow_active = True
+                
+                # Debug info to verify family queue
+                st.info(f"Family queue created with {len(family_visits)} members: {[v['patient_name'] for v in family_visits]}")
                 
                 # Clear family registration state
                 if 'family_parent_id' in st.session_state:
