@@ -1831,11 +1831,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 def consultation_history():
     st.markdown("### Today's Consultations")
     
-    conn = sqlite3.connect(db.db_name)
+    conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT c.*, p.name, v.patient_id
+        SELECT c.id, c.visit_id, c.doctor_name, c.chief_complaint, c.symptoms, 
+               c.diagnosis, c.treatment_plan, c.notes, c.needs_ophthalmology, 
+               c.consultation_time, p.name, v.patient_id
         FROM consultations c
         JOIN visits v ON c.visit_id = v.visit_id
         JOIN patients p ON v.patient_id = p.patient_id
@@ -1848,15 +1850,29 @@ def consultation_history():
     
     if consultations:
         for consultation in consultations:
-            with st.expander(f"👤 {consultation[8]} (ID: {consultation[9]}) - {consultation[2]}"):
-                st.write(f"**Doctor:** {consultation[1]}")
-                st.write(f"**Time:** {consultation[7][:16].replace('T', ' ')}")
-                st.write(f"**Chief Complaint:** {consultation[2]}")
-                st.write(f"**Symptoms:** {consultation[3]}")
-                st.write(f"**Diagnosis:** {consultation[4]}")
-                st.write(f"**Treatment Plan:** {consultation[5]}")
-                if consultation[6]:
-                    st.write(f"**Notes:** {consultation[6]}")
+            # consultation structure: [id, visit_id, doctor_name, chief_complaint, symptoms, diagnosis, treatment_plan, notes, needs_ophthalmology, consultation_time, patient_name, patient_id]
+            patient_name = consultation[10]
+            patient_id = consultation[11]
+            doctor_name = consultation[2]
+            chief_complaint = consultation[3]
+            symptoms = consultation[4]
+            diagnosis = consultation[5]
+            treatment_plan = consultation[6]
+            notes = consultation[7]
+            consultation_time = consultation[9]
+            
+            with st.expander(f"👤 {patient_name} (ID: {patient_id}) - {chief_complaint}"):
+                st.write(f"**Doctor:** {doctor_name}")
+                st.write(f"**Time:** {consultation_time[:16].replace('T', ' ')}")
+                st.write(f"**Chief Complaint:** {chief_complaint}")
+                if symptoms:
+                    st.write(f"**Symptoms:** {symptoms}")
+                if diagnosis:
+                    st.write(f"**Diagnosis:** {diagnosis}")
+                if treatment_plan:
+                    st.write(f"**Treatment Plan:** {treatment_plan}")
+                if notes:
+                    st.write(f"**Notes:** {notes}")
     else:
         st.info("No consultations recorded today.")
 
