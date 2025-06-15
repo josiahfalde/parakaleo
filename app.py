@@ -3822,7 +3822,7 @@ def pending_prescriptions():
     
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -3868,6 +3868,7 @@ def pending_prescriptions():
                             <p><strong>Frequency:</strong> {prescription[4]}</p>
                             <p><strong>Duration:</strong> {prescription[5]}</p>
                             {f'<p><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
+                            {f'<p><strong>Indication:</strong> {prescription[7]}</p>' if prescription[7] else ''}
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -3915,7 +3916,7 @@ def awaiting_lab_prescriptions():
     
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
