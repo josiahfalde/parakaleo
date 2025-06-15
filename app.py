@@ -898,6 +898,12 @@ def main():
         
         return
     
+    # Handle consultation form page navigation
+    if st.session_state.get('page') == 'consultation_form' and 'active_consultation' in st.session_state:
+        consultation = st.session_state.active_consultation
+        consultation_form(consultation['visit_id'], consultation['patient_id'], consultation['patient_name'])
+        return
+    
     # Show LAN status page if requested
     if 'show_lan_page' in st.session_state and st.session_state.show_lan_page:
         show_lan_status_page()
@@ -1715,11 +1721,11 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     
                     # Now handle lab tests and prescriptions using separate connections
                     for test_type in lab_tests:
-                        db.order_lab_test(visit_id, test_type, doctor_name)
+                        db_manager.order_lab_test(visit_id, test_type, doctor_name)
                     
                     for med in selected_medications:
                         if med['name']:
-                            db.add_prescription(
+                            db_manager.add_prescription(
                                 visit_id=visit_id,
                                 medication_id=med['id'],
                                 medication_name=med['name'],
@@ -1745,7 +1751,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             st.info(f"{awaiting_count} prescriptions awaiting lab results.")
                     
                     # Update doctor status back to available
-                    db.update_doctor_status(st.session_state.doctor_name, "available")
+                    db_manager.update_doctor_status(st.session_state.doctor_name, "available")
                     
                     # Clear current consultation and return to doctor interface
                     if 'current_consultation' in st.session_state:
@@ -1754,17 +1760,17 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         del st.session_state.active_consultation
                     
                     # Save patient history to database
-                    db_conn = sqlite3.connect(db.db_name)
-                    cursor = db_conn.cursor()
-                    cursor.execute('''
+                    history_conn = sqlite3.connect(db_manager.db_name)
+                    history_cursor = history_conn.cursor()
+                    history_cursor.execute('''
                         UPDATE patients 
                         SET medical_history = ?, allergies = ?
                         WHERE patient_id = ?
                     ''', (f"Surgical: {surgical_history}\nMedical: {medical_history}", 
                           f"Allergies: {allergies}\nCurrent Meds: {current_medications}", 
                           patient_id))
-                    db_conn.commit()
-                    db_conn.close()
+                    history_conn.commit()
+                    history_conn.close()
                     
                     st.session_state.page = 'doctor'
                     st.rerun()
