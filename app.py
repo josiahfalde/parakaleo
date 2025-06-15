@@ -1000,7 +1000,7 @@ def show_loading_screen():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.markdown('<div style="text-align: center; margin-top: 100px;">', unsafe_allow_html=True)
-                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750024558948.png", width=150)
+                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=250)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666; margin-top: 30px;">Loading...</p>', unsafe_allow_html=True)
         
@@ -1304,26 +1304,6 @@ def main():
         border-color: #d1d5db !important;
     }
     
-    /* Minimize spacing around images */
-    .stImage > div {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    
-    /* Reduce column padding */
-    .stColumn > div {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-    
-    /* Custom positioning for logo - slight left adjustment */
-    .logo-container {
-        margin-left: -1px !important;
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-        padding: 0 !important;
-    }
-    
     /* BackpackEMR-style tabs */
     .stTabs [data-baseweb="tab-list"] {
         background: #f9fafb !important;
@@ -1607,11 +1587,11 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with centered logo - minimal spacing
-    st.markdown('<div class="logo-container" style="text-align: center;">', unsafe_allow_html=True)
-    st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; color: #666; margin: 0; padding: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
+    # Header with centered logo - no extra spacing
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+    st.markdown('<p style="text-align: center; color: #666; margin: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
     nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
@@ -1630,7 +1610,7 @@ def main():
             st.rerun()
     
     with nav_col2:
-        if st.button("🏠 Home", key="home_button", help="Return to role selection", use_container_width=True):
+        if st.button("⚪ Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
@@ -1650,18 +1630,6 @@ def main():
         else:
             location_text = "📍 Location"
             
-        # Location button with horizontal text wrapping
-        st.markdown(f'''
-        <style>
-        .location-button {{
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }}
-        </style>
-        ''', unsafe_allow_html=True)
-        
         if st.button(location_text, key="location_button", help="Change clinic location", use_container_width=True):
             st.session_state.clinic_location = None
             st.session_state.user_role = None
