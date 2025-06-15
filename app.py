@@ -165,15 +165,18 @@ class DatabaseManager:
             CREATE TABLE IF NOT EXISTS prescriptions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 visit_id TEXT,
+                medication_id INTEGER,
                 medication_name TEXT,
                 dosage TEXT,
                 frequency TEXT,
                 duration TEXT,
                 instructions TEXT,
                 status TEXT DEFAULT 'pending',
+                awaiting_lab TEXT DEFAULT 'no',
                 prescribed_time TEXT,
                 filled_time TEXT,
-                FOREIGN KEY (visit_id) REFERENCES visits (visit_id)
+                FOREIGN KEY (visit_id) REFERENCES visits (visit_id),
+                FOREIGN KEY (medication_id) REFERENCES preset_medications (id)
             )
         ''')
         
@@ -405,6 +408,78 @@ class DatabaseManager:
         
         columns = ['id', 'medication_name', 'common_dosages', 'category', 'requires_lab', 'active']
         return [dict(zip(columns, row)) for row in results]
+    
+    def order_lab_test(self, visit_id: str, test_type: str, ordered_by: str) -> int:
+        """Order a lab test for a patient"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO lab_tests (visit_id, test_type, ordered_by, ordered_time, status)
+            VALUES (?, ?, ?, ?, 'pending')
+        ''', (visit_id, test_type, ordered_by, datetime.now().isoformat()))
+        
+        test_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return int(test_id) if test_id else 0
+    
+    def get_pending_lab_tests(self) -> List[Dict]:
+        """Get all pending lab tests"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT lt.*, p.name as patient_name, p.patient_id, v.visit_date
+            FROM lab_tests lt
+            JOIN visits v ON lt.visit_id = v.visit_id
+            JOIN patients p ON v.patient_id = p.patient_id
+            WHERE lt.status = 'pending'
+            ORDER BY lt.ordered_time
+        ''')
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        columns = ['id', 'visit_id', 'test_type', 'ordered_by', 'ordered_time', 
+                  'completed_time', 'results', 'status', 'patient_name', 'patient_id', 'visit_date']
+        return [dict(zip(columns, row)) for row in results]
+    
+    def complete_lab_test(self, test_id: int, results: str):
+        """Complete a lab test with results"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE lab_tests 
+            SET status = 'completed', results = ?, completed_time = ?
+            WHERE id = ?
+        ''', (results, datetime.now().isoformat(), test_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def add_prescription(self, visit_id: str, medication_id: int, medication_name: str, 
+                        dosage: str, frequency: str, duration: str, instructions: str = "",
+                        awaiting_lab: str = "no") -> int:
+        """Add a prescription"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO prescriptions 
+            (visit_id, medication_id, medication_name, dosage, frequency, duration, 
+             instructions, awaiting_lab, prescribed_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (visit_id, medication_id, medication_name, dosage, frequency, duration, 
+              instructions, awaiting_lab, datetime.now().isoformat()))
+        
+        prescription_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return int(prescription_id) if prescription_id else 0
 
 # Initialize database
 @st.cache_resource
@@ -453,6 +528,18 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
         
+        # Add lab role
+        col4, col5 = st.columns([1, 1])
+        with col4:
+            if st.button("🔬 Lab Tech", key="lab", type="secondary"):
+                st.session_state.user_role = "lab"
+                st.rerun()
+        
+        with col5:
+            if st.button("⚙️ Admin", key="admin", type="secondary"):
+                st.session_state.user_role = "admin"
+                st.rerun()
+        
         st.markdown("---")
         st.info("This system works offline and stores all patient data locally for mission trips in remote areas.")
         
@@ -465,6 +552,10 @@ def main():
         doctor_interface()
     elif st.session_state.user_role == "pharmacy":
         pharmacy_interface()
+    elif st.session_state.user_role == "lab":
+        lab_interface()
+    elif st.session_state.user_role == "admin":
+        admin_interface()
     
     # Role change button
     st.sidebar.markdown("---")
@@ -574,7 +665,8 @@ def new_patient_form():
                     'allergies': allergies.strip() if allergies else None
                 }
                 
-                patient_id = db.add_patient(**patient_data)
+                location_code = st.session_state.clinic_location['country_code']
+                patient_id = db.add_patient(location_code, **patient_data)
                 visit_id = db.create_visit(patient_id, priority.lower())
                 
                 st.success(f"✅ Patient registered successfully!")
@@ -840,37 +932,99 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         treatment_plan = st.text_area("Treatment Plan", placeholder="Recommended treatment")
         notes = st.text_area("Additional Notes", placeholder="Any additional observations")
         
+        st.markdown("#### Lab Tests")
+        lab_tests = []
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.checkbox("Urinalysis"):
+                lab_tests.append("Urinalysis")
+        with col2:
+            if st.checkbox("Blood Glucose"):
+                lab_tests.append("Blood Glucose")
+        with col3:
+            if st.checkbox("Pregnancy Test"):
+                lab_tests.append("Pregnancy Test")
+        
         st.markdown("#### Prescriptions")
         
-        # Prescription fields
-        num_medications = st.number_input("Number of Medications", min_value=0, max_value=10, value=1)
+        # Get preset medications
+        preset_meds = db.get_preset_medications()
+        med_categories = list(set(med['category'] for med in preset_meds))
         
-        medications = []
-        for i in range(int(num_medications)):
-            st.markdown(f"**Medication {i+1}:**")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                med_name = st.text_input(f"Medication Name", key=f"med_name_{i}")
-                dosage = st.text_input(f"Dosage", key=f"dosage_{i}")
-            
-            with col2:
-                frequency = st.text_input(f"Frequency", key=f"frequency_{i}")
-                duration = st.text_input(f"Duration", key=f"duration_{i}")
-            
-            instructions = st.text_input(f"Special Instructions", key=f"instructions_{i}")
-            
-            if med_name:
-                medications.append({
-                    'name': med_name,
-                    'dosage': dosage,
-                    'frequency': frequency,
-                    'duration': duration,
-                    'instructions': instructions
+        selected_medications = []
+        
+        for category in sorted(med_categories):
+            with st.expander(f"{category} Medications"):
+                category_meds = [med for med in preset_meds if med['category'] == category]
+                
+                for med in category_meds:
+                    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                    
+                    with col1:
+                        selected = st.checkbox(f"{med['medication_name']}", key=f"med_{med['id']}")
+                    
+                    if selected:
+                        with col2:
+                            dosages = med['common_dosages'].split(', ')
+                            selected_dosage = st.selectbox("Dosage", dosages, key=f"dosage_{med['id']}")
+                        
+                        with col3:
+                            frequency = st.selectbox("Frequency", 
+                                                    ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"], 
+                                                    key=f"freq_{med['id']}")
+                        
+                        with col4:
+                            duration = st.selectbox("Duration", 
+                                                   ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"], 
+                                                   key=f"dur_{med['id']}")
+                        
+                        instructions = st.text_input("Special Instructions", key=f"inst_{med['id']}")
+                        
+                        awaiting_lab = "no"
+                        if med['requires_lab'] == 'yes':
+                            awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}") else "no"
+                        
+                        selected_medications.append({
+                            'id': med['id'],
+                            'name': med['medication_name'],
+                            'dosage': selected_dosage,
+                            'frequency': frequency,
+                            'duration': duration,
+                            'instructions': instructions,
+                            'awaiting_lab': awaiting_lab
+                        })
+        
+        # Custom medication section
+        with st.expander("Add Custom Medication"):
+            custom_med_name = st.text_input("Custom Medication Name")
+            if custom_med_name:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    custom_dosage = st.text_input("Dosage", key="custom_dosage")
+                with col2:
+                    custom_frequency = st.text_input("Frequency", key="custom_frequency")
+                with col3:
+                    custom_duration = st.text_input("Duration", key="custom_duration")
+                
+                custom_instructions = st.text_input("Instructions", key="custom_instructions")
+                custom_awaiting = st.checkbox("Awaiting Lab Results", key="custom_awaiting")
+                
+                selected_medications.append({
+                    'id': None,
+                    'name': custom_med_name,
+                    'dosage': custom_dosage,
+                    'frequency': custom_frequency,
+                    'duration': custom_duration,
+                    'instructions': custom_instructions,
+                    'awaiting_lab': "yes" if custom_awaiting else "no"
                 })
         
         if st.form_submit_button("Complete Consultation", type="primary"):
             if doctor_name and chief_complaint:
+                conn = sqlite3.connect(db.db_name)
+                cursor = conn.cursor()
+                
                 # Save consultation
                 cursor.execute('''
                     INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
@@ -879,17 +1033,32 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
                       treatment_plan, notes, datetime.now().isoformat()))
                 
-                # Save prescriptions
-                for med in medications:
-                    cursor.execute('''
-                        INSERT INTO prescriptions (visit_id, medication_name, dosage, 
-                                                 frequency, duration, instructions, prescribed_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (visit_id, med['name'], med['dosage'], med['frequency'], 
-                          med['duration'], med['instructions'], datetime.now().isoformat()))
+                # Order lab tests
+                for test_type in lab_tests:
+                    db.order_lab_test(visit_id, test_type, doctor_name)
+                
+                # Save prescriptions with awaiting lab functionality
+                for med in selected_medications:
+                    if med['name']:  # Only save if medication name exists
+                        db.add_prescription(
+                            visit_id=visit_id,
+                            medication_id=med['id'],
+                            medication_name=med['name'],
+                            dosage=med['dosage'],
+                            frequency=med['frequency'],
+                            duration=med['duration'],
+                            instructions=med['instructions'],
+                            awaiting_lab=med['awaiting_lab']
+                        )
                 
                 # Update visit status
-                new_status = 'prescribed' if medications else 'completed'
+                if selected_medications:
+                    new_status = 'prescribed'
+                elif lab_tests:
+                    new_status = 'waiting_lab'
+                else:
+                    new_status = 'completed'
+                
                 cursor.execute('''
                     UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
                 ''', (datetime.now().isoformat(), new_status, visit_id))
@@ -898,8 +1067,18 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 conn.close()
                 
                 st.success("✅ Consultation completed successfully!")
-                if medications:
-                    st.info("📋 Prescriptions sent to pharmacy.")
+                
+                if lab_tests:
+                    st.info(f"🔬 Lab tests ordered: {', '.join(lab_tests)}")
+                
+                if selected_medications:
+                    awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                    ready_count = len(selected_medications) - awaiting_count
+                    
+                    if ready_count > 0:
+                        st.info(f"💊 {ready_count} prescriptions sent to pharmacy.")
+                    if awaiting_count > 0:
+                        st.info(f"⏳ {awaiting_count} prescriptions awaiting lab results.")
                 
                 # Clear current consultation
                 if 'current_consultation' in st.session_state:
@@ -1076,6 +1255,264 @@ def filled_prescriptions():
             """, unsafe_allow_html=True)
     else:
         st.info("No prescriptions filled today.")
+
+def lab_interface():
+    st.markdown("## 🔬 Laboratory")
+    
+    tab1, tab2 = st.tabs(["Pending Tests", "Lab Results"])
+    
+    with tab1:
+        pending_lab_tests()
+    
+    with tab2:
+        completed_lab_tests()
+
+def pending_lab_tests():
+    st.markdown("### Tests to Process")
+    
+    pending_tests = db.get_pending_lab_tests()
+    
+    if pending_tests:
+        for test in pending_tests:
+            with st.expander(f"🧪 {test['patient_name']} (ID: {test['patient_id']}) - {test['test_type']}", expanded=True):
+                st.write(f"**Ordered by:** {test['ordered_by']}")
+                st.write(f"**Ordered:** {test['ordered_time'][:16].replace('T', ' ')}")
+                
+                if test['test_type'] == 'Urinalysis':
+                    urinalysis_form(test['id'])
+                elif test['test_type'] == 'Blood Glucose':
+                    glucose_form(test['id'])
+                elif test['test_type'] == 'Pregnancy Test':
+                    pregnancy_form(test['id'])
+    else:
+        st.info("No pending lab tests.")
+
+def urinalysis_form(test_id: int):
+    with st.form(f"urinalysis_{test_id}"):
+        st.markdown("#### Urinalysis Results")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"])
+            clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"])
+            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005)
+            ph = st.number_input("pH", min_value=4.0, max_value=9.0, value=6.0, step=0.5)
+        
+        with col2:
+            protein = st.selectbox("Protein", ["Negative", "Trace", "1+", "2+", "3+", "4+"])
+            glucose = st.selectbox("Glucose", ["Negative", "Trace", "1+", "2+", "3+", "4+"])
+            ketones = st.selectbox("Ketones", ["Negative", "Trace", "Small", "Moderate", "Large"])
+            blood = st.selectbox("Blood", ["Negative", "Trace", "1+", "2+", "3+"])
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "1+", "2+", "3+"])
+            nitrites = st.selectbox("Nitrites", ["Negative", "Positive"])
+            urobilinogen = st.selectbox("Urobilinogen", ["Normal", "1+", "2+", "3+", "4+"])
+        
+        with col4:
+            bilirubin = st.selectbox("Bilirubin", ["Negative", "1+", "2+", "3+"])
+            wbc = st.number_input("WBC/hpf", min_value=0, max_value=50, value=0)
+            rbc = st.number_input("RBC/hpf", min_value=0, max_value=50, value=0)
+        
+        bacteria = st.selectbox("Bacteria", ["None", "Few", "Moderate", "Many"])
+        epithelial_cells = st.selectbox("Epithelial Cells", ["None", "Few", "Moderate", "Many"])
+        
+        notes = st.text_area("Additional Notes")
+        
+        if st.form_submit_button("Complete Urinalysis", type="primary"):
+            results = {
+                'Color': color,
+                'Clarity': clarity,
+                'Specific Gravity': specific_gravity,
+                'pH': ph,
+                'Protein': protein,
+                'Glucose': glucose,
+                'Ketones': ketones,
+                'Blood': blood,
+                'Leukocyte Esterase': leukocyte_esterase,
+                'Nitrites': nitrites,
+                'Urobilinogen': urobilinogen,
+                'Bilirubin': bilirubin,
+                'WBC': f"{wbc}/hpf",
+                'RBC': f"{rbc}/hpf",
+                'Bacteria': bacteria,
+                'Epithelial Cells': epithelial_cells,
+                'Notes': notes
+            }
+            
+            results_text = "\n".join([f"{k}: {v}" for k, v in results.items() if v])
+            db.complete_lab_test(test_id, results_text)
+            
+            st.success("Urinalysis completed!")
+            st.rerun()
+
+def glucose_form(test_id: int):
+    with st.form(f"glucose_{test_id}"):
+        st.markdown("#### Blood Glucose Results")
+        
+        glucose_value = st.number_input("Glucose (mg/dL)", min_value=0, max_value=800, value=100)
+        test_type = st.selectbox("Test Type", ["Random", "Fasting", "Post-meal"])
+        notes = st.text_area("Notes")
+        
+        if st.form_submit_button("Complete Glucose Test", type="primary"):
+            results = f"Glucose: {glucose_value} mg/dL ({test_type})"
+            if notes:
+                results += f"\nNotes: {notes}"
+            
+            db.complete_lab_test(test_id, results)
+            st.success("Glucose test completed!")
+            st.rerun()
+
+def pregnancy_form(test_id: int):
+    with st.form(f"pregnancy_{test_id}"):
+        st.markdown("#### Pregnancy Test Results")
+        
+        result = st.selectbox("Result", ["Negative", "Positive"])
+        notes = st.text_area("Notes")
+        
+        if st.form_submit_button("Complete Pregnancy Test", type="primary"):
+            results = f"Pregnancy Test: {result}"
+            if notes:
+                results += f"\nNotes: {notes}"
+            
+            db.complete_lab_test(test_id, results)
+            st.success("Pregnancy test completed!")
+            st.rerun()
+
+def completed_lab_tests():
+    st.markdown("### Today's Lab Results")
+    
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT lt.*, p.name as patient_name, p.patient_id
+        FROM lab_tests lt
+        JOIN visits v ON lt.visit_id = v.visit_id
+        JOIN patients p ON v.patient_id = p.patient_id
+        WHERE lt.status = 'completed' AND DATE(lt.completed_time) = DATE('now')
+        ORDER BY lt.completed_time DESC
+    ''')
+    
+    completed_tests = cursor.fetchall()
+    conn.close()
+    
+    if completed_tests:
+        for test in completed_tests:
+            with st.expander(f"✅ {test[8]} (ID: {test[9]}) - {test[2]}"):
+                st.write(f"**Completed:** {test[5][:16].replace('T', ' ')}")
+                st.write(f"**Results:**")
+                st.text(test[6])
+    else:
+        st.info("No lab tests completed today.")
+
+def admin_interface():
+    st.markdown("## ⚙️ Administration")
+    
+    tab1, tab2, tab3 = st.tabs(["Medication Management", "Reports", "Settings"])
+    
+    with tab1:
+        medication_management()
+    
+    with tab2:
+        daily_reports()
+    
+    with tab3:
+        clinic_settings()
+
+def medication_management():
+    st.markdown("### Preset Medications")
+    
+    medications = db.get_preset_medications()
+    
+    # Add new medication
+    with st.expander("Add New Medication"):
+        with st.form("new_medication"):
+            col1, col2 = st.columns(2)
+            with col1:
+                med_name = st.text_input("Medication Name")
+                dosages = st.text_input("Common Dosages", placeholder="e.g., 250mg, 500mg")
+            with col2:
+                category = st.selectbox("Category", ["Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", "Stomach", "Respiratory", "Vitamin", "Other"])
+                requires_lab = st.selectbox("Requires Lab Work", ["no", "yes"])
+            
+            if st.form_submit_button("Add Medication"):
+                if med_name:
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab)
+                        VALUES (?, ?, ?, ?)
+                    ''', (med_name, dosages, category, requires_lab))
+                    conn.commit()
+                    conn.close()
+                    st.success("Medication added!")
+                    st.rerun()
+    
+    # Display existing medications
+    if medications:
+        for category in set(med['category'] for med in medications):
+            with st.expander(f"{category} Medications"):
+                category_meds = [med for med in medications if med['category'] == category]
+                for med in category_meds:
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    with col1:
+                        st.write(f"**{med['medication_name']}** - {med['common_dosages']}")
+                    with col2:
+                        if med['requires_lab'] == 'yes':
+                            st.write("🔬 Lab Required")
+                    with col3:
+                        if st.button("Deactivate", key=f"deactivate_{med['id']}"):
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('UPDATE preset_medications SET active = 0 WHERE id = ?', (med['id'],))
+                            conn.commit()
+                            conn.close()
+                            st.rerun()
+
+def daily_reports():
+    st.markdown("### Daily Statistics")
+    
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    # Patient counts
+    cursor.execute("SELECT COUNT(*) FROM visits WHERE DATE(visit_date) = DATE('now')")
+    today_patients = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM visits WHERE status = 'completed' AND DATE(visit_date) = DATE('now')")
+    completed_patients = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM prescriptions WHERE DATE(prescribed_time) = DATE('now')")
+    prescriptions_written = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM lab_tests WHERE DATE(ordered_time) = DATE('now')")
+    lab_tests_ordered = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Patients", today_patients)
+    with col2:
+        st.metric("Completed", completed_patients)
+    with col3:
+        st.metric("Prescriptions", prescriptions_written)
+    with col4:
+        st.metric("Lab Tests", lab_tests_ordered)
+
+def clinic_settings():
+    st.markdown("### Clinic Settings")
+    
+    location = st.session_state.clinic_location
+    st.info(f"Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
+    
+    if st.button("Export Today's Data"):
+        st.info("Data export functionality would be implemented here for offline backup.")
 
 if __name__ == "__main__":
     main()
