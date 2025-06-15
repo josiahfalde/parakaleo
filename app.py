@@ -1012,6 +1012,109 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
+    # Apply dark mode globally if enabled
+    if 'dark_mode' in st.session_state and st.session_state.dark_mode:
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #1a1a1a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Main content area */
+        .main .block-container {
+            background-color: #1a1a1a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Buttons */
+        .stButton > button {
+            background-color: #333333 !important;
+            color: #e0e0e0 !important;
+            border: 1px solid #555555 !important;
+        }
+        
+        /* Primary buttons */
+        .stButton > button[kind="primary"] {
+            background-color: #0066cc !important;
+            color: #ffffff !important;
+        }
+        
+        /* Input fields */
+        .stTextInput input, .stSelectbox select, .stNumberInput input {
+            background-color: #2d2d2d !important;
+            color: #e0e0e0 !important;
+            border: 1px solid #555555 !important;
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            background-color: #2d2d2d !important;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            background-color: #2d2d2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background-color: #0066cc !important;
+            color: #ffffff !important;
+        }
+        
+        /* Sidebar */
+        .css-1d391kg {
+            background-color: #262626 !important;
+        }
+        
+        /* Text and headers */
+        h1, h2, h3, h4, h5, h6, p, span, div {
+            color: #e0e0e0 !important;
+        }
+        
+        /* Info boxes */
+        .stInfo {
+            background-color: #2d4a5a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Warning boxes */
+        .stWarning {
+            background-color: #5a4a2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Error boxes */
+        .stError {
+            background-color: #5a2d2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Success boxes */
+        .stSuccess {
+            background-color: #2d5a2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Form elements */
+        .stForm {
+            background-color: #262626 !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Expander */
+        .streamlit-expanderHeader {
+            background-color: #2d2d2d !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Metrics */
+        .metric-container {
+            background-color: #2d2d2d !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
     # Header with improved navigation layout
     st.markdown('<h1 style="text-align: center; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
     st.markdown('<p style="text-align: center; color: #666; margin-bottom: 20px;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
@@ -4364,25 +4467,7 @@ def clinic_settings():
         st.session_state.dark_mode = dark_mode
         st.rerun()
     
-    # Apply dark mode CSS if enabled
-    if st.session_state.dark_mode:
-        st.markdown("""
-        <style>
-        .stApp {
-            background-color: #1e1e1e;
-            color: #ffffff;
-        }
-        .stButton > button {
-            background-color: #2d2d2d;
-            color: #ffffff;
-            border: 1px solid #404040;
-        }
-        .stSelectbox > div > div {
-            background-color: #2d2d2d;
-            color: #ffffff;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+    # Dark mode CSS is now applied globally in main() function
     
     # Language Settings
     st.markdown("#### Language & Localization")
@@ -4396,10 +4481,7 @@ def clinic_settings():
     enable_popups = st.checkbox("📢 Enable Pop-up Alerts", value=True)
     auto_save = st.checkbox("💾 Auto-save Patient Data", value=True)
     
-    # Session Settings
-    st.markdown("#### Session Management")
-    session_timeout = st.slider("Session Timeout (minutes)", 15, 120, 60)
-    auto_logout = st.checkbox("🔒 Auto-logout when idle", value=True)
+    # Remove session timeout and auto-logout - user doesn't want these features
     
     # Data Management
     st.markdown("#### Data Management")
@@ -4431,8 +4513,6 @@ def clinic_settings():
             'sounds': enable_sounds,
             'popups': enable_popups,
             'auto_save': auto_save,
-            'session_timeout': session_timeout,
-            'auto_logout': auto_logout,
             'backup_reminder': backup_reminder,
             'debug_mode': debug_mode,
             'show_performance': show_performance
