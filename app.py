@@ -471,7 +471,7 @@ class DatabaseManager:
         except:
             return False
     
-    def update_doctor_status(self, doctor_name: str, status: str, patient_id: str = None, patient_name: str = None):
+    def update_doctor_status(self, doctor_name: str, status: str, patient_id: str = "", patient_name: str = ""):
         """Update doctor's current status"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -483,7 +483,7 @@ class DatabaseManager:
         cursor.execute('''
             INSERT INTO doctor_status (doctor_name, current_patient_id, current_patient_name, status, last_updated)
             VALUES (?, ?, ?, ?, ?)
-        ''', (doctor_name, patient_id, patient_name, status, datetime.now().isoformat()))
+        ''', (doctor_name, patient_id or "", patient_name or "", status, datetime.now().isoformat()))
         
         conn.commit()
         conn.close()
@@ -842,6 +842,50 @@ def main():
         st.session_state.show_lan_page = True
         st.rerun()
 
+def doctor_login():
+    """Doctor login interface with real-time status display"""
+    st.markdown("### Doctor Login")
+    
+    db = get_db_manager()
+    doctors = db.get_doctors()
+    
+    if not doctors:
+        st.warning("No doctors available. Please contact admin to add doctors.")
+        if st.button("Back to Role Selection"):
+            if 'user_role' in st.session_state:
+                del st.session_state.user_role
+            st.rerun()
+        return
+    
+    # Display current doctor status in real-time
+    st.markdown("#### Current Doctor Status")
+    doctor_status = db.get_all_doctor_status()
+    
+    if doctor_status:
+        for status in doctor_status:
+            status_color = "🟢" if status['status'] == 'available' else "🟡" if status['status'] == 'with_patient' else "🔴"
+            patient_info = f" - {status['current_patient_name']} ({status['current_patient_id']})" if status['current_patient_id'] else ""
+            st.write(f"{status_color} **{status['doctor_name']}** - {status['status'].replace('_', ' ').title()}{patient_info}")
+    
+    st.markdown("---")
+    
+    # Doctor selection
+    st.markdown("#### Select Your Name")
+    doctor_names = [doc['name'] for doc in doctors]
+    selected_doctor = st.selectbox("Choose your name:", [""] + doctor_names)
+    
+    if selected_doctor and st.button("Login as Doctor", type="primary"):
+        st.session_state.doctor_name = selected_doctor
+        # Update doctor status to available
+        db.update_doctor_status(selected_doctor, "available")
+        st.success(f"Logged in as {selected_doctor}")
+        st.rerun()
+    
+    if st.button("Back to Role Selection"):
+        if 'user_role' in st.session_state:
+            del st.session_state.user_role
+        st.rerun()
+
 def show_lan_status_page():
     """Display LAN connectivity status for iPad connections"""
     st.markdown("## 🌐 LAN Network Status")
@@ -1136,7 +1180,28 @@ def patient_queue_view():
         st.info("No patients in queue for today.")
 
 def doctor_interface():
-    st.markdown("## 👨‍⚕️ Doctor Consultation")
+    st.markdown(f"## 👨‍⚕️ Doctor Consultation - {st.session_state.doctor_name}")
+    
+    # Update doctor status and show real-time status of all doctors
+    db = get_db_manager()
+    
+    # Display real-time doctor status at top
+    with st.expander("📊 Real-Time Doctor Status", expanded=False):
+        doctor_status = db.get_all_doctor_status()
+        if doctor_status:
+            for status in doctor_status:
+                status_color = "🟢" if status['status'] == 'available' else "🟡" if status['status'] == 'with_patient' else "🔴"
+                patient_info = f" - {status['current_patient_name']} ({status['current_patient_id']})" if status['current_patient_id'] else ""
+                
+                if status['doctor_name'] == st.session_state.doctor_name:
+                    st.markdown(f"**{status_color} {status['doctor_name']} (YOU)** - {status['status'].replace('_', ' ').title()}{patient_info}")
+                else:
+                    st.write(f"{status_color} {status['doctor_name']} - {status['status'].replace('_', ' ').title()}{patient_info}")
+        
+        if st.button("🚪 Logout"):
+            db.update_doctor_status(st.session_state.doctor_name, "offline")
+            del st.session_state.doctor_name
+            st.rerun()
     
     tab1, tab2 = st.tabs(["Patient Consultation", "Consultation History"])
     
@@ -1921,28 +1986,74 @@ def patient_management():
                     }
                     st.rerun()
         
-        # Show confirmation dialog if there's a patient to delete
+        # Show confirmation dialog as centered popup if there's a patient to delete
         if 'confirm_delete' in st.session_state:
             patient_to_delete = st.session_state.confirm_delete
-            st.error(f"⚠️ Are you sure you want to delete {patient_to_delete['patient_name']}?")
-            st.write("This will permanently remove all their data including visits, prescriptions, and lab results.")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Confirm Delete", type="primary", key="confirm_delete_btn"):
-                    if db.delete_patient(patient_to_delete['patient_id']):
-                        st.success(f"Patient {patient_to_delete['patient_name']} has been deleted successfully.")
-                        del st.session_state.confirm_delete
-                        st.rerun()
-                    else:
-                        st.error("Failed to delete patient. Please try again.")
+            # Create modal-style popup
+            st.markdown("""
+            <style>
+            .delete-modal {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                border: 3px solid #ff4444;
+                z-index: 1000;
+                max-width: 500px;
+                width: 90%;
+            }
+            .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0,0,0,0.7);
+                z-index: 999;
+            }
+            </style>
+            <div class="modal-overlay"></div>
+            """, unsafe_allow_html=True)
             
-            with col2:
-                if st.button("Cancel", key="cancel_delete_btn"):
-                    del st.session_state.confirm_delete
-                    st.rerun()
+            with st.container():
+                st.markdown('<div class="delete-modal">', unsafe_allow_html=True)
+                
+                st.markdown("### ⚠️ CONFIRM PATIENT DELETION")
+                st.markdown(f"**Patient:** {patient_to_delete['patient_name']}")
+                st.markdown(f"**ID:** {patient_to_delete['patient_id']}")
                 
                 st.markdown("---")
+                st.markdown("**This will permanently delete:**")
+                st.markdown("• Patient information")
+                st.markdown("• All visits and consultations") 
+                st.markdown("• All prescriptions")
+                st.markdown("• All lab results")
+                st.markdown("---")
+                st.error("**This action CANNOT be undone!**")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
+                        if db.delete_patient(patient_to_delete['patient_id']):
+                            st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
+                            del st.session_state.confirm_delete
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete patient.")
+                
+                with col2:
+                    if st.button("CANCEL", key="cancel_delete_btn", use_container_width=True):
+                        del st.session_state.confirm_delete
+                        st.rerun()
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            return  # Don't show rest of page when modal is active
     else:
         if search_query:
             st.info("No patients found matching your search.")
