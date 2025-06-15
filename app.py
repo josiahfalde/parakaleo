@@ -250,23 +250,28 @@ class DatabaseManager:
         existing_count = cursor.fetchone()[0]
         
         if existing_count == 0:
-            # Initialize default medications only if table is empty
+            # Initialize default medications with Epocrates-style dosages
             default_meds = [
-                ('Acetaminophen', '325mg, 500mg, 650mg', 'Pain Relief', 'no'),
-                ('Ibuprofen', '200mg, 400mg, 600mg, 800mg', 'Pain Relief', 'no'),
-                ('Amoxicillin', '250mg, 500mg, 875mg', 'Antibiotic', 'no'),
-                ('Azithromycin', '250mg, 500mg', 'Antibiotic', 'no'),
-                ('Metronidazole', '250mg, 500mg', 'Antibiotic', 'no'),
-                ('Ciprofloxacin', '250mg, 500mg', 'Antibiotic', 'yes'),
-                ('Nitrofurantoin', '50mg, 100mg', 'UTI Antibiotic', 'yes'),
-                ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'optional'),
-                ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'optional'),
-                ('Amlodipine', '2.5mg, 5mg, 10mg', 'Blood Pressure', 'no'),
-                ('Omeprazole', '20mg, 40mg', 'Stomach', 'no'),
-                ('Prednisone', '5mg, 10mg, 20mg', 'Steroid', 'no'),
-                ('Albuterol Inhaler', '90mcg/puff', 'Respiratory', 'no'),
-                ('Multivitamin', 'Daily', 'Vitamin', 'no'),
-                ('Iron Supplement', '65mg', 'Vitamin', 'no')
+                ('Acetaminophen', '325mg q6h PRN, 500mg q6h PRN, 650mg q6h PRN', 'Pain Relief', 'no'),
+                ('Ibuprofen', '200mg q6h PRN, 400mg q8h PRN, 600mg q8h PRN', 'Pain Relief', 'no'),
+                ('Amoxicillin', '500mg q12h x7-10 days, 875mg q12h x7-10 days', 'Antibiotic', 'no'),
+                ('Azithromycin', '250mg daily x5 days, 500mg day 1 then 250mg daily x4 days', 'Antibiotic', 'no'),
+                ('Metronidazole', '250mg q8h x7 days, 500mg q12h x7 days', 'Antibiotic', 'no'),
+                ('Ciprofloxacin', '250mg q12h x3-7 days, 500mg q12h x7-14 days', 'Antibiotic', 'no'),
+                ('Nitrofurantoin', '100mg q12h x5-7 days', 'UTI Antibiotic', 'no'),
+                ('Metformin', '500mg q12h with meals, 850mg daily with meals', 'Diabetes', 'no'),
+                ('Lisinopril', '5mg daily, 10mg daily, 20mg daily', 'Blood Pressure', 'no'),
+                ('Amlodipine', '2.5mg daily, 5mg daily, 10mg daily', 'Blood Pressure', 'no'),
+                ('Omeprazole', '20mg daily before breakfast, 40mg daily before breakfast', 'Stomach', 'no'),
+                ('Prednisone', '5mg daily x5-7 days, 10mg daily x5-7 days, 20mg daily x5 days', 'Steroid', 'no'),
+                ('Albuterol Inhaler', '2 puffs q4-6h PRN', 'Respiratory', 'no'),
+                ('Multivitamin', '1 tablet daily', 'Vitamin', 'no'),
+                ('Iron Supplement', '65mg daily on empty stomach', 'Vitamin', 'no'),
+                ('Cephalexin', '250mg q6h x7-10 days, 500mg q12h x7-10 days', 'Antibiotic', 'no'),
+                ('Doxycycline', '100mg q12h x7-14 days', 'Antibiotic', 'no'),
+                ('Hydrochlorothiazide', '12.5mg daily, 25mg daily', 'Blood Pressure', 'no'),
+                ('Atorvastatin', '20mg daily, 40mg daily', 'Cholesterol', 'no'),
+                ('Furosemide', '20mg daily, 40mg daily', 'Diuretic', 'no')
             ]
             
             for med in default_meds:
@@ -1330,7 +1335,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             st.write(f"**Allergies:** {patient_info[7] or 'None recorded'}")
     
     with st.form(f"consultation_{visit_id}"):
-        doctor_name = st.text_input("Doctor Name", placeholder="Your name")
+        # Auto-fill doctor name from logged-in session
+        doctor_name = st.session_state.get('doctor_name', '')
+        st.text_input("Doctor Name", value=doctor_name, disabled=True)
         
         chief_complaint = st.text_area("Chief Complaint", placeholder="What brought the patient in today?")
         symptoms = st.text_area("Symptoms", placeholder="Describe symptoms observed/reported")
@@ -1354,15 +1361,24 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         
         st.markdown("#### Prescriptions")
         
-        # Get preset medications
+        # Get preset medications and deduplicate by name
         preset_meds = db.get_preset_medications()
-        med_categories = list(set(med['category'] for med in preset_meds))
+        
+        # Deduplicate medications by name (keep first occurrence)
+        unique_meds = {}
+        for med in preset_meds:
+            med_name = med['medication_name']
+            if med_name not in unique_meds:
+                unique_meds[med_name] = med
+        
+        deduplicated_meds = list(unique_meds.values())
+        med_categories = list(set(med['category'] for med in deduplicated_meds))
         
         selected_medications = []
         
         for category in sorted(med_categories):
             with st.expander(f"{category} Medications"):
-                category_meds = [med for med in preset_meds if med['category'] == category]
+                category_meds = [med for med in deduplicated_meds if med['category'] == category]
                 
                 for med in category_meds:
                     col1, col2 = st.columns([1, 2])
@@ -1395,10 +1411,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         
                         instructions = st.text_input("Special Instructions", key=f"inst_{med['id']}")
                         
-                        # Always show "awaiting lab results" checkbox for medications that support it
-                        awaiting_lab = "no"
-                        if med['requires_lab'] in ['optional', 'yes']:
-                            awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}", value=False) else "no"
+                        # Flexible "awaiting lab results" checkbox - doctor can decide for any medication
+                        awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}", value=False) else "no"
                         
                         selected_medications.append({
                             'id': med['id'],
@@ -2195,8 +2209,7 @@ def medication_management():
                 med_name = st.text_input("Medication Name")
                 dosages = st.text_input("Common Dosages", placeholder="e.g., 250mg, 500mg")
             with col2:
-                category = st.selectbox("Category", ["Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", "Stomach", "Respiratory", "Vitamin", "Other"])
-                requires_lab = st.selectbox("Requires Lab Work", ["no", "yes"])
+                category = st.selectbox("Category", ["Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic", "Cholesterol", "UTI Antibiotic", "Other"])
             
             if st.form_submit_button("Add Medication"):
                 if med_name:
@@ -2205,7 +2218,7 @@ def medication_management():
                     cursor.execute('''
                         INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab)
                         VALUES (?, ?, ?, ?)
-                    ''', (med_name, dosages, category, requires_lab))
+                    ''', (med_name, dosages, category, "no"))
                     conn.commit()
                     conn.close()
                     st.success("Medication added!")
