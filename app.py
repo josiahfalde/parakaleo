@@ -1000,7 +1000,7 @@ def show_loading_screen():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.markdown('<div style="text-align: center; margin-top: 100px;">', unsafe_allow_html=True)
-                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=250)
+                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750024910085.png", width=200)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666; margin-top: 30px;">Loading...</p>', unsafe_allow_html=True)
         
