@@ -1961,7 +1961,7 @@ def new_patient_form():
                 phone = st.text_input("Phone Number", placeholder="Optional")
                 emergency_contact = st.text_input("Emergency Contact", placeholder="Optional")
             
-            if st.form_submit_button("Check for Existing Patient", type="primary"):
+            if st.form_submit_button("Register Patient", type="primary"):
                 if name.strip():
                     # Check for duplicate patients
                     duplicates = db.check_duplicate_patient(name.strip(), age if age else None, phone.strip() if phone else None)
