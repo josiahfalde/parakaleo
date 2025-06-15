@@ -140,6 +140,7 @@ class DatabaseManager:
                 temperature REAL,
                 weight REAL,
                 height REAL,
+                oxygen_saturation INTEGER,
                 recorded_time TEXT,
                 FOREIGN KEY (visit_id) REFERENCES visits (visit_id)
             )
@@ -184,6 +185,12 @@ class DatabaseManager:
         # Add awaiting_lab column if it doesn't exist (for database migration)
         try:
             cursor.execute('ALTER TABLE prescriptions ADD COLUMN awaiting_lab TEXT DEFAULT "no"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Add oxygen saturation column if it doesn't exist
+        try:
+            cursor.execute('ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
         
@@ -1035,8 +1042,7 @@ def new_patient_form():
             phone = st.text_input("Phone Number", placeholder="Optional")
             emergency_contact = st.text_input("Emergency Contact", placeholder="Optional")
         
-        medical_history = st.text_area("Medical History", placeholder="Previous conditions, surgeries, etc.")
-        allergies = st.text_area("Allergies", placeholder="Known allergies or medications to avoid")
+
         
         if st.form_submit_button("Register Patient", type="primary"):
             if name.strip():
@@ -1046,8 +1052,8 @@ def new_patient_form():
                     'gender': gender if gender else None,
                     'phone': phone.strip() if phone else None,
                     'emergency_contact': emergency_contact.strip() if emergency_contact else None,
-                    'medical_history': medical_history.strip() if medical_history else None,
-                    'allergies': allergies.strip() if allergies else None
+                    'medical_history': None,
+                    'allergies': None
                 }
                 
                 location_code = st.session_state.clinic_location['country_code']
@@ -1123,6 +1129,7 @@ def vital_signs_form(visit_id: str):
         with col3:
             weight = st.number_input("Weight (lbs)", min_value=1.0, max_value=1000.0, value=None, step=0.1)
             height = st.number_input("Height (inches)", min_value=12.0, max_value=96.0, value=None, step=0.5)
+            oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
         
         if st.form_submit_button("Save Vital Signs", type="primary"):
             conn = sqlite3.connect(db.db_name)
@@ -1130,10 +1137,10 @@ def vital_signs_form(visit_id: str):
             
             cursor.execute('''
                 INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                       temperature, weight, height, recorded_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                       temperature, weight, height, oxygen_saturation, recorded_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (visit_id, systolic, diastolic, heart_rate, temperature, 
-                  weight, height, datetime.now().isoformat()))
+                  weight, height, oxygen_sat, datetime.now().isoformat()))
             
             # Update visit status
             cursor.execute('''
