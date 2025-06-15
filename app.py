@@ -519,6 +519,34 @@ class DatabaseManager:
         conn.close()
         return status_list
     
+    def clean_duplicate_medications(self):
+        """Remove duplicate medications keeping the first occurrence"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Find duplicate medications by name
+        cursor.execute('''
+            SELECT medication_name, MIN(id) as keep_id, GROUP_CONCAT(id) as all_ids
+            FROM preset_medications 
+            GROUP BY medication_name 
+            HAVING COUNT(*) > 1
+        ''')
+        
+        duplicates = cursor.fetchall()
+        
+        for med_name, keep_id, all_ids in duplicates:
+            # Delete all duplicates except the first one
+            id_list = [int(x) for x in all_ids.split(',')]
+            delete_ids = [x for x in id_list if x != keep_id]
+            
+            for delete_id in delete_ids:
+                cursor.execute('DELETE FROM preset_medications WHERE id = ?', (delete_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return len(duplicates)
+    
     def delete_patient(self, patient_id: str) -> bool:
         """Delete a patient and all associated data"""
         conn = None
@@ -2239,6 +2267,17 @@ def doctor_management():
 def medication_management():
     st.markdown("### Preset Medications")
     
+    # Clean up duplicates button
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("Clean Duplicates", type="secondary"):
+            duplicates_removed = db.clean_duplicate_medications()
+            if duplicates_removed > 0:
+                st.success(f"Removed {duplicates_removed} duplicate medication groups")
+            else:
+                st.info("No duplicates found")
+            st.rerun()
+    
     medications = db.get_preset_medications()
     
     # Add new medication
@@ -2294,14 +2333,14 @@ def medication_management():
                             col_save, col_cancel = st.columns(2)
                             with col_save:
                                 if st.form_submit_button("Save Changes", type="primary"):
-                                    if new_name.strip():
+                                    if new_name and new_name.strip():
                                         conn = sqlite3.connect("clinic_database.db")
                                         cursor = conn.cursor()
                                         cursor.execute('''
                                             UPDATE preset_medications 
                                             SET medication_name = ?, common_dosages = ?, category = ?
                                             WHERE id = ?
-                                        ''', (new_name.strip(), new_dosages.strip(), new_category, med['id']))
+                                        ''', (new_name.strip(), new_dosages.strip() if new_dosages else "", new_category, med['id']))
                                         conn.commit()
                                         conn.close()
                                         st.session_state[edit_key] = False
