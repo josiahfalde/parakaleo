@@ -1212,74 +1212,82 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     'frequency': custom_frequency,
                     'duration': custom_duration,
                     'instructions': custom_instructions,
-                    'awaiting_lab': "yes" if custom_awaiting else "no"
+                    'awaiting_lab': "yes" if custom_awaiting else "no",
+                    'pharmacy_notes': ""
                 })
         
         if st.form_submit_button("Complete Consultation", type="primary"):
             if doctor_name and chief_complaint:
-                conn = sqlite3.connect(db.db_name)
-                cursor = conn.cursor()
-                
-                # Save consultation
-                cursor.execute('''
-                    INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
-                                             symptoms, diagnosis, treatment_plan, notes, consultation_time)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
-                      treatment_plan, notes, datetime.now().isoformat()))
-                
-                # Order lab tests
-                for test_type in lab_tests:
-                    db.order_lab_test(visit_id, test_type, doctor_name)
-                
-                # Save prescriptions with awaiting lab functionality
-                for med in selected_medications:
-                    if med['name']:  # Only save if medication name exists
-                        db.add_prescription(
-                            visit_id=visit_id,
-                            medication_id=med['id'],
-                            medication_name=med['name'],
-                            dosage=med['dosage'],
-                            frequency=med['frequency'],
-                            duration=med['duration'],
-                            instructions=med['instructions'],
-                            awaiting_lab=med['awaiting_lab']
-                        )
-                
-                # Update visit status
-                if selected_medications:
-                    new_status = 'prescribed'
-                elif lab_tests:
-                    new_status = 'waiting_lab'
-                else:
-                    new_status = 'completed'
-                
-                cursor.execute('''
-                    UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
-                ''', (datetime.now().isoformat(), new_status, visit_id))
-                
-                conn.commit()
-                conn.close()
-                
-                st.success("✅ Consultation completed successfully!")
-                
-                if lab_tests:
-                    st.info(f"🔬 Lab tests ordered: {', '.join(lab_tests)}")
-                
-                if selected_medications:
-                    awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
-                    ready_count = len(selected_medications) - awaiting_count
+                try:
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
                     
-                    if ready_count > 0:
-                        st.info(f"💊 {ready_count} prescriptions sent to pharmacy.")
-                    if awaiting_count > 0:
-                        st.info(f"⏳ {awaiting_count} prescriptions awaiting lab results.")
-                
-                # Clear current consultation
-                if 'current_consultation' in st.session_state:
-                    del st.session_state.current_consultation
-                
-                st.rerun()
+                    # Save consultation
+                    cursor.execute('''
+                        INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
+                                                 symptoms, diagnosis, treatment_plan, notes, consultation_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
+                          treatment_plan, notes, datetime.now().isoformat()))
+                    
+                    # Order lab tests
+                    for test_type in lab_tests:
+                        db.order_lab_test(visit_id, test_type, doctor_name)
+                    
+                    # Save prescriptions with awaiting lab functionality
+                    for med in selected_medications:
+                        if med['name']:  # Only save if medication name exists
+                            db.add_prescription(
+                                visit_id=visit_id,
+                                medication_id=med['id'],
+                                medication_name=med['name'],
+                                dosage=med['dosage'],
+                                frequency=med['frequency'],
+                                duration=med['duration'],
+                                instructions=med['instructions'],
+                                awaiting_lab=med['awaiting_lab']
+                            )
+                    
+                    # Update visit status
+                    if selected_medications:
+                        new_status = 'prescribed'
+                    elif lab_tests:
+                        new_status = 'waiting_lab'
+                    else:
+                        new_status = 'completed'
+                    
+                    cursor.execute('''
+                        UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
+                    ''', (datetime.now().isoformat(), new_status, visit_id))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    st.success("Consultation completed successfully!")
+                    
+                    if lab_tests:
+                        st.info(f"Lab tests ordered: {', '.join(lab_tests)}")
+                    
+                    if selected_medications:
+                        awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                        ready_count = len(selected_medications) - awaiting_count
+                        
+                        if ready_count > 0:
+                            st.info(f"{ready_count} prescriptions sent to pharmacy.")
+                        if awaiting_count > 0:
+                            st.info(f"{awaiting_count} prescriptions awaiting lab results.")
+                    
+                    # Clear current consultation
+                    if 'current_consultation' in st.session_state:
+                        del st.session_state.current_consultation
+                    
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error completing consultation: {str(e)}")
+                    if 'conn' in locals():
+                        conn.rollback()
+                        conn.close()
             else:
                 st.error("Please fill in required fields: Doctor Name and Chief Complaint")
 
