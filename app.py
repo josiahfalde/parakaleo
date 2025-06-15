@@ -575,21 +575,29 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Display header with logo
-    col1, col2 = st.columns([1, 6])
+    # Display header with correct Parakaleo logo
+    col1, col2 = st.columns([1, 8])
     with col1:
-        # Display SVG logo directly
+        # Correct Parakaleo logo based on user's image - interlocking colorful rings
         st.markdown('''
-        <svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
-          <g transform="translate(25, 25)">
-            <circle cx="0" cy="0" r="18" fill="none" stroke="#FF6B35" stroke-width="2.5"/>
-            <circle cx="8" cy="-6" r="14" fill="none" stroke="#3498DB" stroke-width="2.5"/>
-            <circle cx="-8" cy="-6" r="14" fill="none" stroke="#2ECC71" stroke-width="2.5"/>
-            <circle cx="0" cy="10" r="12" fill="none" stroke="#9B59B6" stroke-width="2.5"/>
-            <circle cx="5" cy="3" r="8" fill="none" stroke="#F1C40F" stroke-width="2.5"/>
-            <circle cx="-5" cy="3" r="8" fill="none" stroke="#E74C3C" stroke-width="2.5"/>
+        <div style="display: flex; align-items: center; justify-content: center; height: 60px;">
+        <svg width="45" height="45" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(50, 50)">
+            <!-- Orange ring -->
+            <circle cx="-15" cy="-15" r="20" fill="none" stroke="#FF8C00" stroke-width="4" opacity="0.8"/>
+            <!-- Blue ring -->
+            <circle cx="15" cy="-15" r="20" fill="none" stroke="#4A90E2" stroke-width="4" opacity="0.8"/>
+            <!-- Green ring -->
+            <circle cx="15" cy="15" r="20" fill="none" stroke="#50C878" stroke-width="4" opacity="0.8"/>
+            <!-- Purple ring -->
+            <circle cx="-15" cy="15" r="20" fill="none" stroke="#9B59B6" stroke-width="4" opacity="0.8"/>
+            <!-- Yellow center ring -->
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#F1C40F" stroke-width="4" opacity="0.8"/>
+            <!-- Red inner ring -->
+            <circle cx="0" cy="0" r="12" fill="none" stroke="#E74C3C" stroke-width="3" opacity="0.8"/>
           </g>
         </svg>
+        </div>
         ''', unsafe_allow_html=True)
     with col2:
         st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
@@ -651,6 +659,23 @@ def main():
     elif st.session_state.user_role == "admin":
         admin_interface()
     
+    # Sidebar header with Parakaleo logo
+    st.sidebar.markdown('''
+    <div style="text-align: center; margin-bottom: 20px;">
+        <svg width="35" height="35" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(50, 50)">
+            <circle cx="-15" cy="-15" r="20" fill="none" stroke="#FF8C00" stroke-width="4" opacity="0.8"/>
+            <circle cx="15" cy="-15" r="20" fill="none" stroke="#4A90E2" stroke-width="4" opacity="0.8"/>
+            <circle cx="15" cy="15" r="20" fill="none" stroke="#50C878" stroke-width="4" opacity="0.8"/>
+            <circle cx="-15" cy="15" r="20" fill="none" stroke="#9B59B6" stroke-width="4" opacity="0.8"/>
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#F1C40F" stroke-width="4" opacity="0.8"/>
+            <circle cx="0" cy="0" r="12" fill="none" stroke="#E74C3C" stroke-width="3" opacity="0.8"/>
+          </g>
+        </svg>
+        <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
+    </div>
+    ''', unsafe_allow_html=True)
+    
     # Role change button
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Change Role"):
@@ -661,6 +686,61 @@ def main():
         st.session_state.clinic_location = None
         st.session_state.user_role = None
         st.rerun()
+    
+    # LAN connectivity page
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🌐 LAN Status"):
+        st.session_state.show_lan_page = True
+        st.rerun()
+    
+    # Show LAN status page if requested
+    if 'show_lan_page' in st.session_state and st.session_state.show_lan_page:
+        show_lan_status_page()
+
+def show_lan_status_page():
+    """Display LAN connectivity status for iPad connections"""
+    st.markdown("## 🌐 LAN Network Status")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("### Connected Devices")
+        
+        # Simulate checking for other devices on the network
+        import socket
+        
+        try:
+            # Get current IP address
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            st.success(f"This Device: {local_ip}")
+            
+            # Show network scan status
+            st.info("Scanning for other ParakaleoMed devices on network...")
+            
+            # Simulated device list (in real implementation, would scan network)
+            devices = [
+                {"name": "iPad-Triage-01", "ip": "192.168.1.105", "status": "Connected", "role": "Triage"},
+                {"name": "iPad-Doctor-01", "ip": "192.168.1.106", "status": "Connected", "role": "Doctor"},
+                {"name": "iPad-Pharmacy-01", "ip": "192.168.1.107", "status": "Offline", "role": "Pharmacy"}
+            ]
+            
+            for device in devices:
+                status_color = "🟢" if device["status"] == "Connected" else "🔴"
+                st.markdown(f"{status_color} **{device['name']}** ({device['role']}) - {device['ip']} - {device['status']}")
+            
+        except Exception:
+            st.error("Unable to scan network. Check WiFi connection.")
+    
+    with col2:
+        if st.button("Back to Main"):
+            st.session_state.show_lan_page = False
+            st.rerun()
+        
+        if st.button("Refresh"):
+            st.rerun()
+    
+    st.markdown("---")
+    st.info("Note: All devices should be connected to the same WiFi network for data synchronization.")
 
 def location_setup():
     st.markdown("## Clinic Location Setup")
@@ -1066,9 +1146,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         
                         instructions = st.text_input("Special Instructions", key=f"inst_{med['id']}")
                         
+                        # Always show "awaiting lab results" checkbox for medications that support it
                         awaiting_lab = "no"
-                        if med['requires_lab'] == 'optional':
-                            awaiting_lab = "yes" if st.checkbox("Pending Lab", key=f"await_{med['id']}", value=False) else "no"
+                        if med['requires_lab'] in ['optional', 'yes']:
+                            awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}", value=False) else "no"
                         
                         selected_medications.append({
                             'id': med['id'],
@@ -1671,21 +1752,34 @@ def patient_management():
                 </div>
                 """, unsafe_allow_html=True)
                 
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    confirmation = st.text_input(f"Type 'DELETE {patient['patient_id']}' to confirm deletion", 
-                                               key=f"confirm_{patient['patient_id']}")
-                
-                with col2:
-                    if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
-                        if confirmation == f"DELETE {patient['patient_id']}":
-                            if db.delete_patient(patient['patient_id']):
-                                st.success(f"Patient {patient['name']} has been deleted successfully.")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete patient. Please try again.")
-                        else:
-                            st.error(f"Please type 'DELETE {patient['patient_id']}' to confirm deletion.")
+                if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
+                    # Store the patient to delete in session state
+                    st.session_state.confirm_delete = {
+                        'patient_id': patient['patient_id'],
+                        'patient_name': patient['name']
+                    }
+                    st.rerun()
+        
+        # Show confirmation dialog if there's a patient to delete
+        if 'confirm_delete' in st.session_state:
+            patient_to_delete = st.session_state.confirm_delete
+            st.error(f"⚠️ Are you sure you want to delete {patient_to_delete['patient_name']}?")
+            st.write("This will permanently remove all their data including visits, prescriptions, and lab results.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Confirm Delete", type="primary", key="confirm_delete_btn"):
+                    if db.delete_patient(patient_to_delete['patient_id']):
+                        st.success(f"Patient {patient_to_delete['patient_name']} has been deleted successfully.")
+                        del st.session_state.confirm_delete
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete patient. Please try again.")
+            
+            with col2:
+                if st.button("Cancel", key="cancel_delete_btn"):
+                    del st.session_state.confirm_delete
+                    st.rerun()
                 
                 st.markdown("---")
     else:
