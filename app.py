@@ -3639,21 +3639,41 @@ def patient_management():
                 
                 patient_id = patient_to_delete['patient_id']
                 
-                # Delete all related data
-                cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
-                cursor.execute('DELETE FROM family_members WHERE patient_id = ? OR parent_id = ?', (patient_id, patient_id))
-                cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+                try:
+                    # Delete all related data - check if tables exist first
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    existing_tables = [row[0] for row in cursor.fetchall()]
+                    
+                    # Delete from tables that exist
+                    if 'vital_signs' in existing_tables:
+                        cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                    
+                    if 'prescriptions' in existing_tables:
+                        cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                    
+                    if 'lab_tests' in existing_tables:
+                        cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                    
+                    if 'consultations' in existing_tables:
+                        cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                    
+                    if 'visits' in existing_tables:
+                        cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+                    
+                    # Delete patient
+                    cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+                    
+                    conn.commit()
+                    st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
+                    
+                except Exception as e:
+                    conn.rollback()
+                    st.error(f"Error during deletion: {str(e)}")
                 
-                conn.commit()
-                conn.close()
-                
-                st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
-                del st.session_state.confirm_delete
-                st.rerun()
+                finally:
+                    conn.close()
+                    del st.session_state.confirm_delete
+                    st.rerun()
         
         with col2:
             if st.button("❌ CANCEL", 
