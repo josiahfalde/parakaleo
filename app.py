@@ -1668,10 +1668,10 @@ def new_patient_form():
                     # Age-appropriate weight ranges
                     if current_member['relationship'] == 'parent':
                         weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=0.1)
-                        height = st.number_input("Height (cm)", min_value=120.0, max_value=220.0, value=None, step=0.5)
+                        height = st.number_input("Height (inches)", min_value=48.0, max_value=84.0, value=None, step=0.5)
                     else:  # child
                         weight = st.number_input("Weight (kg)", min_value=2.0, max_value=100.0, value=None, step=0.1, help="Child weight in kg")
-                        height = st.number_input("Height (cm)", min_value=40.0, max_value=180.0, value=None, step=0.5, help="Child height in cm")
+                        height = st.number_input("Height (inches)", min_value=12.0, max_value=72.0, value=None, step=0.5, help="Child height in inches")
                     
                     oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
                 
@@ -1695,7 +1695,18 @@ def new_patient_form():
                     conn.close()
                     
                     st.success(f"✅ Vital signs recorded for {current_member['patient_name']}!")
-                    st.info(f"**{current_member['patient_name']}** has been sent to the doctor queue.")
+                    
+                    # Green confirmation box for family members
+                    st.markdown("""
+                        <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 0.375rem; padding: 1rem; margin: 0.5rem 0;">
+                            <div style="color: #155724; font-weight: bold; font-size: 1.1rem;">
+                                🟢 PATIENT SENT TO DOCTOR QUEUE
+                            </div>
+                            <div style="color: #155724; margin-top: 0.5rem;">
+                                <strong>{}</strong> is now waiting for consultation
+                            </div>
+                        </div>
+                    """.format(current_member['patient_name']), unsafe_allow_html=True)
                     
                     # Move to next family member
                     st.session_state.current_family_vital_index = st.session_state.get('current_family_vital_index', 0) + 1
@@ -1767,7 +1778,7 @@ def vital_signs_form(visit_id: str):
         
         with col3:
             weight = st.number_input("Weight (kg)", min_value=0.5, max_value=500.0, value=None, step=0.1)
-            height = st.number_input("Height (cm)", min_value=30.0, max_value=250.0, value=None, step=0.5)
+            height = st.number_input("Height (inches)", min_value=12.0, max_value=96.0, value=None, step=0.5)
             oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
         
         if st.form_submit_button("Save Vital Signs", type="primary"):
@@ -1790,7 +1801,18 @@ def vital_signs_form(visit_id: str):
             conn.close()
             
             st.success("✅ Vital signs recorded! Patient is ready for consultation.")
-            st.info(f"**{st.session_state.get('patient_name', 'Patient')}** has been sent to the doctor queue for consultation.")
+            
+            # Green confirmation box
+            st.markdown("""
+                <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 0.375rem; padding: 1rem; margin: 0.5rem 0;">
+                    <div style="color: #155724; font-weight: bold; font-size: 1.1rem;">
+                        🟢 PATIENT SENT TO DOCTOR QUEUE
+                    </div>
+                    <div style="color: #155724; margin-top: 0.5rem;">
+                        <strong>{}</strong> is now waiting for consultation
+                    </div>
+                </div>
+            """.format(st.session_state.get('patient_name', 'Patient')), unsafe_allow_html=True)
             
             # Clear the pending vitals from session state
             if 'pending_vitals' in st.session_state:
@@ -2006,8 +2028,38 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         st.markdown("#### 📸 Photo Documentation")
         st.info("Capture photos of visible symptoms or affected areas to enhance diagnosis and treatment documentation.")
         
-        # Camera input for symptom documentation
+        # Camera input for symptom documentation (rear-facing by default)
         photo_file = st.camera_input("Take a photo of symptoms/affected area", key=f"symptom_photo_{visit_id}")
+        
+        # Add JavaScript to set rear camera as default
+        st.markdown("""
+        <script>
+        // Set rear camera as default when camera input loads
+        setTimeout(function() {
+            const videoElements = document.querySelectorAll('video');
+            videoElements.forEach(video => {
+                if (video.srcObject) {
+                    const stream = video.srcObject;
+                    const tracks = stream.getVideoTracks();
+                    tracks.forEach(track => {
+                        track.stop();
+                    });
+                    
+                    navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { exact: "environment" } }
+                    }).then(stream => {
+                        video.srcObject = stream;
+                    }).catch(() => {
+                        // Fallback to any camera if rear not available
+                        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                            video.srcObject = stream;
+                        });
+                    });
+                }
+            });
+        }, 1000);
+        </script>
+        """, unsafe_allow_html=True)
         
         if photo_file is not None:
             # Display the captured photo
@@ -3260,26 +3312,37 @@ def patient_management():
         st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
         
         for patient in filtered_patients:
-            with st.expander(f"{patient['name']} (ID: {patient['patient_id']})", expanded=False):
-                # Basic patient info
-                col1, col2 = st.columns(2)
-                with col1:
+            col1, col2 = st.columns([4, 1])
+            
+            with col1:
+                # Make patient name clickable for full history
+                if st.button(f"📋 {patient['name']} (ID: {patient['patient_id']})", 
+                           key=f"patient_history_{patient['patient_id']}", 
+                           use_container_width=True):
+                    st.session_state.show_patient_history = {
+                        'patient_id': patient['patient_id'],
+                        'patient_name': patient['name']
+                    }
+                    st.rerun()
+            
+            with col2:
+                # Quick info toggle
+                with st.expander("📄", expanded=False):
+                    # Basic patient info
                     st.write(f"**Age:** {patient['age'] or 'Not specified'}")
                     st.write(f"**Gender:** {patient['gender'] or 'Not specified'}")
                     st.write(f"**Phone:** {patient['phone'] or 'Not provided'}")
-                
-                with col2:
                     st.write(f"**Emergency Contact:** {patient['emergency_contact'] or 'Not provided'}")
                     st.write(f"**Last Visit:** {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}")
-                
-                # Medical history
-                if patient['medical_history']:
-                    st.markdown("**Medical History:**")
-                    st.text(patient['medical_history'])
-                
-                if patient['allergies']:
-                    st.markdown("**Allergies:**")
-                    st.text(patient['allergies'])
+                    
+                    # Medical history
+                    if patient['medical_history']:
+                        st.markdown("**Medical History:**")
+                        st.text(patient['medical_history'])
+                    
+                    if patient['allergies']:
+                        st.markdown("**Allergies:**")
+                        st.text(patient['allergies'])
                 
                 # Get visit history
                 conn = sqlite3.connect("clinic_database.db")
