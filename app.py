@@ -1106,8 +1106,35 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Show universal back button at the very top
-    show_back_button()
+    # Universal back button positioned where menu button would be
+    if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
+        # Position back button in top-right where hamburger menu was
+        st.markdown("""
+        <style>
+        /* Position back button in top-right corner like hamburger menu */
+        .back-button-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 999999;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        </style>
+        <div class="back-button-container">
+            <button onclick="window.parent.postMessage({type: 'streamlit:setComponentValue', value: true}, '*')" 
+                    style="background: none; border: none; color: #374151; font-size: 16px; cursor: pointer;">
+                ← Back
+            </button>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Handle back button click
+        if st.button("← Back", key="universal_back_btn", help="Go back"):
+            go_back()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -1604,22 +1631,9 @@ def main():
         st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
     
     # Navigation buttons in a cleaner horizontal layout
-    nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 4, 4])
+    nav_col1, nav_col2, nav_col3 = st.columns([3, 4, 5])
     
     with nav_col1:
-        if st.button("← Back", key="back_button", help="Previous page", use_container_width=True):
-            # Navigate back based on current state
-            if st.session_state.get('page') == 'consultation_form':
-                st.session_state.page = 'doctor'
-                if 'active_consultation' in st.session_state:
-                    del st.session_state.active_consultation
-            elif st.session_state.get('user_role'):
-                st.session_state.user_role = None
-            elif st.session_state.get('clinic_location'):
-                st.session_state.clinic_location = None
-            st.rerun()
-    
-    with nav_col2:
         if st.button("⚪ Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
@@ -1924,7 +1938,6 @@ def location_setup():
 
 def triage_interface():
     add_to_history('triage')
-    show_back_button()
     st.markdown("## 🩺 Triage Station")
     
     tab1, tab2, tab3 = st.tabs(["New Patient", "Existing Patient", "Patient Queue"])
@@ -2608,7 +2621,6 @@ def patient_queue_view():
 
 def doctor_interface():
     add_to_history('doctor')
-    show_back_button()
     st.markdown(f"## 👨‍⚕️ Doctor Consultation - {st.session_state.doctor_name}")
     
     # Update doctor status and show real-time status of all doctors
@@ -3799,7 +3811,6 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
 
 def pharmacy_interface():
     add_to_history('pharmacy')
-    show_back_button()
     st.markdown("## 💊 Pharmacy Station")
     
     tab1, tab2, tab3 = st.tabs(["Ready to Fill", "Awaiting Lab Results", "Filled Prescriptions"])
@@ -4067,7 +4078,6 @@ def filled_prescriptions():
 
 def lab_interface():
     add_to_history('lab')
-    show_back_button()
     st.markdown("## 🔬 Laboratory")
     
     tab1, tab2 = st.tabs(["Pending Tests", "Lab Results"])
@@ -4465,7 +4475,6 @@ def patient_management():
 
 def admin_interface():
     add_to_history('admin')
-    show_back_button()
     st.markdown("## Admin Dashboard")
     
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["Patient Management", "Doctor Management", "Medication Management", "Reports", "Settings"])
