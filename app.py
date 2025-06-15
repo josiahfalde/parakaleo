@@ -1255,15 +1255,29 @@ def main():
     
     /* Modern input styling */
     .stTextInput input, .stSelectbox select, .stNumberInput input {
-        border-radius: 8px !important;
-        border: 2px solid #e9ecef !important;
-        padding: 12px !important;
-        transition: all 0.3s ease !important;
+        border-radius: 6px !important;
+        border: 1px solid #d1d5db !important;
+        padding: 8px 12px !important;
+        transition: all 0.2s ease !important;
+        background: #ffffff !important;
     }
     
     .stTextInput input:focus, .stSelectbox select:focus, .stNumberInput input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+        outline: none !important;
+    }
+    
+    /* Fix selectbox styling */
+    .stSelectbox > div > div > div {
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+        background: #ffffff !important;
+    }
+    
+    .stSelectbox > div > div > div:focus-within {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
     }
     
     /* BackpackEMR-style tabs */
@@ -2050,38 +2064,104 @@ def new_patient_form():
                     relationship_icon = "👨‍👩" if member['relationship'] == 'parent' else "👶"
                     st.write(f"{relationship_icon} {member['name']} ({member['age']} yrs, {member['gender']}) - {member['relationship'].title()}")
             
-            with st.expander("👶 Add Child", expanded=True):
-                with st.form("child_registration"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        child_name = st.text_input("Child's Name *")
-                        child_age = st.number_input("Age", min_value=0, max_value=17, value=None, key="child_age")
-                        child_gender = st.selectbox("Gender", ["", "Male", "Female"], key="child_gender")
-                    
-                    with col2:
-                        relationship = st.selectbox("Relationship", ["child", "stepchild", "adopted child", "other"])
-                    
-                    child_submitted = st.form_submit_button("Add Child to Family", type="secondary")
-                    
-                    if child_submitted and child_name.strip():
-                        child_data = {
-                            'name': child_name.strip(),
-                            'age': child_age,
-                            'gender': child_gender if child_gender else None,
-                            'relationship': relationship
-                        }
+            # Dynamic child registration - show multiple forms as needed
+            if 'num_children_forms' not in st.session_state:
+                st.session_state.num_children_forms = 1
+            
+            st.markdown("#### Add Children to Family")
+            
+            # Display multiple child forms
+            for form_idx in range(st.session_state.num_children_forms):
+                with st.expander(f"👶 Child #{form_idx + 1}", expanded=True):
+                    with st.form(f"child_registration_{form_idx}"):
+                        col1, col2 = st.columns(2)
                         
-                        location_code = st.session_state.clinic_location['country_code']
-                        child_id = db.add_family_member(
-                            parent_id=st.session_state.family_parent_id,
-                            location_code=location_code,
-                            **child_data
-                        )
+                        with col1:
+                            child_name = st.text_input("Child's Name *", key=f"child_name_{form_idx}")
+                            child_age = st.number_input("Age", min_value=0, max_value=17, value=None, key=f"child_age_{form_idx}")
+                            child_gender = st.selectbox("Gender", ["", "Male", "Female"], key=f"child_gender_{form_idx}")
                         
-                        st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
-                        st.info("➕ Add another child or create visits for the entire family below.")
-                        st.rerun()
+                        with col2:
+                            relationship = st.selectbox("Relationship", ["child", "stepchild", "adopted child", "other"], key=f"relationship_{form_idx}")
+                        
+                        col_submit, col_add = st.columns(2)
+                        with col_submit:
+                            child_submitted = st.form_submit_button("Add Child", type="primary")
+                        with col_add:
+                            add_another = st.form_submit_button("Add Another Child Form", type="secondary")
+                        
+                        if child_submitted and child_name.strip():
+                            child_data = {
+                                'name': child_name.strip(),
+                                'age': child_age,
+                                'gender': child_gender if child_gender else None,
+                                'relationship': relationship
+                            }
+                            
+                            location_code = st.session_state.clinic_location['country_code']
+                            child_id = db.add_family_member(
+                                parent_id=st.session_state.family_parent_id,
+                                location_code=location_code,
+                                **child_data
+                            )
+                            
+                            st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
+                            st.rerun()
+                        
+                        if add_another:
+                            st.session_state.num_children_forms += 1
+                            st.rerun()
+            
+            # Vital signs collection for children
+            if family_members:
+                st.markdown("#### Children's Vital Signs")
+                st.info("Record vital signs for each child before creating visits.")
+                
+                for member in family_members:
+                    if member['relationship'] != 'parent':
+                        with st.expander(f"📊 Vital Signs for {member['name']} (Age: {member['age']})", expanded=False):
+                            vital_key = f"vitals_{member['patient_id']}"
+                            
+                            with st.form(f"vitals_form_{member['patient_id']}"):
+                                st.markdown(f"**Recording vital signs for {member['name']}**")
+                                
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    systolic = st.number_input("Systolic BP", min_value=50, max_value=200, value=100, key=f"sys_{member['patient_id']}")
+                                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=150, value=60, key=f"dia_{member['patient_id']}")
+                                
+                                with col2:
+                                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=60, max_value=200, value=100, key=f"hr_{member['patient_id']}")
+                                    temperature = st.number_input("Temperature (°F)", min_value=95.0, max_value=105.0, value=98.6, step=0.1, key=f"temp_{member['patient_id']}")
+                                
+                                with col3:
+                                    weight = st.number_input("Weight (kg)", min_value=5.0, max_value=150.0, value=None, step=0.1, key=f"weight_{member['patient_id']}")
+                                    height = st.number_input("Height (inches)", min_value=20.0, max_value=72.0, value=None, step=0.5, key=f"height_{member['patient_id']}")
+                                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=85, max_value=100, value=98, key=f"o2_{member['patient_id']}")
+                                
+                                if st.form_submit_button(f"Save Vital Signs for {member['name']}", type="secondary"):
+                                    # Store vital signs in session state for later use
+                                    if 'family_vitals' not in st.session_state:
+                                        st.session_state.family_vitals = {}
+                                    
+                                    st.session_state.family_vitals[member['patient_id']] = {
+                                        'systolic': systolic,
+                                        'diastolic': diastolic,
+                                        'heart_rate': heart_rate,
+                                        'temperature': temperature,
+                                        'weight': weight,
+                                        'height': height,
+                                        'oxygen_sat': oxygen_sat
+                                    }
+                                    
+                                    st.success(f"✅ Vital signs saved for {member['name']}")
+                                    st.rerun()
+                            
+                            # Show saved vitals if they exist
+                            if 'family_vitals' in st.session_state and member['patient_id'] in st.session_state.family_vitals:
+                                vitals = st.session_state.family_vitals[member['patient_id']]
+                                st.success(f"✅ Vital signs recorded: BP {vitals['systolic']}/{vitals['diastolic']}, HR {vitals['heart_rate']}, Temp {vitals['temperature']}°F")
             
             # Automatically create visits for entire family when family registration is complete
             st.markdown("#### Create Family Visits")
