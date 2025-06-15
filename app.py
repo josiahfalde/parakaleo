@@ -272,6 +272,14 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
+        # Ensure counters table exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS counters (
+                location_code TEXT PRIMARY KEY,
+                value INTEGER
+            )
+        ''')
+        
         # Get current counter for this location
         cursor.execute('SELECT value FROM counters WHERE location_code = ?', (location_code,))
         result = cursor.fetchone()
@@ -489,8 +497,18 @@ def get_db_manager():
 db = get_db_manager()
 
 def main():
-    st.title("🏥 Medical Clinic Charting System")
-    st.markdown("### Mission Trip Patient Management")
+    # Load and display Parakaleo logo
+    with open("parakaleo_logo.svg", "r") as f:
+        logo_svg = f.read()
+    
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        st.markdown(logo_svg, unsafe_allow_html=True)
+    with col2:
+        st.markdown("# Medical Clinic Charting System")
+        st.markdown("*Mission Trip Patient Management*")
+    
+    st.markdown("---")
     
     # Location selection first
     if 'clinic_location' not in st.session_state:
@@ -509,34 +527,25 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        st.markdown("#### Select Your Role:")
+        st.markdown("### Select Your Role")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🩺 Triage Nurse", key="triage", type="primary"):
+            if st.button("Triage Nurse", key="triage", type="primary", use_container_width=True):
                 st.session_state.user_role = "triage"
                 st.rerun()
-        
-        with col2:
-            if st.button("👨‍⚕️ Doctor", key="doctor", type="primary"):
+            
+            if st.button("Doctor", key="doctor", type="primary", use_container_width=True):
                 st.session_state.user_role = "doctor"
                 st.rerun()
         
-        with col3:
-            if st.button("💊 Pharmacy", key="pharmacy", type="primary"):
+        with col2:
+            if st.button("Pharmacy", key="pharmacy", type="primary", use_container_width=True):
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
-        
-        # Add lab role
-        col4, col5 = st.columns([1, 1])
-        with col4:
-            if st.button("🔬 Lab Tech", key="lab", type="secondary"):
-                st.session_state.user_role = "lab"
-                st.rerun()
-        
-        with col5:
-            if st.button("⚙️ Admin", key="admin", type="secondary"):
+            
+            if st.button("Administrator", key="admin", type="primary", use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
         
@@ -552,8 +561,6 @@ def main():
         doctor_interface()
     elif st.session_state.user_role == "pharmacy":
         pharmacy_interface()
-    elif st.session_state.user_role == "lab":
-        lab_interface()
     elif st.session_state.user_role == "admin":
         admin_interface()
     
@@ -642,7 +649,7 @@ def new_patient_form():
         with col1:
             name = st.text_input("Patient Name *", placeholder="Enter full name")
             age = st.number_input("Age", min_value=0, max_value=120, value=None)
-            gender = st.selectbox("Gender", ["", "Male", "Female", "Other"])
+            gender = st.selectbox("Gender", ["", "Male", "Female"])
         
         with col2:
             phone = st.text_input("Phone Number", placeholder="Optional")
@@ -650,8 +657,6 @@ def new_patient_form():
         
         medical_history = st.text_area("Medical History", placeholder="Previous conditions, surgeries, etc.")
         allergies = st.text_area("Allergies", placeholder="Known allergies or medications to avoid")
-        
-        priority = st.selectbox("Priority Level", ["Normal", "Urgent", "Critical"])
         
         if st.form_submit_button("Register Patient", type="primary"):
             if name.strip():
