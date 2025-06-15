@@ -1,37 +1,32 @@
-
 <svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <style>
-      .link-circle { fill: none; stroke-width: 2; opacity: 0.8; }
-      .orange-link { stroke: #FF6B35; }
-      .blue-link { stroke: #4A90E2; }
-      .green-link { stroke: #50C878; }
-      .purple-link { stroke: #9B59B6; }
-      .yellow-link { stroke: #F1C40F; }
-      .red-link { stroke: #E74C3C; }
-      .parakaleo-text { font-family: Arial, sans-serif; font-size: 6px; font-weight: bold; fill: #333; }
+      .ring { fill: none; stroke-width: 2.5; }
+      .orange { stroke: #FF6B35; }
+      .blue { stroke: #3498DB; }
+      .green { stroke: #2ECC71; }
+      .purple { stroke: #9B59B6; }
+      .yellow { stroke: #F1C40F; }
+      .red { stroke: #E74C3C; }
     </style>
   </defs>
   
-  <!-- Parakaleo interlocking circles representing connection and community -->
+  <!-- Interlocking rings based on Parakaleo logo -->
   <g transform="translate(25, 25)">
-    <!-- Main connecting circles -->
-    <circle cx="-8" cy="-8" r="10" class="link-circle orange-link"/>
-    <circle cx="8" cy="-8" r="10" class="link-circle blue-link"/>
-    <circle cx="8" cy="8" r="10" class="link-circle green-link"/>
-    <circle cx="-8" cy="8" r="10" class="link-circle purple-link"/>
+    <!-- Outer ring - Orange -->
+    <circle cx="0" cy="0" r="18" class="ring orange"/>
     
-    <!-- Center connecting element -->
-    <circle cx="0" cy="0" r="9" class="link-circle yellow-link"/>
-    <circle cx="0" cy="0" r="6" class="link-circle red-link"/>
+    <!-- Second ring - Blue -->
+    <circle cx="8" cy="-6" r="14" class="ring blue"/>
     
-    <!-- Small connecting dots -->
-    <circle cx="0" cy="-12" r="2" fill="#FF6B35"/>
-    <circle cx="12" cy="0" r="2" fill="#4A90E2"/>
-    <circle cx="0" cy="12" r="2" fill="#50C878"/>
-    <circle cx="-12" cy="0" r="2" fill="#9B59B6"/>
+    <!-- Third ring - Green -->
+    <circle cx="-8" cy="-6" r="14" class="ring green"/>
+    
+    <!-- Fourth ring - Purple -->
+    <circle cx="0" cy="10" r="12" class="ring purple"/>
+    
+    <!-- Inner elements -->
+    <circle cx="5" cy="3" r="8" class="ring yellow"/>
+    <circle cx="-5" cy="3" r="8" class="ring red"/>
   </g>
-  
-  <!-- Parakaleo text (very small) -->
-  <text x="25" y="46" text-anchor="middle" class="parakaleo-text">P</text>
 </svg>
