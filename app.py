@@ -1587,11 +1587,22 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with centered logo - no extra spacing
+    # Header with centered logo - minimal spacing
+    st.markdown("""
+    <style>
+    .main > div:first-child {
+        padding-top: 0 !important;
+    }
+    .block-container {
+        padding-top: 1rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
-    st.markdown('<p style="text-align: center; color: #666; margin: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align: center; color: #666; margin: 0; line-height: 1;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
     nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
