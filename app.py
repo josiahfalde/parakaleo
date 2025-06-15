@@ -2572,10 +2572,17 @@ def vital_signs_form(visit_id: str):
                         st.session_state.family_vital_signs_queue = family_vitals_queue
                         st.session_state.current_family_vital_index = 0
                         st.info(f"👶 Found {len(family_vitals_queue)} children who need vital signs recorded.")
+                        
+                        # Clear the pending vitals but don't clear patient_name yet as we'll need it
+                        if 'pending_vitals' in st.session_state:
+                            del st.session_state.pending_vitals
+                        
+                        st.rerun()
+                        return  # Exit early to start children's vital signs workflow
             else:
                 patient_conn.close()
             
-            # Clear the pending vitals from session state
+            # Only clear session state if no children workflow was started
             if 'pending_vitals' in st.session_state:
                 del st.session_state.pending_vitals
             if 'patient_name' in st.session_state:
