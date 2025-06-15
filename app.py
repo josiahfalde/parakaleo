@@ -2263,19 +2263,71 @@ def medication_management():
             with st.expander(f"{category} Medications"):
                 category_meds = [med for med in medications if med['category'] == category]
                 for med in category_meds:
-                    col1, col2, col3 = st.columns([2, 1, 1])
-                    with col1:
-                        st.write(f"**{med['medication_name']}** - {med['common_dosages']}")
-                    with col2:
-                        st.write(f"Category: {med['category']}")
-                    with col3:
-                        if st.button("Deactivate", key=f"deactivate_{med['id']}"):
-                            conn = sqlite3.connect(db.db_name)
-                            cursor = conn.cursor()
-                            cursor.execute('UPDATE preset_medications SET active = 0 WHERE id = ?', (med['id'],))
-                            conn.commit()
-                            conn.close()
-                            st.rerun()
+                    # Check if this medication is being edited
+                    edit_key = f"edit_{med['id']}"
+                    is_editing = st.session_state.get(edit_key, False)
+                    
+                    if is_editing:
+                        # Edit form
+                        with st.form(f"edit_form_{med['id']}"):
+                            st.markdown(f"**Editing: {med['medication_name']}**")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                new_name = st.text_input("Medication Name", value=med['medication_name'])
+                                new_dosages = st.text_area("Common Dosages", value=med['common_dosages'], height=100)
+                            with col2:
+                                categories = ["Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic", "Cholesterol", "UTI Antibiotic", "Other"]
+                                try:
+                                    cat_index = categories.index(med['category'])
+                                except ValueError:
+                                    cat_index = 0
+                                new_category = st.selectbox("Category", categories, index=cat_index)
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("Save Changes", type="primary"):
+                                    if new_name.strip():
+                                        conn = sqlite3.connect("clinic_database.db")
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE preset_medications 
+                                            SET medication_name = ?, common_dosages = ?, category = ?
+                                            WHERE id = ?
+                                        ''', (new_name.strip(), new_dosages.strip(), new_category, med['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        st.session_state[edit_key] = False
+                                        st.success("Medication updated!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Medication name cannot be empty")
+                            
+                            with col_cancel:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode
+                        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                        with col1:
+                            st.write(f"**{med['medication_name']}**")
+                            st.caption(med['common_dosages'])
+                        with col2:
+                            st.write(f"{med['category']}")
+                        with col3:
+                            if st.button("Edit", key=f"edit_btn_{med['id']}", type="secondary"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
+                        with col4:
+                            if st.button("Delete", key=f"delete_{med['id']}", type="secondary"):
+                                conn = sqlite3.connect("clinic_database.db")
+                                cursor = conn.cursor()
+                                cursor.execute('DELETE FROM preset_medications WHERE id = ?', (med['id'],))
+                                conn.commit()
+                                conn.close()
+                                st.success("Medication removed!")
+                                st.rerun()
 
 def daily_reports():
     st.markdown("### Daily Statistics")
