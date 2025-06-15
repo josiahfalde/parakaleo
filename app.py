@@ -694,38 +694,7 @@ class DatabaseManager:
         conn.close()
         return photos
     
-    def add_family_member(self, parent_id: str, location_code: str, **kwargs) -> str:
-        """Add a family member under a parent"""
-        # Get parent's family_id or create one
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT family_id FROM patients WHERE patient_id = ?', (parent_id,))
-        parent_data = cursor.fetchone()
-        
-        if parent_data and parent_data[0]:
-            family_id = parent_data[0]
-        else:
-            # Create new family_id and update parent
-            family_id = f"FAM_{parent_id}"
-            cursor.execute('UPDATE patients SET family_id = ? WHERE patient_id = ?', (family_id, parent_id))
-        
-        conn.close()
-        
-        # Add the family member
-        # Remove relationship from kwargs to avoid duplicate parameter
-        family_member_data = kwargs.copy()
-        relationship = family_member_data.pop('relationship', 'child')
-        
-        patient_id = self.add_patient(
-            location_code,
-            family_id=family_id,
-            parent_id=parent_id,
-            relationship=relationship,
-            **family_member_data
-        )
-        
-        return patient_id
+
     
     def get_family_members(self, patient_id: str) -> List[Dict]:
         """Get all family members for a patient"""
@@ -2446,199 +2415,156 @@ def new_patient_form():
     
     else:  # Family Registration
         st.markdown("#### Family Registration")
-        st.info("Register a parent/guardian first, then add children to the family.")
+        st.info("Create a family file that includes parent/guardian and all children together.")
         
-        # Parent/Guardian Registration
-        with st.expander("👨‍👩‍👧‍👦 Register Parent/Guardian", expanded=True):
-            with st.form("parent_registration"):
-                st.markdown("**Parent/Guardian Information**")
+        # Family Information Form
+        with st.form("family_registration_form"):
+            st.markdown("**Family Information**")
+            
+            # Family details
+            col1, col2 = st.columns(2)
+            with col1:
+                family_name = st.text_input("Family Name *", placeholder="e.g., The Rodriguez Family")
+                family_address = st.text_input("Address", placeholder="Street, neighborhood, city")
+            with col2:
+                family_phone = st.text_input("Family Phone Number")
+                emergency_contact = st.text_input("Emergency Contact")
+            
+            st.markdown("---")
+            st.markdown("**Parent/Guardian Information**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                parent_name = st.text_input("Parent/Guardian Name *")
+                parent_age = st.number_input("Age", min_value=18, max_value=120, value=None, key="parent_age")
+                parent_gender = st.selectbox("Gender", ["", "Male", "Female"], key="parent_gender")
+            with col2:
+                parent_phone = st.text_input("Parent Phone (if different)", key="parent_phone")
+                parent_medical_history = st.text_area("Medical History", key="parent_medical", height=80)
+                parent_allergies = st.text_input("Allergies", key="parent_allergies")
+            
+            st.markdown("---")
+            st.markdown("**Children Information**")
+            
+            # Number of children
+            num_children = st.number_input("Number of children", min_value=0, max_value=10, value=1)
+            
+            children_data = []
+            for i in range(num_children):
+                st.markdown(f"**Child {i+1}**")
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    parent_name = st.text_input("Parent/Guardian Name *")
-                    parent_age = st.number_input("Age", min_value=18, max_value=120, value=None, key="parent_age")
-                    parent_gender = st.selectbox("Gender", ["", "Male", "Female"], key="parent_gender")
-                
+                    child_name = st.text_input(f"Child {i+1} Name *", key=f"child_name_{i}")
+                    child_age = st.number_input(f"Age", min_value=0, max_value=17, value=None, key=f"child_age_{i}")
+                    child_gender = st.selectbox("Gender", ["", "Male", "Female"], key=f"child_gender_{i}")
                 with col2:
-                    parent_phone = st.text_input("Phone Number", key="parent_phone")
-                    emergency_contact = st.text_input("Emergency Contact", key="parent_emergency")
+                    child_medical_history = st.text_area("Medical History", key=f"child_medical_{i}", height=60)
+                    child_allergies = st.text_input("Allergies", key=f"child_allergies_{i}")
                 
-                parent_submitted = st.form_submit_button("Register Parent/Guardian", type="primary")
-                
-                if parent_submitted and parent_name.strip():
-                    parent_data = {
-                        'name': parent_name.strip(),
-                        'age': parent_age,
-                        'gender': parent_gender if parent_gender else None,
-                        'phone': parent_phone.strip() if parent_phone else None,
-                        'emergency_contact': emergency_contact.strip() if emergency_contact else None,
-                        'relationship': 'parent'
-                    }
+                children_data.append({
+                    'name': child_name,
+                    'age': child_age,
+                    'gender': child_gender,
+                    'medical_history': child_medical_history,
+                    'allergies': child_allergies
+                })
+            
+            family_submitted = st.form_submit_button("Create Family File", type="primary")
+            
+            if family_submitted:
+                if family_name.strip() and parent_name.strip():
+                    # Validate children data
+                    valid_children = [child for child in children_data if child['name'].strip()]
                     
-                    location_code = st.session_state.clinic_location['country_code']
-                    parent_id = db.add_patient(location_code, **parent_data)
-                    
-                    st.session_state.family_parent_id = parent_id
-                    st.session_state.family_parent_name = parent_name.strip()
-                    st.success(f"✅ Parent registered with ID: **{parent_id}**")
-                    st.rerun()
-        
-        # Children Registration (only show if parent is registered)
-        if 'family_parent_id' in st.session_state:
-            st.markdown(f"**Adding children for: {st.session_state.family_parent_name}** (ID: {st.session_state.family_parent_id})")
-            
-            # Show existing family members
-            family_members = db.get_family_members(st.session_state.family_parent_id)
-            if family_members:
-                st.markdown("**Current Family Members:**")
-                for member in family_members:
-                    relationship_icon = "👨‍👩" if member['relationship'] == 'parent' else "👶"
-                    st.write(f"{relationship_icon} {member['name']} ({member['age']} yrs, {member['gender']}) - {member['relationship'].title()}")
-            
-            # Dynamic child registration - show multiple forms as needed
-            if 'num_children_forms' not in st.session_state:
-                st.session_state.num_children_forms = 1
-            
-            st.markdown("#### Add Children to Family")
-            
-            # Display multiple child forms
-            for form_idx in range(st.session_state.num_children_forms):
-                with st.expander(f"👶 Child #{form_idx + 1}", expanded=True):
-                    with st.form(f"child_registration_{form_idx}"):
-                        col1, col2 = st.columns(2)
+                    if len(valid_children) > 0 or num_children == 0:
+                        location_code = st.session_state.clinic_location['country_code']
                         
-                        with col1:
-                            child_name = st.text_input("Child's Name *", key=f"child_name_{form_idx}")
-                            child_age = st.number_input("Age", min_value=0, max_value=17, value=None, key=f"child_age_{form_idx}")
-                            child_gender = st.selectbox("Gender", ["", "Male", "Female"], key=f"child_gender_{form_idx}")
+                        # Create family unit
+                        family_id = db.create_family(
+                            location_code=location_code,
+                            family_name=family_name.strip(),
+                            head_of_household=parent_name.strip(),
+                            address=family_address.strip() if family_address else "",
+                            phone=family_phone.strip() if family_phone else "",
+                            emergency_contact=emergency_contact.strip() if emergency_contact else ""
+                        )
                         
-                        with col2:
-                            relationship = st.selectbox("Relationship", ["child", "stepchild", "adopted child", "other"], key=f"relationship_{form_idx}")
+                        # Add parent to family
+                        parent_id = db.add_family_member(
+                            family_id=family_id,
+                            location_code=location_code,
+                            relationship="parent",
+                            name=parent_name.strip(),
+                            age=parent_age,
+                            gender=parent_gender if parent_gender else None,
+                            phone=parent_phone.strip() if parent_phone else "",
+                            medical_history=parent_medical_history.strip() if parent_medical_history else "",
+                            allergies=parent_allergies.strip() if parent_allergies else "",
+                            address=family_address.strip() if family_address else ""
+                        )
                         
-                        child_submitted = st.form_submit_button("Add Child", type="primary")
+                        # Add children to family
+                        family_members = [{'patient_id': parent_id, 'patient_name': parent_name.strip(), 'relationship': 'parent'}]
                         
-                        if child_submitted and child_name.strip():
-                            child_data = {
-                                'name': child_name.strip(),
-                                'age': child_age,
-                                'gender': child_gender if child_gender else None,
-                                'relationship': relationship
-                            }
-                            
-                            location_code = st.session_state.clinic_location['country_code']
+                        for child in valid_children:
                             child_id = db.add_family_member(
-                                parent_id=st.session_state.family_parent_id,
+                                family_id=family_id,
                                 location_code=location_code,
-                                **child_data
+                                relationship="child",
+                                parent_id=parent_id,
+                                name=child['name'].strip(),
+                                age=child['age'],
+                                gender=child['gender'] if child['gender'] else None,
+                                medical_history=child['medical_history'].strip() if child['medical_history'] else "",
+                                allergies=child['allergies'].strip() if child['allergies'] else "",
+                                address=family_address.strip() if family_address else ""
                             )
                             
-                            st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
-                            # Auto-create another form after adding a child
-                            st.session_state.num_children_forms += 1
-                            st.rerun()
-            
-            # Vital signs collection for children
-            if family_members:
-                st.markdown("#### Children's Vital Signs")
-                st.info("Record vital signs for each child before creating visits.")
-                
-                for member in family_members:
-                    if member['relationship'] != 'parent':
-                        with st.expander(f"📊 Vital Signs for {member['name']} (Age: {member['age']})", expanded=False):
-                            vital_key = f"vitals_{member['patient_id']}"
-                            
-                            with st.form(f"vitals_form_{member['patient_id']}"):
-                                st.markdown(f"**Recording vital signs for {member['name']}**")
-                                
-                                col1, col2, col3 = st.columns(3)
-                                
-                                with col1:
-                                    systolic = st.number_input("Systolic BP", min_value=50, max_value=200, value=100, key=f"sys_{member['patient_id']}")
-                                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=150, value=60, key=f"dia_{member['patient_id']}")
-                                
-                                with col2:
-                                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=60, max_value=200, value=100, key=f"hr_{member['patient_id']}")
-                                    temperature = st.number_input("Temperature (°F)", min_value=95.0, max_value=105.0, value=98.6, step=0.1, key=f"temp_{member['patient_id']}")
-                                
-                                with col3:
-                                    weight = st.number_input("Weight (kg)", min_value=5.0, max_value=150.0, value=None, step=0.1, key=f"weight_{member['patient_id']}")
-                                    height = st.number_input("Height (inches)", min_value=20.0, max_value=72.0, value=None, step=0.5, key=f"height_{member['patient_id']}")
-                                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=85, max_value=100, value=98, key=f"o2_{member['patient_id']}")
-                                
-                                if st.form_submit_button(f"Save Vital Signs for {member['name']}", type="secondary"):
-                                    # Store vital signs in session state for later use
-                                    if 'family_vitals' not in st.session_state:
-                                        st.session_state.family_vitals = {}
-                                    
-                                    st.session_state.family_vitals[member['patient_id']] = {
-                                        'systolic': systolic,
-                                        'diastolic': diastolic,
-                                        'heart_rate': heart_rate,
-                                        'temperature': temperature,
-                                        'weight': weight,
-                                        'height': height,
-                                        'oxygen_sat': oxygen_sat
-                                    }
-                                    
-                                    st.success(f"✅ Vital signs saved for {member['name']}")
-                                    st.rerun()
-                            
-                            # Show saved vitals if they exist
-                            if 'family_vitals' in st.session_state and member['patient_id'] in st.session_state.family_vitals:
-                                vitals = st.session_state.family_vitals[member['patient_id']]
-                                st.success(f"✅ Vital signs recorded: BP {vitals['systolic']}/{vitals['diastolic']}, HR {vitals['heart_rate']}, Temp {vitals['temperature']}°F")
-            
-            # Automatically create visits for entire family when family registration is complete
-            st.markdown("#### Create Family Visits")
-            if st.button("Create Visits for Entire Family", type="primary", use_container_width=True):
-                family_visits = []
-                
-                # Create visit for parent
-                parent_visit_id = db.create_visit(st.session_state.family_parent_id)
-                family_visits.append({
-                    'patient_id': st.session_state.family_parent_id,
-                    'patient_name': st.session_state.family_parent_name,
-                    'visit_id': parent_visit_id,
-                    'relationship': 'parent'
-                })
-                
-                # Create visits for all children
-                for member in family_members:
-                    if member['relationship'] != 'parent':
-                        child_visit_id = db.create_visit(member['patient_id'])
-                        family_visits.append({
-                            'patient_id': member['patient_id'],
-                            'patient_name': member['name'],
-                            'visit_id': child_visit_id,
-                            'relationship': member['relationship'],
-                            'age': member.get('age', None)
-                        })
-                
-                # Store family consultation data
-                st.session_state.family_consultation = {
-                    'parent_id': st.session_state.family_parent_id,
-                    'parent_name': st.session_state.family_parent_name,
-                    'family_visits': family_visits
-                }
-                
-                st.success(f"✅ Created visits for entire family ({len(family_visits)} members)")
-                st.info("Family is ready for vital signs and consultation. Each family member needs vital signs recorded.")
-                
-                # Store family visits for vital signs processing - ensure each member gets their own form
-                st.session_state.family_vital_signs_queue = family_visits.copy()
-                st.session_state.current_family_vital_index = 0
-                st.session_state.family_workflow_active = True
-                
-                # Debug info to verify family queue
-                st.info(f"Family queue created with {len(family_visits)} members: {[v['patient_name'] for v in family_visits]}")
-                
-                # Clear family registration state
-                if 'family_parent_id' in st.session_state:
-                    del st.session_state.family_parent_id
-                if 'family_parent_name' in st.session_state:
-                    del st.session_state.family_parent_name
-                
-                st.rerun()
+                            family_members.append({
+                                'patient_id': child_id, 
+                                'patient_name': child['name'].strip(), 
+                                'relationship': 'child'
+                            })
+                        
+                        # Create visits for all family members
+                        family_visits = []
+                        for member in family_members:
+                            visit_id = db.create_visit(member['patient_id'])
+                            family_visits.append({
+                                'visit_id': visit_id,
+                                'patient_id': member['patient_id'],
+                                'patient_name': member['patient_name'],
+                                'relationship': member['relationship']
+                            })
+                        
+                        st.success(f"✅ Family file created successfully!")
+                        st.info(f"**Family ID:** {family_id}")
+                        st.info(f"**Family Members:** {len(family_members)} (1 parent + {len(valid_children)} children)")
+                        
+                        # Display all created patient IDs
+                        st.markdown("**Patient IDs Created:**")
+                        for visit in family_visits:
+                            st.write(f"• {visit['patient_name']} ({visit['relationship']}): {visit['patient_id']}")
+                        
+                        # Store family visits for vital signs processing
+                        st.session_state.family_vital_signs_queue = family_visits.copy()
+                        st.session_state.current_family_vital_index = 0
+                        st.session_state.family_workflow_active = True
+                        
+                        # Clear family registration state
+                        if 'family_parent_id' in st.session_state:
+                            del st.session_state.family_parent_id
+                        if 'family_parent_name' in st.session_state:
+                            del st.session_state.family_parent_name
+                        
+                        st.info("🔄 Redirecting to family vital signs collection...")
+                        time.sleep(2)
+                        st.rerun()
+                    
+                    else:
+                        st.error("Please provide at least one child's name, or set number of children to 0.")
+                else:
+                    st.error("Please provide family name and parent/guardian name.")
     
     # Show vital signs form outside the main form if there's a pending visit
     if 'pending_vitals' in st.session_state:
