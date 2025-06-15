@@ -1123,12 +1123,15 @@ def consultation_history():
 def pharmacy_interface():
     st.markdown("## 💊 Pharmacy Station")
     
-    tab1, tab2 = st.tabs(["Pending Prescriptions", "Filled Prescriptions"])
+    tab1, tab2, tab3 = st.tabs(["Ready to Fill", "Awaiting Lab Results", "Filled Prescriptions"])
     
     with tab1:
         pending_prescriptions()
     
     with tab2:
+        awaiting_lab_prescriptions()
+    
+    with tab3:
         filled_prescriptions()
 
 def pending_prescriptions():
@@ -1139,11 +1142,11 @@ def pending_prescriptions():
     
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.prescribed_time, pt.name, v.patient_id
+               p.duration, p.instructions, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
-        WHERE p.status = 'pending' AND DATE(p.prescribed_time) = DATE('now')
+        WHERE p.status = 'pending' AND p.awaiting_lab = 'no' AND DATE(p.prescribed_time) = DATE('now')
         ORDER BY p.prescribed_time
     ''')
     
@@ -1223,6 +1226,133 @@ def pending_prescriptions():
                     st.rerun()
     else:
         st.info("No pending prescriptions.")
+
+def awaiting_lab_prescriptions():
+    st.markdown("### Prescriptions Awaiting Lab Results")
+    
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
+               p.duration, p.instructions, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+        FROM prescriptions p
+        JOIN visits v ON p.visit_id = v.visit_id
+        JOIN patients pt ON v.patient_id = pt.patient_id
+        WHERE p.status = 'pending' AND p.awaiting_lab = 'yes' AND DATE(p.prescribed_time) = DATE('now')
+        ORDER BY p.prescribed_time
+    ''')
+    
+    awaiting = cursor.fetchall()
+    
+    # Get completed lab tests for today
+    cursor.execute('''
+        SELECT lt.visit_id, lt.test_type, lt.results, lt.completed_time
+        FROM lab_tests lt
+        WHERE lt.status = 'completed' AND DATE(lt.completed_time) = DATE('now')
+    ''')
+    
+    completed_labs = cursor.fetchall()
+    conn.close()
+    
+    # Create a map of visit_id to completed lab tests
+    lab_results = {}
+    for lab in completed_labs:
+        visit_id = lab[0]
+        if visit_id not in lab_results:
+            lab_results[visit_id] = []
+        lab_results[visit_id].append({
+            'test_type': lab[1],
+            'results': lab[2],
+            'completed_time': lab[3]
+        })
+    
+    if awaiting:
+        # Group by patient
+        patients = {}
+        for prescription in awaiting:
+            patient_id = prescription[9]
+            patient_name = prescription[8]
+            visit_id = prescription[1]
+            
+            if patient_id not in patients:
+                patients[patient_id] = {
+                    'name': patient_name,
+                    'visit_id': visit_id,
+                    'prescriptions': [],
+                    'lab_results': lab_results.get(visit_id, [])
+                }
+            
+            patients[patient_id]['prescriptions'].append(prescription)
+        
+        for patient_id, patient_data in patients.items():
+            with st.expander(f"⏳ {patient_data['name']} (ID: {patient_id})", expanded=True):
+                
+                # Show lab results if available
+                if patient_data['lab_results']:
+                    st.markdown("**Lab Results Available:**")
+                    for lab in patient_data['lab_results']:
+                        st.success(f"✅ {lab['test_type']} - Completed {lab['completed_time'][:16].replace('T', ' ')}")
+                        with st.expander(f"View {lab['test_type']} Results"):
+                            st.text(lab['results'])
+                else:
+                    st.warning("🔬 Waiting for lab results...")
+                
+                st.markdown("**Medications Awaiting Approval:**")
+                
+                prescription_ids = []
+                for prescription in patient_data['prescriptions']:
+                    prescription_ids.append(prescription[0])
+                    
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <h5>💊 {prescription[2]}</h5>
+                            <p><strong>Dosage:</strong> {prescription[3]}</p>
+                            <p><strong>Frequency:</strong> {prescription[4]}</p>
+                            <p><strong>Duration:</strong> {prescription[5]}</p>
+                            {f'<p><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        if patient_data['lab_results']:  # Only show options if lab results are available
+                            approve = st.button(f"✅ Approve", key=f"approve_{prescription[0]}")
+                            deny = st.button(f"❌ Deny", key=f"deny_{prescription[0]}")
+                            
+                            if approve:
+                                # Move prescription to ready status
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE prescriptions 
+                                    SET awaiting_lab = 'no' 
+                                    WHERE id = ?
+                                ''', (prescription[0],))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"Prescription approved and moved to fill queue!")
+                                st.rerun()
+                            
+                            if deny:
+                                # Remove prescription
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE prescriptions 
+                                    SET status = 'denied' 
+                                    WHERE id = ?
+                                ''', (prescription[0],))
+                                conn.commit()
+                                conn.close()
+                                st.warning(f"Prescription denied based on lab results.")
+                                st.rerun()
+                        else:
+                            st.info("Waiting for lab results...")
+    else:
+        st.info("No prescriptions awaiting lab results.")
 
 def filled_prescriptions():
     st.markdown("### Today's Filled Prescriptions")

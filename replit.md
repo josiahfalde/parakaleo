@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a Streamlit-based medical clinic charting application designed for mobile and tablet use. The application provides a user-friendly interface for medical professionals to manage patient data, create visualizations, and generate reports. The system is built with Python/Streamlit and includes data processing capabilities with support for Excel and CSV file formats.
+This is a comprehensive Streamlit-based medical clinic charting application designed for mobile medical missions in the Dominican Republic and Haiti. The system provides location-based patient numbering (DR00001, H00001), comprehensive lab testing (urinalysis, glucose, pregnancy), preset medication management with lab-dependent prescribing, and multi-role interfaces for triage nurses, doctors, lab technicians, pharmacy staff, and administrators.
 
 ## System Architecture
 
@@ -26,36 +26,43 @@ This is a Streamlit-based medical clinic charting application designed for mobil
 ## Key Components
 
 ### Core Application (`app.py`)
-- Main Streamlit application entry point
-- Mobile-optimized UI configuration
-- Patient data management interface
-- Custom CSS for responsive design
+- **Main Streamlit Application**: Entry point with role-based interface selection
+- **Location Management**: Setup and selection of clinic locations (DR/Haiti with city-based organization)
+- **Multi-Role Interfaces**: Triage nurse, doctor, lab tech, pharmacy, and admin roles
+- **Mobile-Optimized UI**: Custom CSS for touch interfaces and responsive design
 
-### Data Processing Module (`utils/data_processor.py`)
-- **DataProcessor Class**: Handles file loading, data cleaning, and processing
-- **File Loading**: Multi-format support (CSV, Excel) with error handling
-- **Data Cleaning**: Automatic removal of empty rows/columns, column name standardization
-- **Type Conversion**: Intelligent numeric data type detection and conversion
+### Database Layer (SQLite3)
+- **Patient Management**: Location-based patient numbering (DR00001, H00001 format)
+- **Visit Tracking**: Complete patient visit lifecycle from triage to completion
+- **Lab Tests**: Comprehensive urinalysis, glucose, and pregnancy test management
+- **Prescription System**: Preset medications with lab-dependent prescribing workflow
+- **Location Organization**: Folder-based patient registry by country and city
 
-### Visualization System (`utils/visualization_templates.py`)
-- **VisualizationTemplates Class**: Creates mobile-friendly charts and graphs
-- **Chart Types**: Bar charts, line charts with customizable color palettes
-- **Mobile Optimization**: Responsive layouts with appropriate font sizes and margins
-- **Interactive Features**: Custom hover templates and styling
+### Clinical Workflow Components
+- **Triage Interface**: Patient registration, vital signs capture, priority assignment
+- **Doctor Interface**: Comprehensive consultation with preset medication selection and lab ordering
+- **Lab Interface**: Detailed test processing with full urinalysis parameters (leukocytes, nitrites, etc.)
+- **Pharmacy Interface**: Prescription filling with "awaiting lab results" approval workflow
+- **Admin Interface**: Medication management, daily reports, and clinic settings
 
-### Export Functionality (`utils/export_handler.py`)
-- **ExportHandler Class**: Manages data and visualization exports
-- **Format Support**: PNG, SVG, and HTML export options
-- **Fallback System**: HTML export when Kaleido (PNG/SVG engine) is unavailable
-- **Export Optimization**: Configurable dimensions and styling for different output formats
+### Preset Medication System
+- **Pre-configured Medications**: Common clinic medications with dosages and categories
+- **Lab-Dependent Prescribing**: Medications marked as requiring lab results before dispensing
+- **Awaiting Lab Workflow**: Two-stage approval system for lab-dependent medications
+- **Custom Medications**: Ability to add medications not in preset list
 
-## Data Flow
+## Clinical Workflow
 
-1. **File Upload**: Users upload CSV or Excel files through Streamlit interface
-2. **Data Processing**: DataProcessor loads and cleans the data, handling encoding issues
-3. **Data Storage**: Processed data is stored in SQLite database for persistence
-4. **Visualization**: VisualizationTemplates creates interactive charts from processed data
-5. **Export**: ExportHandler converts visualizations to various formats for download
+1. **Location Setup**: Select clinic location (Dominican Republic or Haiti with specific city)
+2. **Patient Registration**: Triage nurse registers patient with location-based ID (DR00001, H00001)
+3. **Vital Signs Collection**: Blood pressure, heart rate, temperature, weight, height recording
+4. **Doctor Consultation**: Complete medical assessment with symptoms, diagnosis, treatment plan
+5. **Lab Test Ordering**: Doctor orders urinalysis, glucose, or pregnancy tests as needed
+6. **Prescription Management**: Select from preset medications with lab-dependent approval workflow
+7. **Lab Processing**: Lab tech processes tests with detailed parameter entry (urinalysis components)
+8. **Pharmacy Review**: Pharmacist reviews prescriptions, approves lab-dependent medications
+9. **Medication Dispensing**: Final prescription filling and patient completion
+10. **Administrative Oversight**: Daily reports, medication management, and system configuration
 
 ## External Dependencies
 
