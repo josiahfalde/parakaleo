@@ -98,6 +98,21 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
+        # Create families table for proper family management
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS families (
+                family_id TEXT PRIMARY KEY,
+                family_name TEXT NOT NULL,
+                head_of_household TEXT,
+                location_code TEXT,
+                address TEXT,
+                phone TEXT,
+                emergency_contact TEXT,
+                created_date TEXT,
+                notes TEXT
+            )
+        ''')
+        
         # Create patients table with family grouping
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS patients (
@@ -113,7 +128,12 @@ class DatabaseManager:
                 last_visit TEXT,
                 family_id TEXT,
                 relationship TEXT,
-                parent_id TEXT
+                parent_id TEXT,
+                is_independent INTEGER DEFAULT 0,
+                separation_date TEXT,
+                address TEXT,
+                registration_time TEXT,
+                FOREIGN KEY (family_id) REFERENCES families (family_id)
             )
         ''')
         
@@ -198,6 +218,27 @@ class DatabaseManager:
             cursor.execute('ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
+        
+        # Add family-related columns to patients table if they don't exist
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN is_independent INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN separation_date TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN address TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN registration_time TEXT')
+        except sqlite3.OperationalError:
+            pass
             
         # Add address column to patients table if it doesn't exist
         try:
@@ -434,8 +475,80 @@ class DatabaseManager:
         conn.close()
         return new_id
     
+    def create_family(self, location_code: str, family_name: str, head_of_household: str, **kwargs) -> str:
+        """Create a new family unit and return family ID"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Generate family ID using location code + sequential number
+        cursor.execute('SELECT COUNT(*) FROM families WHERE location_code = ?', (location_code,))
+        count = cursor.fetchone()[0]
+        family_id = f"{location_code}FAM{str(count + 1).zfill(5)}"
+        
+        cursor.execute('''
+            INSERT INTO families (
+                family_id, family_name, head_of_household, location_code,
+                address, phone, emergency_contact, created_date, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            family_id,
+            family_name,
+            head_of_household,
+            location_code,
+            kwargs.get('address', ''),
+            kwargs.get('phone', ''),
+            kwargs.get('emergency_contact', ''),
+            datetime.now().isoformat(),
+            kwargs.get('notes', '')
+        ))
+        
+        conn.commit()
+        conn.close()
+        return family_id
+    
+    def add_family_member(self, family_id: str, location_code: str, relationship: str, parent_id: str = "", **kwargs) -> str:
+        """Add a family member to an existing family"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        patient_id = self.get_next_patient_id(location_code)
+        
+        # Determine if this person should be independent (18+ years old)
+        age = kwargs.get('age', 0)
+        is_independent = 1 if age >= 18 else 0
+        
+        cursor.execute('''
+            INSERT INTO patients (
+                patient_id, name, age, gender, phone, emergency_contact, 
+                medical_history, allergies, created_date, last_visit,
+                family_id, relationship, parent_id, is_independent,
+                address, registration_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            patient_id,
+            kwargs.get('name', ''),
+            age,
+            kwargs.get('gender', ''),
+            kwargs.get('phone', ''),
+            kwargs.get('emergency_contact', ''),
+            kwargs.get('medical_history', ''),
+            kwargs.get('allergies', ''),
+            datetime.now().isoformat(),
+            datetime.now().isoformat(),
+            family_id,
+            relationship,
+            parent_id,
+            is_independent,
+            kwargs.get('address', ''),
+            datetime.now().isoformat()
+        ))
+        
+        conn.commit()
+        conn.close()
+        return patient_id
+
     def add_patient(self, location_code: str, **kwargs) -> str:
-        """Add a new patient and return their ID"""
+        """Add a new individual patient and return their ID"""
         patient_id = self.get_next_patient_id(location_code)
         
         conn = sqlite3.connect(self.db_name)
@@ -444,8 +557,9 @@ class DatabaseManager:
         cursor.execute('''
             INSERT INTO patients (patient_id, name, age, gender, phone, 
                                 emergency_contact, medical_history, allergies, 
-                                created_date, last_visit, family_id, relationship, parent_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                created_date, last_visit, family_id, relationship, parent_id,
+                                is_independent, address, registration_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             patient_id, 
             kwargs.get('name', ''),
@@ -459,7 +573,10 @@ class DatabaseManager:
             datetime.now().isoformat(),
             kwargs.get('family_id', None),
             kwargs.get('relationship', 'self'),
-            kwargs.get('parent_id', None)
+            kwargs.get('parent_id', None),
+            1,  # Individual patients are always independent
+            kwargs.get('address', ''),
+            datetime.now().isoformat()
         ))
         
         conn.commit()
@@ -652,6 +769,53 @@ class DatabaseManager:
         
         conn.close()
         return members
+    
+    def get_family_info(self, family_id: str) -> Dict:
+        """Get complete family information including all members"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Get family details
+        cursor.execute('SELECT * FROM families WHERE family_id = ?', (family_id,))
+        family_row = cursor.fetchone()
+        
+        if not family_row:
+            conn.close()
+            return {}
+        
+        # Get all family members
+        cursor.execute('''
+            SELECT patient_id, name, age, gender, relationship, parent_id, is_independent 
+            FROM patients WHERE family_id = ? ORDER BY relationship, age DESC
+        ''', (family_id,))
+        members = cursor.fetchall()
+        
+        conn.close()
+        
+        return {
+            'family_id': family_row[0],
+            'family_name': family_row[1],
+            'head_of_household': family_row[2],
+            'location_code': family_row[3],
+            'address': family_row[4],
+            'phone': family_row[5],
+            'members': [dict(zip(['patient_id', 'name', 'age', 'gender', 'relationship', 'parent_id', 'is_independent'], member)) for member in members]
+        }
+    
+    def separate_family_member(self, patient_id: str, new_address: str = "") -> bool:
+        """Separate a family member (typically when they turn 18)"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            UPDATE patients 
+            SET is_independent = 1, separation_date = ?, address = ?
+            WHERE patient_id = ?
+        ''', (datetime.now().isoformat(), new_address, patient_id))
+        
+        conn.commit()
+        conn.close()
+        return True
     
     def search_patients(self, query: str) -> List[Dict]:
         """Search for patients by name or ID"""
