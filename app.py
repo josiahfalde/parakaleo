@@ -8,7 +8,7 @@ import time
 # Configure page for mobile/tablet use
 st.set_page_config(
     page_title="Medical Clinic Charting",
-    page_icon="attached_assets/Screenshot 2025-06-14 215718_1750022031172.png",
+    page_icon="attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -1000,7 +1000,7 @@ def show_loading_screen():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.markdown('<div style="text-align: center; margin-top: 100px;">', unsafe_allow_html=True)
-                st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=120)
+                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=120)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
@@ -1651,7 +1651,7 @@ def main():
     if st.session_state.user_role is None:
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
-            st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=120)
+            st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=120)
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
@@ -1721,7 +1721,7 @@ def main():
     # Display logo in sidebar
     col1, col2, col3 = st.sidebar.columns([1, 1, 1])
     with col2:
-        st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=50)
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=50)
     
     st.sidebar.markdown(f'''
     <div style="text-align: center; margin-bottom: 20px;">
