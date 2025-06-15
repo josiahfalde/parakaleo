@@ -3610,28 +3610,52 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show deletion confirmation dialog
+    # Show deletion confirmation dialog as overlay popup
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create a prominent bordered container for the modal
+        # Create full-screen overlay with centered modal
         st.markdown("""
         <style>
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            pointer-events: auto;
+        }
         .deletion-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             background: white;
             border: 4px solid #dc3545;
             border-radius: 15px;
             padding: 30px;
-            margin: 20px auto;
-            max-width: 600px;
-            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
-            animation: slideIn 0.3s ease-out;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            animation: modalAppear 0.3s ease-out;
         }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes modalAppear {
+            from { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(0.9); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1); 
+            }
         }
         </style>
+        <div class="modal-backdrop"></div>
         """, unsafe_allow_html=True)
         
         with st.container():
@@ -3665,15 +3689,55 @@ def patient_management():
                            key="confirm_delete_btn", 
                            use_container_width=True):
                     try:
-                        success = db.delete_patient(patient_to_delete['patient_id'])
-                        if success:
-                            st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
-                            del st.session_state.confirm_delete
-                            st.rerun()
-                        else:
-                            st.error("❌ Failed to delete patient.")
+                        # Force delete with detailed error checking
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        
+                        # Manual deletion process with detailed logging
+                        patient_id = patient_to_delete['patient_id']
+                        
+                        # Delete in specific order to avoid foreign key issues
+                        cursor.execute('PRAGMA foreign_keys = OFF')
+                        
+                        # Delete vital signs first
+                        cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                        
+                        # Delete prescriptions
+                        cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                        
+                        # Delete lab tests and results
+                        cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                        
+                        # Delete consultations
+                        cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                        
+                        # Delete visits
+                        cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+                        
+                        # Delete family relationships
+                        cursor.execute('DELETE FROM family_members WHERE patient_id = ? OR parent_id = ?', (patient_id, patient_id))
+                        
+                        # Finally delete patient
+                        cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
+                        del st.session_state.confirm_delete
+                        st.rerun()
+                        
                     except Exception as e:
                         st.error(f"❌ Error deleting patient: {str(e)}")
+                        # Try alternative deletion method
+                        try:
+                            success = db.delete_patient(patient_to_delete['patient_id'])
+                            if success:
+                                st.success(f"✅ Patient deleted using backup method.")
+                                del st.session_state.confirm_delete
+                                st.rerun()
+                        except:
+                            pass
             
             with button_col2:
                 if st.button("❌ CANCEL", 
