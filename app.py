@@ -3610,22 +3610,81 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show confirmation dialog
+    # Show centered modal dialog
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        st.markdown("---")
-        st.markdown("# 🚨 CONFIRM PATIENT DELETION")
+        # Create modal overlay that covers entire screen
+        st.markdown(f"""
+        <style>
+        .modal-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }}
+        .modal-dialog {{
+            background: white;
+            border: 3px solid #dc3545;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }}
+        .modal-close-btn {{
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #dc3545;
+            font-weight: bold;
+        }}
+        .modal-close-btn:hover {{
+            background-color: #f8f9fa;
+            border-radius: 50%;
+            padding: 5px;
+        }}
+        </style>
+        <div class="modal-overlay" onclick="closeModal(event)">
+            <div class="modal-dialog" onclick="event.stopPropagation()">
+                <button class="modal-close-btn" onclick="closeModal()" id="modalCloseBtn">✕</button>
+                <h2 style="color: #dc3545; text-align: center; margin-top: 20px;">🚨 CONFIRM DELETION</h2>
+                <hr>
+                <div style="text-align: center; margin: 20px 0;">
+                    <strong style="color: #dc3545;">Patient: {patient_to_delete['patient_name']}</strong><br>
+                    <strong>ID: {patient_to_delete['patient_id']}</strong>
+                </div>
+            </div>
+        </div>
+        <script>
+        function closeModal(event) {{
+            if (event) event.preventDefault();
+            // Find and click the cancel button
+            const cancelBtn = document.querySelector('[data-testid*="cancel"]') || 
+                             Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('CANCEL'));
+            if (cancelBtn) cancelBtn.click();
+        }}
+        </script>
+        """, unsafe_allow_html=True)
         
-        # Patient information at top
-        st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
-        st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+        # Center the Streamlit content in the modal
+        st.markdown('<div style="text-align: center; padding: 20px;">', unsafe_allow_html=True)
         
-        st.markdown("---")
-        
-        # Action buttons at top for easy access
-        st.markdown("### Choose an action:")
-        col1, col2, col3 = st.columns([1, 1, 1])
+        # Action buttons
+        col1, col2 = st.columns([1, 1])
         
         with col1:
             if st.button("🗑️ DELETE FOREVER", 
@@ -3633,33 +3692,13 @@ def patient_management():
                        key="confirm_delete_btn", 
                        use_container_width=True):
                 try:
-                    # Debug: Check what exists for this patient before deletion
-                    conn = sqlite3.connect(db.db_name)
-                    cursor = conn.cursor()
-                    
-                    # Check patient exists
-                    cursor.execute('SELECT COUNT(*) FROM patients WHERE patient_id = ?', (patient_to_delete['patient_id'],))
-                    patient_count = cursor.fetchone()[0]
-                    
-                    # Check visits
-                    cursor.execute('SELECT COUNT(*) FROM visits WHERE patient_id = ?', (patient_to_delete['patient_id'],))
-                    visit_count = cursor.fetchone()[0]
-                    
-                    # Check if there are any foreign key references preventing deletion
-                    cursor.execute('SELECT visit_id FROM visits WHERE patient_id = ?', (patient_to_delete['patient_id'],))
-                    visit_ids = [row[0] for row in cursor.fetchall()]
-                    
-                    conn.close()
-                    
-                    st.info(f"Debug: Patient exists: {patient_count}, Visits: {visit_count}, Visit IDs: {visit_ids}")
-                    
                     success = db.delete_patient(patient_to_delete['patient_id'])
                     if success:
                         st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
                         del st.session_state.confirm_delete
                         st.rerun()
                     else:
-                        st.error("❌ Failed to delete patient. Check if patient has active relationships.")
+                        st.error("❌ Failed to delete patient.")
                 except Exception as e:
                     st.error(f"❌ Error deleting patient: {str(e)}")
         
@@ -3669,15 +3708,8 @@ def patient_management():
                        use_container_width=True):
                 del st.session_state.confirm_delete
                 st.rerun()
-                
-        with col3:
-            if st.button("✕ Close", key="close_delete_modal", use_container_width=True):
-                del st.session_state.confirm_delete
-                st.rerun()
         
-        st.markdown("---")
-        
-        # Warning message below buttons
+        # Warning message
         st.warning("""
 **⚠️ WARNING: This will permanently delete:**
 - All patient information and demographics
@@ -3689,7 +3721,7 @@ def patient_management():
 **THIS ACTION CANNOT BE UNDONE!**
         """)
         
-        st.markdown("---")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         return  # Don't show rest of page when modal is active
     
