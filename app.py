@@ -3456,101 +3456,130 @@ def patient_management():
         st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
         
         for patient in filtered_patients:
-            col1, col2 = st.columns([4, 1])
-            
-            with col1:
-                # Make patient name clickable for full history
-                if st.button(f"📋 {patient['name']} (ID: {patient['patient_id']})", 
-                           key=f"patient_history_{patient['patient_id']}", 
-                           use_container_width=True):
-                    st.session_state.show_patient_history = {
-                        'patient_id': patient['patient_id'],
-                        'patient_name': patient['name']
-                    }
-                    st.rerun()
-            
-            with col2:
-                # Quick info toggle
-                with st.expander("📄", expanded=False):
-                    # Basic patient info
-                    st.write(f"**Age:** {patient['age'] or 'Not specified'}")
-                    st.write(f"**Gender:** {patient['gender'] or 'Not specified'}")
-                    st.write(f"**Phone:** {patient['phone'] or 'Not provided'}")
-                    st.write(f"**Emergency Contact:** {patient['emergency_contact'] or 'Not provided'}")
-                    st.write(f"**Last Visit:** {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}")
-                    
-                    # Medical history
-                    if patient['medical_history']:
-                        st.markdown("**Medical History:**")
-                        st.text(patient['medical_history'])
-                    
-                    if patient['allergies']:
-                        st.markdown("**Allergies:**")
-                        st.text(patient['allergies'])
-                    
-                    # Delete button in quick info
-                    st.markdown("---")
-                    if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
+            # Patient card layout
+            with st.container():
+                col1, col2 = st.columns([5, 1])
+                
+                with col1:
+                    # Make patient name clickable for full history
+                    if st.button(f"📋 {patient['name']} (ID: {patient['patient_id']}) - Age: {patient['age'] or 'N/A'}, Last Visit: {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}", 
+                               key=f"patient_history_{patient['patient_id']}", 
+                               use_container_width=True):
+                        st.session_state.show_patient_history = {
+                            'patient_id': patient['patient_id'],
+                            'patient_name': patient['name']
+                        }
+                        st.rerun()
+                
+                with col2:
+                    # Delete button prominently placed
+                    if st.button("🗑️ Delete", key=f"delete_{patient['patient_id']}", type="secondary", use_container_width=True):
                         # Store the patient to delete in session state
                         st.session_state.confirm_delete = {
                             'patient_id': patient['patient_id'],
                             'patient_name': patient['name']
                         }
                         st.rerun()
+                
+                st.markdown("---")
         
-        # Show confirmation dialog as centered popup if there's a patient to delete
-        if 'confirm_delete' in st.session_state:
-            patient_to_delete = st.session_state.confirm_delete
+    # Show confirmation dialog as centered popup if there's a patient to delete
+    if 'confirm_delete' in st.session_state:
+        patient_to_delete = st.session_state.confirm_delete
+        
+        # Create overlay and centered modal
+        st.markdown("""
+        <style>
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .delete-modal {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+            border: 3px solid #dc3545;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            z-index: 1001;
+        }
+        .modal-header {
+            text-align: center;
+            color: #dc3545;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .modal-content {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .modal-warning {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        </style>
+        <div class="modal-overlay">
+            <div class="delete-modal">
+                <div class="modal-header">⚠️ CONFIRM PATIENT DELETION</div>
+                <div class="modal-content">
+                    <p><strong>Patient:</strong> {patient_name}</p>
+                    <p><strong>ID:</strong> {patient_id}</p>
+                </div>
+                <div class="modal-warning">
+                    <strong>This will permanently delete:</strong><br>
+                    • Patient information<br>
+                    • All visits and consultations<br>
+                    • All prescriptions<br>
+                    • All lab results<br><br>
+                    <strong>This action CANNOT be undone!</strong>
+                </div>
+            </div>
+        </div>
+        """.format(
+            patient_name=patient_to_delete['patient_name'],
+            patient_id=patient_to_delete['patient_id']
+        ), unsafe_allow_html=True)
+        
+        # Create the buttons in Streamlit
+        st.markdown("### ")  # Add spacing
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("#### Confirm Patient Deletion")
+            st.error(f"⚠️ Delete **{patient_to_delete['patient_name']}** (ID: {patient_to_delete['patient_id']})?")
             
-            # Create modal-style popup with fixed styling
-            st.markdown("""
-            <style>
-            .delete-modal {
-                background: white;
-                padding: 30px;
-                border-radius: 15px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                border: 3px solid #ff4444;
-                max-width: 500px;
-                margin: 20px auto;
-            }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            with st.container():
-                st.markdown('<div class="delete-modal">', unsafe_allow_html=True)
-                
-                st.markdown("### ⚠️ CONFIRM PATIENT DELETION")
-                st.markdown(f"**Patient:** {patient_to_delete['patient_name']}")
-                st.markdown(f"**ID:** {patient_to_delete['patient_id']}")
-                
-                st.markdown("---")
-                st.markdown("**This will permanently delete:**")
-                st.markdown("• Patient information")
-                st.markdown("• All visits and consultations") 
-                st.markdown("• All prescriptions")
-                st.markdown("• All lab results")
-                st.markdown("---")
-                st.error("**This action CANNOT be undone!**")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
-                        if db.delete_patient(patient_to_delete['patient_id']):
-                            st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
-                            del st.session_state.confirm_delete
-                            st.rerun()
-                        else:
-                            st.error("Failed to delete patient.")
-                
-                with col2:
-                    if st.button("CANCEL", key="cancel_delete_btn", use_container_width=True):
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("🗑️ DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
+                    if db.delete_patient(patient_to_delete['patient_id']):
+                        st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
                         del st.session_state.confirm_delete
                         st.rerun()
-                
-                st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        st.error("Failed to delete patient.")
             
-            return  # Don't show rest of page when modal is active
+            with col_btn2:
+                if st.button("❌ CANCEL", key="cancel_delete_btn", use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+        
+        return  # Don't show rest of page when modal is active
     
     # Check if we should show patient history detail page
     if 'show_patient_history' in st.session_state:
