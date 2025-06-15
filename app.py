@@ -8,7 +8,7 @@ import time
 # Configure page for mobile/tablet use
 st.set_page_config(
     page_title="Medical Clinic Charting",
-    page_icon="🏥",
+    page_icon="attached_assets/Screenshot 2025-06-14 215718_1750022031172.png",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -999,7 +999,9 @@ def show_loading_screen():
         with placeholder.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                st.markdown('<div style="text-align: center; margin-top: 100px; font-size: 60px;">🏥</div>', unsafe_allow_html=True)
+                st.markdown('<div style="text-align: center; margin-top: 100px;">', unsafe_allow_html=True)
+                st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=120)
+                st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
         
@@ -1607,7 +1609,7 @@ def main():
             st.rerun()
     
     with nav_col2:
-        if st.button("🏥 Home", key="home_button", help="Return to role selection", use_container_width=True):
+        if st.button("🏠 Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
@@ -1647,7 +1649,9 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        st.markdown('<div style="text-align: center; margin-bottom: 30px; font-size: 80px;">🏥</div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=120)
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
@@ -1716,7 +1720,7 @@ def main():
     
     st.sidebar.markdown(f'''
     <div style="text-align: center; margin-bottom: 20px;">
-        <div style="font-size: 35px;">🏥</div>
+        <div style="text-align: center;"><img src="attached_assets/Screenshot 2025-06-14 215718_1750022031172.png" width="50" style="border-radius: 8px;" alt="ParakaleoMed Logo"></div>
         <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
         <p style="color: #666; font-size: 12px; margin-top: 5px;">{location_info}</p>
     </div>
