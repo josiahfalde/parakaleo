@@ -1926,9 +1926,125 @@ def location_setup():
                 else:
                     st.error("Please enter a city name.")
 
+def family_vital_signs_collection():
+    """Handle vital signs collection for family members in sequence"""
+    if 'family_vital_signs_queue' not in st.session_state or not st.session_state.family_vital_signs_queue:
+        return
+    
+    current_index = st.session_state.get('current_family_vital_index', 0)
+    family_queue = st.session_state.family_vital_signs_queue
+    
+    if current_index >= len(family_queue):
+        # All family members completed
+        st.success("✅ All family members' vital signs have been recorded!")
+        st.info("Family is ready for consultation.")
+        
+        # Clear family vital signs workflow
+        if 'family_vital_signs_queue' in st.session_state:
+            del st.session_state.family_vital_signs_queue
+        if 'current_family_vital_index' in st.session_state:
+            del st.session_state.current_family_vital_index
+        
+        st.rerun()
+        return
+    
+    current_member = family_queue[current_index]
+    remaining_count = len(family_queue) - current_index
+    
+    st.markdown("### 👶 Family Vital Signs Collection")
+    st.info(f"Recording vital signs for family member {current_index + 1} of {len(family_queue)}")
+    
+    # Progress indicator
+    progress = (current_index) / len(family_queue)
+    st.progress(progress)
+    
+    # Show current family member info
+    st.markdown(f"""
+    <div style="background-color: #e3f2fd; border-left: 4px solid #2196f3; padding: 1rem; margin: 1rem 0; border-radius: 0.375rem;">
+        <h4 style="margin: 0; color: #1976d2;">👤 {current_member['patient_name']}</h4>
+        <p style="margin: 0.5rem 0 0 0; color: #424242;">
+            <strong>Patient ID:</strong> {current_member['patient_id']} | 
+            <strong>Relationship:</strong> {current_member['relationship'].title()} |
+            <strong>Age:</strong> {current_member.get('age', 'Unknown')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show remaining family members
+    if remaining_count > 1:
+        st.markdown(f"**Remaining:** {remaining_count - 1} family members")
+        remaining_names = [member['patient_name'] for member in family_queue[current_index + 1:]]
+        st.markdown(f"*Next: {', '.join(remaining_names)}*")
+    
+    # Vital signs form for current family member
+    with st.form(f"family_vitals_{current_member['visit_id']}"):
+        st.markdown("#### Vital Signs")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            systolic = st.number_input("Systolic BP", min_value=50, max_value=300, value=120)
+            diastolic = st.number_input("Diastolic BP", min_value=30, max_value=200, value=80)
+        
+        with col2:
+            heart_rate = st.number_input("Heart Rate (bpm)", min_value=30, max_value=250, value=72)
+            temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
+        
+        with col3:
+            weight = st.number_input("Weight (kg)", min_value=0.5, max_value=500.0, value=None, step=0.1)
+            height = st.number_input("Height (inches)", min_value=12.0, max_value=96.0, value=None, step=0.5)
+            oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.form_submit_button("Save Vital Signs & Continue", type="primary"):
+                # Save vital signs for current family member
+                conn = sqlite3.connect(db.db_name)
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
+                                           temperature, weight, height, oxygen_saturation, recorded_time)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (current_member['visit_id'], systolic, diastolic, heart_rate, temperature, 
+                      weight, height, oxygen_sat, datetime.now().isoformat()))
+                
+                # Update visit status
+                cursor.execute('''
+                    UPDATE visits SET triage_time = ?, status = ? WHERE visit_id = ?
+                ''', (datetime.now().isoformat(), 'waiting_consultation', current_member['visit_id']))
+                
+                conn.commit()
+                conn.close()
+                
+                st.success(f"✅ Vital signs recorded for {current_member['patient_name']}")
+                
+                # Move to next family member
+                st.session_state.current_family_vital_index = current_index + 1
+                st.rerun()
+        
+        with col2:
+            if st.form_submit_button("Skip This Member", type="secondary"):
+                st.warning(f"Skipped vital signs for {current_member['patient_name']}")
+                st.session_state.current_family_vital_index = current_index + 1
+                st.rerun()
+
 def triage_interface():
     add_to_history('triage')
     st.markdown("## 🩺 Triage Station")
+    
+    # Check if we need to collect family vital signs
+    if 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
+        family_vital_signs_collection()
+        return
+    
+    # Check if we need to collect vital signs for a patient
+    if 'pending_vitals' in st.session_state:
+        st.markdown("### Record Vital Signs")
+        patient_name = st.session_state.get('patient_name', 'Patient')
+        st.info(f"Recording vital signs for: **{patient_name}**")
+        vital_signs_form(st.session_state.pending_vitals)
+        return
     
     tab1, tab2, tab3 = st.tabs(["New Patient", "Existing Patient", "Patient Queue"])
     
