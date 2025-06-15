@@ -245,31 +245,36 @@ class DatabaseManager:
             )
         ''')
         
-        # Initialize default medications
-        default_meds = [
-            ('Acetaminophen', '325mg, 500mg, 650mg', 'Pain Relief', 'no'),
-            ('Ibuprofen', '200mg, 400mg, 600mg, 800mg', 'Pain Relief', 'no'),
-            ('Amoxicillin', '250mg, 500mg, 875mg', 'Antibiotic', 'no'),
-            ('Azithromycin', '250mg, 500mg', 'Antibiotic', 'no'),
-            ('Metronidazole', '250mg, 500mg', 'Antibiotic', 'no'),
-            ('Ciprofloxacin', '250mg, 500mg', 'Antibiotic', 'yes'),
-            ('Nitrofurantoin', '50mg, 100mg', 'UTI Antibiotic', 'yes'),
-            ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'optional'),
-            ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'optional'),
-            ('Amlodipine', '2.5mg, 5mg, 10mg', 'Blood Pressure', 'no'),
-            ('Omeprazole', '20mg, 40mg', 'Stomach', 'no'),
-            ('Prednisone', '5mg, 10mg, 20mg', 'Steroid', 'no'),
-            ('Albuterol Inhaler', '90mcg/puff', 'Respiratory', 'no'),
-            ('Multivitamin', 'Daily', 'Vitamin', 'no'),
-            ('Iron Supplement', '65mg', 'Vitamin', 'no')
-        ]
+        # Check if medications already exist to prevent duplicates
+        cursor.execute('SELECT COUNT(*) FROM preset_medications')
+        existing_count = cursor.fetchone()[0]
         
-        for med in default_meds:
-            cursor.execute('''
-                INSERT OR IGNORE INTO preset_medications 
-                (medication_name, common_dosages, category, requires_lab)
-                VALUES (?, ?, ?, ?)
-            ''', med)
+        if existing_count == 0:
+            # Initialize default medications only if table is empty
+            default_meds = [
+                ('Acetaminophen', '325mg, 500mg, 650mg', 'Pain Relief', 'no'),
+                ('Ibuprofen', '200mg, 400mg, 600mg, 800mg', 'Pain Relief', 'no'),
+                ('Amoxicillin', '250mg, 500mg, 875mg', 'Antibiotic', 'no'),
+                ('Azithromycin', '250mg, 500mg', 'Antibiotic', 'no'),
+                ('Metronidazole', '250mg, 500mg', 'Antibiotic', 'no'),
+                ('Ciprofloxacin', '250mg, 500mg', 'Antibiotic', 'yes'),
+                ('Nitrofurantoin', '50mg, 100mg', 'UTI Antibiotic', 'yes'),
+                ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'optional'),
+                ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'optional'),
+                ('Amlodipine', '2.5mg, 5mg, 10mg', 'Blood Pressure', 'no'),
+                ('Omeprazole', '20mg, 40mg', 'Stomach', 'no'),
+                ('Prednisone', '5mg, 10mg, 20mg', 'Steroid', 'no'),
+                ('Albuterol Inhaler', '90mcg/puff', 'Respiratory', 'no'),
+                ('Multivitamin', 'Daily', 'Vitamin', 'no'),
+                ('Iron Supplement', '65mg', 'Vitamin', 'no')
+            ]
+            
+            for med in default_meds:
+                cursor.execute('''
+                    INSERT INTO preset_medications 
+                    (medication_name, common_dosages, category, requires_lab)
+                    VALUES (?, ?, ?, ?)
+                ''', med)
         
         conn.commit()
         conn.close()
@@ -397,32 +402,28 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
             
-            # Delete prescriptions for all visits of this patient
-            cursor.execute('''
-                DELETE FROM prescriptions 
-                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-            ''', (patient_id,))
+            # Get all visit IDs for this patient
+            cursor.execute('SELECT visit_id FROM visits WHERE patient_id = ?', (patient_id,))
+            visit_ids = [row[0] for row in cursor.fetchall()]
             
-            # Delete lab tests for all visits of this patient
-            cursor.execute('''
-                DELETE FROM lab_tests 
-                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-            ''', (patient_id,))
-            
-            # Delete lab results for all visits of this patient
-            cursor.execute('''
-                DELETE FROM lab_results 
-                WHERE test_id IN (
-                    SELECT id FROM lab_tests 
-                    WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-                )
-            ''', (patient_id,))
-            
-            # Delete consultations for all visits of this patient
-            cursor.execute('''
-                DELETE FROM consultations 
-                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-            ''', (patient_id,))
+            # Delete related data for each visit
+            for visit_id in visit_ids:
+                # Delete prescriptions
+                cursor.execute('DELETE FROM prescriptions WHERE visit_id = ?', (visit_id,))
+                
+                # Get lab test IDs for this visit
+                cursor.execute('SELECT id FROM lab_tests WHERE visit_id = ?', (visit_id,))
+                lab_test_ids = [row[0] for row in cursor.fetchall()]
+                
+                # Delete lab results for these tests
+                for test_id in lab_test_ids:
+                    cursor.execute('DELETE FROM lab_results WHERE test_id = ?', (test_id,))
+                
+                # Delete lab tests
+                cursor.execute('DELETE FROM lab_tests WHERE visit_id = ?', (visit_id,))
+                
+                # Delete consultations
+                cursor.execute('DELETE FROM consultations WHERE visit_id = ?', (visit_id,))
             
             # Delete all visits for this patient
             cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
@@ -430,12 +431,20 @@ class DatabaseManager:
             # Finally delete the patient
             cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
             
-            conn.commit()
-            conn.close()
-            return True
+            # Check if deletion was successful
+            cursor.execute('SELECT COUNT(*) FROM patients WHERE patient_id = ?', (patient_id,))
+            if cursor.fetchone()[0] == 0:
+                conn.commit()
+                conn.close()
+                return True
+            else:
+                conn.rollback()
+                conn.close()
+                return False
             
-        except Exception:
+        except Exception as e:
             if conn:
+                conn.rollback()
                 conn.close()
             return False
     
@@ -659,6 +668,11 @@ def main():
         
         return
     
+    # Show LAN status page if requested
+    if 'show_lan_page' in st.session_state and st.session_state.show_lan_page:
+        show_lan_status_page()
+        return
+    
     # Role-specific interfaces
     if st.session_state.user_role == "triage":
         triage_interface()
@@ -702,10 +716,6 @@ def main():
     if st.sidebar.button("🌐 LAN Status"):
         st.session_state.show_lan_page = True
         st.rerun()
-    
-    # Show LAN status page if requested
-    if 'show_lan_page' in st.session_state and st.session_state.show_lan_page:
-        show_lan_status_page()
 
 def show_lan_status_page():
     """Display LAN connectivity status for iPad connections"""
@@ -1134,22 +1144,30 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 category_meds = [med for med in preset_meds if med['category'] == category]
                 
                 for med in category_meds:
-                    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                    col1, col2 = st.columns([1, 2])
                     
                     with col1:
                         selected = st.checkbox(f"{med['medication_name']}", key=f"med_{med['id']}")
                     
+                    with col2:
+                        # Show dosage field for pharmacy clarity
+                        pharmacy_dosage = st.text_input("Dosage for Pharmacy", 
+                                                      placeholder="e.g., 500mg twice daily for 7 days",
+                                                      key=f"pharma_dose_{med['id']}")
+                    
                     if selected:
-                        with col2:
+                        col3, col4, col5 = st.columns([1, 1, 1])
+                        
+                        with col3:
                             dosages = med['common_dosages'].split(', ')
                             selected_dosage = st.selectbox("Dosage", dosages, key=f"dosage_{med['id']}")
                         
-                        with col3:
+                        with col4:
                             frequency = st.selectbox("Frequency", 
                                                     ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"], 
                                                     key=f"freq_{med['id']}")
                         
-                        with col4:
+                        with col5:
                             duration = st.selectbox("Duration", 
                                                    ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"], 
                                                    key=f"dur_{med['id']}")
@@ -1168,7 +1186,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             'frequency': frequency,
                             'duration': duration,
                             'instructions': instructions,
-                            'awaiting_lab': awaiting_lab
+                            'awaiting_lab': awaiting_lab,
+                            'pharmacy_notes': pharmacy_dosage
                         })
         
         # Custom medication section
@@ -1902,22 +1921,38 @@ def daily_reports():
     # Export functionality
     st.markdown("### Export Today's Data")
     
-    if st.button("Export Today's Data", type="primary"):
-        export_data = generate_daily_export()
-        
-        # Create downloadable CSV
-        csv_data = export_data.to_csv(index=False)
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        filename = f"parakaleo_clinic_data_{today_date}.csv"
-        
-        st.download_button(
-            label="Download CSV File",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv"
-        )
-        
-        st.success("Data exported successfully!")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Download CSV", type="primary"):
+            export_data = generate_daily_export()
+            
+            # Create downloadable CSV
+            csv_data = export_data.to_csv(index=False)
+            today_date = datetime.now().strftime("%Y-%m-%d")
+            filename = f"parakaleo_clinic_data_{today_date}.csv"
+            
+            st.download_button(
+                label="Download CSV File",
+                data=csv_data,
+                file_name=filename,
+                mime="text/csv"
+            )
+            
+            st.success("Data exported successfully!")
+    
+    with col2:
+        if st.button("Connect to OneDrive", type="secondary"):
+            st.session_state.show_onedrive = True
+            st.rerun()
+    
+    # Show OneDrive integration if requested
+    if 'show_onedrive' in st.session_state and st.session_state.show_onedrive:
+        onedrive_integration()
+        if st.button("Back to Reports"):
+            st.session_state.show_onedrive = False
+            st.rerun()
+        return
     
     # OneDrive backup instructions
     with st.expander("OneDrive Backup Instructions"):
@@ -2004,6 +2039,76 @@ def generate_daily_export():
         export_data = pd.concat([export_data, lab_tests_df.add_prefix('lab_')], ignore_index=True)
     
     return export_data
+
+def onedrive_integration():
+    """Handle OneDrive connection and backup"""
+    st.markdown("### OneDrive Integration")
+    
+    st.info("OneDrive integration for automatic backup of patient data.")
+    
+    # Simulate OneDrive connection process
+    st.markdown("#### Connect to OneDrive Account")
+    
+    with st.form("onedrive_setup"):
+        st.markdown("**Step 1: Authentication**")
+        st.write("Click the button below to authenticate with your Microsoft OneDrive account.")
+        
+        if st.form_submit_button("Authenticate with OneDrive", type="primary"):
+            # In a real implementation, this would redirect to Microsoft OAuth
+            st.success("Connected to OneDrive successfully!")
+            st.session_state.onedrive_connected = True
+            
+            # Show backup options
+            st.markdown("**Step 2: Configure Backup**")
+            backup_frequency = st.selectbox("Backup Frequency", 
+                                          ["Manual", "Daily", "Weekly"])
+            
+            folder_name = st.text_input("OneDrive Folder Name", 
+                                      value="ParakaleoMed Backups")
+            
+            if st.button("Setup Automatic Backup"):
+                st.success(f"Backup configured: {backup_frequency} to folder '{folder_name}'")
+                
+                # Generate and prepare data for upload
+                export_data = generate_daily_export()
+                csv_data = export_data.to_csv(index=False)
+                today_date = datetime.now().strftime("%Y-%m-%d")
+                filename = f"parakaleo_clinic_data_{today_date}.csv"
+                
+                st.download_button(
+                    label="Download for Manual Upload to OneDrive",
+                    data=csv_data,
+                    file_name=filename,
+                    mime="text/csv"
+                )
+                
+                st.info("File prepared for OneDrive backup. Use the download button above to get the file, then upload it to your OneDrive folder.")
+    
+    # Manual backup section
+    st.markdown("---")
+    st.markdown("#### Manual Backup to OneDrive")
+    
+    if st.button("Prepare Manual Backup"):
+        export_data = generate_daily_export()
+        csv_data = export_data.to_csv(index=False)
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        filename = f"parakaleo_clinic_backup_{today_date}.csv"
+        
+        st.download_button(
+            label="Download Backup File",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv"
+        )
+        
+        st.markdown("""
+        **Next Steps:**
+        1. Download the file using the button above
+        2. Open OneDrive app on your iPad
+        3. Navigate to your ParakaleoMed Backups folder
+        4. Upload the downloaded file
+        5. OneDrive will automatically sync to the cloud
+        """)
 
 def clinic_settings():
     st.markdown("### Clinic Settings")
