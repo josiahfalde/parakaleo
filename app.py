@@ -800,12 +800,21 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
             
+            # Enable foreign key support
+            cursor.execute('PRAGMA foreign_keys = ON')
+            
+            # Start transaction
+            cursor.execute('BEGIN IMMEDIATE')
+            
             # Get all visit IDs for this patient
             cursor.execute('SELECT visit_id FROM visits WHERE patient_id = ?', (patient_id,))
             visit_ids = [row[0] for row in cursor.fetchall()]
             
             # Delete related data for each visit
             for visit_id in visit_ids:
+                # Delete vital signs
+                cursor.execute('DELETE FROM vital_signs WHERE visit_id = ?', (visit_id,))
+                
                 # Delete prescriptions
                 cursor.execute('DELETE FROM prescriptions WHERE visit_id = ?', (visit_id,))
                 
@@ -822,29 +831,40 @@ class DatabaseManager:
                 
                 # Delete consultations
                 cursor.execute('DELETE FROM consultations WHERE visit_id = ?', (visit_id,))
+                
+                # Delete patient photos for this visit
+                cursor.execute('DELETE FROM patient_photos WHERE visit_id = ?', (visit_id,))
             
             # Delete all visits for this patient
             cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+            
+            # Delete family relationships where this patient is a member
+            cursor.execute('DELETE FROM family_members WHERE patient_id = ?', (patient_id,))
+            
+            # Delete family relationships where this patient is the parent
+            cursor.execute('DELETE FROM family_members WHERE parent_id = ?', (patient_id,))
             
             # Finally delete the patient
             cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
             
             # Check if deletion was successful
             cursor.execute('SELECT COUNT(*) FROM patients WHERE patient_id = ?', (patient_id,))
-            if cursor.fetchone()[0] == 0:
+            remaining_count = cursor.fetchone()[0]
+            
+            if remaining_count == 0:
                 conn.commit()
-                conn.close()
                 return True
             else:
                 conn.rollback()
-                conn.close()
                 return False
             
         except Exception as e:
             if conn:
                 conn.rollback()
-                conn.close()
             return False
+        finally:
+            if conn:
+                conn.close()
     
     def add_location(self, country_code: str, country_name: str, city: str) -> int:
         """Add a new clinic location"""
@@ -3596,20 +3616,68 @@ def patient_management():
         
         st.markdown("---")
         st.markdown("# 🚨 CONFIRM PATIENT DELETION")
+        
+        # Patient information at top
+        st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
+        st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+        
         st.markdown("---")
         
-        # Close button in top right
-        close_col1, close_col2, close_col3 = st.columns([6, 1, 1])
-        with close_col3:
+        # Action buttons at top for easy access
+        st.markdown("### Choose an action:")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            if st.button("🗑️ DELETE FOREVER", 
+                       type="primary", 
+                       key="confirm_delete_btn", 
+                       use_container_width=True):
+                try:
+                    # Debug: Check what exists for this patient before deletion
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
+                    
+                    # Check patient exists
+                    cursor.execute('SELECT COUNT(*) FROM patients WHERE patient_id = ?', (patient_to_delete['patient_id'],))
+                    patient_count = cursor.fetchone()[0]
+                    
+                    # Check visits
+                    cursor.execute('SELECT COUNT(*) FROM visits WHERE patient_id = ?', (patient_to_delete['patient_id'],))
+                    visit_count = cursor.fetchone()[0]
+                    
+                    # Check if there are any foreign key references preventing deletion
+                    cursor.execute('SELECT visit_id FROM visits WHERE patient_id = ?', (patient_to_delete['patient_id'],))
+                    visit_ids = [row[0] for row in cursor.fetchall()]
+                    
+                    conn.close()
+                    
+                    st.info(f"Debug: Patient exists: {patient_count}, Visits: {visit_count}, Visit IDs: {visit_ids}")
+                    
+                    success = db.delete_patient(patient_to_delete['patient_id'])
+                    if success:
+                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
+                        del st.session_state.confirm_delete
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to delete patient. Check if patient has active relationships.")
+                except Exception as e:
+                    st.error(f"❌ Error deleting patient: {str(e)}")
+        
+        with col2:
+            if st.button("❌ CANCEL", 
+                       key="cancel_delete_btn", 
+                       use_container_width=True):
+                del st.session_state.confirm_delete
+                st.rerun()
+                
+        with col3:
             if st.button("✕ Close", key="close_delete_modal", use_container_width=True):
                 del st.session_state.confirm_delete
                 st.rerun()
         
-        # Patient information
-        st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
-        st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+        st.markdown("---")
         
-        # Warning message
+        # Warning message below buttons
         st.warning("""
 **⚠️ WARNING: This will permanently delete:**
 - All patient information and demographics
@@ -3620,37 +3688,6 @@ def patient_management():
 
 **THIS ACTION CANNOT BE UNDONE!**
         """)
-        
-        st.markdown("---")
-        
-        # Action buttons
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
-        with col1:
-            if st.button("🗑️ DELETE FOREVER", 
-                       type="primary", 
-                       key="confirm_delete_btn", 
-                       use_container_width=True):
-                try:
-                    success = db.delete_patient(patient_to_delete['patient_id'])
-                    if success:
-                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
-                        del st.session_state.confirm_delete
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to delete patient.")
-                except Exception as e:
-                    st.error(f"❌ Error deleting patient: {str(e)}")
-        
-        with col2:
-            if st.button("❌ CANCEL", 
-                       key="cancel_delete_btn", 
-                       use_container_width=True):
-                del st.session_state.confirm_delete
-                st.rerun()
-        
-        with col3:
-            st.markdown("")  # spacer
         
         st.markdown("---")
         
