@@ -615,17 +615,17 @@ def main():
     
     # Role change button
     st.sidebar.markdown("---")
-    if st.sidebar.button("🔄 Change Role"):
+    if st.sidebar.button("Change Role"):
         st.session_state.user_role = None
         st.rerun()
     
-    if st.sidebar.button("📍 Change Location"):
+    if st.sidebar.button("Change Location"):
         st.session_state.clinic_location = None
         st.session_state.user_role = None
         st.rerun()
 
 def location_setup():
-    st.markdown("## 📍 Clinic Location Setup")
+    st.markdown("## Clinic Location Setup")
     st.markdown("Please select or add your clinic location before starting patient registration.")
     
     # Get existing locations
@@ -1055,7 +1055,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     custom_duration = st.text_input("Duration", key="custom_duration")
                 
                 custom_instructions = st.text_input("Instructions", key="custom_instructions")
-                custom_awaiting = st.checkbox("Awaiting Lab Results", key="custom_awaiting")
+                custom_awaiting = st.checkbox("Pending Lab", key="custom_awaiting")
                 
                 selected_medications.append({
                     'id': None,
