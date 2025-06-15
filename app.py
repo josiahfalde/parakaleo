@@ -3590,102 +3590,68 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show confirmation dialog as centered modal popup
+    # Show confirmation dialog
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create visual highlighting for the deletion dialog
-        st.markdown("""
-        <style>
-        .deletion-dialog {
-            background: #fff;
-            border: 4px solid #dc3545;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
-            animation: highlightDialog 0.5s ease-out;
-        }
-        @keyframes highlightDialog {
-            0% { transform: scale(0.95); opacity: 0.8; }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        st.markdown("---")
+        st.markdown("# 🚨 CONFIRM PATIENT DELETION")
+        st.markdown("---")
         
-        # Create a highlighted container for the deletion confirmation
-        with st.container():
-            st.markdown('<div class="deletion-dialog">', unsafe_allow_html=True)
-            
-            # Header with close button
-            header_col1, header_col2, header_col3 = st.columns([1, 6, 1])
-            with header_col1:
-                st.markdown("")  # spacer
-            with header_col2:
-                st.markdown("## 🚨 CONFIRM PATIENT DELETION")
-            with header_col3:
-                if st.button("✕", key="close_delete_modal", help="Close", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            st.markdown("---")
-            
-            # Patient information
-            st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
-            st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
-            
-            # Warning message
-            st.markdown("""
-            <div style="background-color: #f8d7da; border: 2px solid #dc3545; padding: 20px; border-radius: 10px; margin: 20px 0; color: #721c24;">
-                <h4 style="color: #dc3545; margin-top: 0;">⚠️ WARNING: This will permanently delete:</h4>
-                <ul style="margin: 10px 0;">
-                    <li>All patient information and demographics</li>
-                    <li>All visits and consultations</li>
-                    <li>All prescriptions and lab results</li>
-                    <li>All medical history and photos</li>
-                    <li>All family member relationships</li>
-                </ul>
-                <h4 style="color: #dc3545; text-align: center; margin-bottom: 0;">THIS ACTION CANNOT BE UNDONE!</h4>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Action buttons - prominently displayed
-            st.markdown("### Choose an action:")
-            
-            button_col1, button_col2 = st.columns([1, 1])
-            
-            with button_col1:
-                if st.button("🗑️ DELETE FOREVER", 
-                           type="primary", 
-                           key="confirm_delete_btn", 
-                           use_container_width=True,
-                           help="This will permanently delete the patient"):
-                    if db.delete_patient(patient_to_delete['patient_id']):
+        # Close button in top right
+        close_col1, close_col2, close_col3 = st.columns([6, 1, 1])
+        with close_col3:
+            if st.button("✕ Close", key="close_delete_modal", use_container_width=True):
+                del st.session_state.confirm_delete
+                st.rerun()
+        
+        # Patient information
+        st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
+        st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+        
+        # Warning message
+        st.warning("""
+**⚠️ WARNING: This will permanently delete:**
+- All patient information and demographics
+- All visits and consultations  
+- All prescriptions and lab results
+- All medical history and photos
+- All family member relationships
+
+**THIS ACTION CANNOT BE UNDONE!**
+        """)
+        
+        st.markdown("---")
+        
+        # Action buttons
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            if st.button("🗑️ DELETE FOREVER", 
+                       type="primary", 
+                       key="confirm_delete_btn", 
+                       use_container_width=True):
+                try:
+                    success = db.delete_patient(patient_to_delete['patient_id'])
+                    if success:
                         st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
                         del st.session_state.confirm_delete
                         st.rerun()
                     else:
                         st.error("❌ Failed to delete patient.")
-            
-            with button_col2:
-                if st.button("❌ CANCEL", 
-                           key="cancel_delete_btn", 
-                           use_container_width=True,
-                           help="Cancel deletion and return"):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            st.markdown("---")
-            st.markdown("*Click the X button above or CANCEL to close this dialog*")
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"❌ Error deleting patient: {str(e)}")
         
-        # Ensure the dialog is prominently visible
-        st.markdown("---")
-        st.markdown("**⬆️ PATIENT DELETION CONFIRMATION ABOVE ⬆️**")
+        with col2:
+            if st.button("❌ CANCEL", 
+                       key="cancel_delete_btn", 
+                       use_container_width=True):
+                del st.session_state.confirm_delete
+                st.rerun()
+        
+        with col3:
+            st.markdown("")  # spacer
+        
         st.markdown("---")
         
         return  # Don't show rest of page when modal is active
