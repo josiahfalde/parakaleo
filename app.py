@@ -1237,7 +1237,7 @@ def main():
         top: 20px !important;
         left: 20px !important;
         z-index: 999 !important;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
         color: white !important;
         border: none !important;
         border-radius: 50% !important;
@@ -1250,7 +1250,7 @@ def main():
     
     .css-1rs6os ~ div button[title*="Go to previous page"]:hover {
         transform: scale(1.1) !important;
-        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
     }
     
     /* Modern input styling */
@@ -1268,7 +1268,7 @@ def main():
         outline: none !important;
     }
     
-    /* Fix selectbox styling */
+    /* Fix selectbox styling - remove purple borders */
     .stSelectbox > div > div > div {
         border: 1px solid #d1d5db !important;
         border-radius: 6px !important;
@@ -1278,6 +1278,29 @@ def main():
     .stSelectbox > div > div > div:focus-within {
         border-color: #3b82f6 !important;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    }
+    
+    /* Remove purple from all selection elements */
+    .stSelectbox [data-baseweb="select"] > div {
+        border: 1px solid #d1d5db !important;
+        background: #ffffff !important;
+    }
+    
+    .stSelectbox [data-baseweb="select"] > div:focus-within {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    }
+    
+    /* Fix multiselect and other inputs */
+    .stMultiSelect > div > div > div {
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+        background: #ffffff !important;
+    }
+    
+    /* Override purple theme completely */
+    .stApp > div[data-testid="stAppViewContainer"] > div > div > div > div {
+        border-color: #d1d5db !important;
     }
     
     /* BackpackEMR-style tabs */
@@ -1337,6 +1360,46 @@ def main():
     .stToggle > label {
         color: #374151 !important;
         font-weight: 500 !important;
+    }
+    
+    /* Fix checkbox styling - remove orange */
+    .stCheckbox > label > div[data-testid="stCheckbox"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 4px !important;
+    }
+    
+    .stCheckbox > label > div[data-testid="stCheckbox"] > div:checked,
+    .stCheckbox > label > div[data-testid="stCheckbox"] > div[aria-checked="true"] {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
+    }
+    
+    /* Universal button styling to override orange */
+    .stButton > button {
+        background: #f8fafc !important;
+        border: 1px solid #d1d5db !important;
+        color: #475569 !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    .stButton > button:hover {
+        background: #f1f5f9 !important;
+        border-color: #9ca3af !important;
+        transform: translateY(-1px) !important;
+    }
+    
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        border: none !important;
+        color: white !important;
+        font-weight: 600 !important;
+    }
+    
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
     }
     
     /* Metrics styling for reports */
@@ -2084,11 +2147,7 @@ def new_patient_form():
                         with col2:
                             relationship = st.selectbox("Relationship", ["child", "stepchild", "adopted child", "other"], key=f"relationship_{form_idx}")
                         
-                        col_submit, col_add = st.columns(2)
-                        with col_submit:
-                            child_submitted = st.form_submit_button("Add Child", type="primary")
-                        with col_add:
-                            add_another = st.form_submit_button("Add Another Child Form", type="secondary")
+                        child_submitted = st.form_submit_button("Add Child", type="primary")
                         
                         if child_submitted and child_name.strip():
                             child_data = {
@@ -2106,9 +2165,7 @@ def new_patient_form():
                             )
                             
                             st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
-                            st.rerun()
-                        
-                        if add_another:
+                            # Auto-create another form after adding a child
                             st.session_state.num_children_forms += 1
                             st.rerun()
             
@@ -2213,17 +2270,6 @@ def new_patient_form():
                     del st.session_state.family_parent_name
                 
                 st.rerun()
-            
-            # Individual visit creation (backup option)
-            with st.expander("Create Individual Visits (if needed)", expanded=False):
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Create Visit for Parent Only", type="secondary"):
-                        visit_id = db.create_visit(st.session_state.family_parent_id)
-                        st.session_state.pending_vitals = visit_id
-                        st.session_state.patient_name = st.session_state.family_parent_name
-                        st.success("Visit created for parent")
-                        st.rerun()
                 
                 with col2:
                     if st.button("Finish Without Visits", type="secondary"):
