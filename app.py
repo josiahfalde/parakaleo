@@ -1587,10 +1587,10 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with centered logo - no extra spacing
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+    # Header with perfectly centered logo - no extra spacing
+    st.markdown('<div style="display: flex; justify-content: center;">', unsafe_allow_html=True)
+    st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('<p style="text-align: center; color: #666; margin: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
@@ -1610,7 +1610,27 @@ def main():
             st.rerun()
     
     with nav_col2:
-        if st.button("⚪ Home", key="home_button", help="Return to role selection", use_container_width=True):
+        # Create custom home button with your logo
+        st.markdown(f'''
+        <div style="display: flex; align-items: center; justify-content: center; 
+                    background: #f8fafc; border: 1px solid #d1d5db; border-radius: 6px; 
+                    padding: 8px 16px; cursor: pointer; transition: all 0.2s ease;
+                    height: 40px;" 
+             onclick="window.parent.postMessage({{'type': 'streamlit:componentReady', 'data': {{'home_clicked': true}}}}, '*')">
+            <img src="attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750023745231.png" 
+                 width="20" style="margin-right: 8px;">
+            <span style="font-weight: 500; color: #475569;">Home</span>
+        </div>
+        <script>
+        window.addEventListener('message', function(event) {{
+            if (event.data && event.data.home_clicked) {{
+                document.querySelector('[data-testid="baseButton-secondary"]').click();
+            }}
+        }});
+        </script>
+        ''', unsafe_allow_html=True)
+        
+        if st.button("", key="home_button_hidden", help="Return to role selection"):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
@@ -1623,14 +1643,30 @@ def main():
             st.rerun()
     
     with nav_col3:
-        # Show current location in the navigation button
+        # Show current location in the navigation button with horizontal extension
         if 'clinic_location' in st.session_state and st.session_state.clinic_location:
             location = st.session_state.clinic_location
-            location_text = f"📍 {location['city']}, {location['country_code']}"
+            # Truncate long location names and extend horizontally
+            city_name = location['city'][:10] + "..." if len(location['city']) > 10 else location['city']
+            location_text = f"📍 {city_name}, {location['country_code']}"
         else:
             location_text = "📍 Location"
             
-        if st.button(location_text, key="location_button", help="Change clinic location", use_container_width=True):
+        # Use a more flexible button layout that can extend right
+        st.markdown(f'''
+        <div style="white-space: nowrap; overflow: visible;">
+            <button style="background: #f8fafc; border: 1px solid #d1d5db; border-radius: 6px; 
+                          padding: 8px 12px; width: auto; min-width: 120px; cursor: pointer;
+                          font-weight: 500; color: #475569; transition: all 0.2s ease;
+                          overflow: visible; white-space: nowrap;"
+                    onclick="document.querySelector('[data-testid=\\"baseButton-secondary\\"][key=\\"location_button_hidden\\"]').click()">
+                {location_text}
+            </button>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        # Hidden button for functionality
+        if st.button("", key="location_button_hidden", help="Change clinic location"):
             st.session_state.clinic_location = None
             st.session_state.user_role = None
             st.rerun()
