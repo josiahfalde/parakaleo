@@ -180,6 +180,12 @@ class DatabaseManager:
             )
         ''')
         
+        # Add awaiting_lab column if it doesn't exist (for database migration)
+        try:
+            cursor.execute('ALTER TABLE prescriptions ADD COLUMN awaiting_lab TEXT DEFAULT "no"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         # Create counter table for location-based patient numbering
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS counters (
@@ -247,8 +253,8 @@ class DatabaseManager:
             ('Metronidazole', '250mg, 500mg', 'Antibiotic', 'no'),
             ('Ciprofloxacin', '250mg, 500mg', 'Antibiotic', 'yes'),
             ('Nitrofurantoin', '50mg, 100mg', 'UTI Antibiotic', 'yes'),
-            ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'yes'),
-            ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'yes'),
+            ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'optional'),
+            ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'optional'),
             ('Amlodipine', '2.5mg, 5mg, 10mg', 'Blood Pressure', 'no'),
             ('Omeprazole', '20mg, 40mg', 'Stomach', 'no'),
             ('Prednisone', '5mg, 10mg, 20mg', 'Steroid', 'no'),
@@ -550,11 +556,11 @@ def main():
     with open("parakaleo_logo.svg", "r") as f:
         logo_svg = f.read()
     
-    col1, col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1, 6])
     with col1:
-        st.markdown(logo_svg, unsafe_allow_html=True)
+        st.markdown(f'<div style="margin-top: 10px;">{logo_svg}</div>', unsafe_allow_html=True)
     with col2:
-        st.markdown("# Medical Clinic Charting System")
+        st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
         st.markdown("*Mission Trip Patient Management*")
     
     st.markdown("---")
@@ -594,7 +600,7 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
             
-            if st.button("Administrator", key="admin", type="primary", use_container_width=True):
+            if st.button("Admin", key="admin", type="primary", use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
         
@@ -615,11 +621,11 @@ def main():
     
     # Role change button
     st.sidebar.markdown("---")
-    if st.sidebar.button("Change Role"):
+    if st.sidebar.button("🔄 Change Role"):
         st.session_state.user_role = None
         st.rerun()
     
-    if st.sidebar.button("Change Location"):
+    if st.sidebar.button("📍 Change Location"):
         st.session_state.clinic_location = None
         st.session_state.user_role = None
         st.rerun()
@@ -1029,8 +1035,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         instructions = st.text_input("Special Instructions", key=f"inst_{med['id']}")
                         
                         awaiting_lab = "no"
-                        if med['requires_lab'] == 'yes':
-                            awaiting_lab = "yes" if st.checkbox("Pending Lab", key=f"await_{med['id']}", value=True) else "no"
+                        if med['requires_lab'] == 'optional':
+                            awaiting_lab = "yes" if st.checkbox("Pending Lab", key=f"await_{med['id']}", value=False) else "no"
                         
                         selected_medications.append({
                             'id': med['id'],
@@ -1633,7 +1639,7 @@ def patient_management():
         st.info("Enter a patient name or ID to search for patients to delete.")
 
 def admin_interface():
-    st.markdown("## Administrator Dashboard")
+    st.markdown("## Admin Dashboard")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Patient Management", "Medication Management", "Reports", "Settings"])
     
