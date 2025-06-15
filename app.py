@@ -1046,8 +1046,14 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        # Show ParakaleoMed title after loading completes
-        st.markdown('<h1 style="text-align: center; color: #1f77b4; margin-bottom: 30px;">ParakaleoMed</h1>', unsafe_allow_html=True)
+        # Show Parakaleo logo after loading completes
+        try:
+            with open("parakaleo_logo.svg", "r") as f:
+                logo_svg = f.read()
+            st.markdown(f'<div style="text-align: center; margin-bottom: 30px;">{logo_svg}</div>', unsafe_allow_html=True)
+        except FileNotFoundError:
+            st.markdown('<h1 style="text-align: center; color: #1f77b4; margin-bottom: 30px;">ParakaleoMed</h1>', unsafe_allow_html=True)
+        
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
