@@ -1056,7 +1056,11 @@ def go_back():
 def show_back_button():
     """Display universal back button on all pages"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        if st.button("← Back", key="universal_back_btn", help="Go to previous page"):
+        # Create unique key based on current page and timestamp
+        import time
+        current_page = st.session_state.get('current_page', 'unknown')
+        back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
+        if st.button("← Back", key=back_key, help="Go to previous page"):
             go_back()
 
 def main():
@@ -3981,6 +3985,8 @@ def doctor_management():
             st.caption(f"Last updated: {last_update}")
 
 def medication_management():
+    add_to_history('medication_management')
+    show_back_button()
     st.markdown("### Preset Medications")
     
     # Clean up duplicates button
@@ -4092,6 +4098,8 @@ def medication_management():
                                 st.rerun()
 
 def daily_reports():
+    add_to_history('daily_reports')
+    show_back_button()
     st.markdown("### Daily Statistics")
     
     conn = sqlite3.connect(db.db_name)
@@ -4525,6 +4533,8 @@ def ophthalmologist_interface():
         st.info("No eye examinations completed yet.")
 
 def clinic_settings():
+    add_to_history('clinic_settings')
+    show_back_button()
     st.markdown("### Clinic Settings")
     
     # Display and Theme Settings
