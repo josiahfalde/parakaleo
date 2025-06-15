@@ -2305,44 +2305,62 @@ def new_patient_form():
             current_member = st.session_state.family_vital_signs_queue[current_index]
             
             # Show progress indicator
-            remaining_children = len(st.session_state.family_vital_signs_queue) - current_index
-            if remaining_children == 1:
-                st.info(f"👶 **Last Child:** Recording vital signs for {current_member['patient_name']} (Age: {current_member.get('age', 'Unknown')})")
+            total_members = len(st.session_state.family_vital_signs_queue)
+            member_role = "Parent" if current_member['relationship'] == 'parent' else f"Child {current_index}"
+            
+            if current_member['relationship'] == 'parent':
+                st.info(f"👨‍👩‍👧‍👦 **Step 1 of {total_members}:** Recording vital signs for {current_member['patient_name']} (Parent)")
             else:
-                st.info(f"👶 **Child {current_index + 1} of {len(st.session_state.family_vital_signs_queue)}:** Recording vital signs for {current_member['patient_name']} (Age: {current_member.get('age', 'Unknown')})")
-                st.progress((current_index) / len(st.session_state.family_vital_signs_queue))
+                child_number = current_index  # Since parent is first, this gives correct child numbering
+                st.info(f"👶 **Step {current_index + 1} of {total_members}:** Recording vital signs for {current_member['patient_name']} (Child #{child_number})")
+            
+            st.progress((current_index) / total_members)
             
             st.markdown(f"### Record Vital Signs - {current_member['patient_name']}")
             st.markdown(f"**Patient ID:** {current_member['patient_id']} | **Visit ID:** {current_member['visit_id']}")
             
-            # Child-specific vital signs form
-            with st.form(f"child_vitals_{current_member['visit_id']}"):
+            # Family member vital signs form
+            with st.form(f"family_vitals_{current_member['visit_id']}"):
                 st.markdown("#### Vital Signs")
                 
                 col1, col2, col3 = st.columns(3)
                 
+                # Set age-appropriate defaults and ranges
+                is_parent = current_member['relationship'] == 'parent'
+                member_age = current_member.get('age', 25 if is_parent else 5)
+                
                 with col1:
-                    systolic = st.number_input("Systolic BP", min_value=50, max_value=200, value=100, help="Child normal range: 90-110")
-                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=150, value=60, help="Child normal range: 50-70")
+                    if is_parent:
+                        systolic = st.number_input("Systolic BP", min_value=80, max_value=200, value=120, help="Adult normal range: 110-140")
+                        diastolic = st.number_input("Diastolic BP", min_value=50, max_value=150, value=80, help="Adult normal range: 70-90")
+                    else:
+                        systolic = st.number_input("Systolic BP", min_value=50, max_value=200, value=100, help="Child normal range: 90-110")
+                        diastolic = st.number_input("Diastolic BP", min_value=30, max_value=150, value=60, help="Child normal range: 50-70")
                 
                 with col2:
-                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=60, max_value=200, value=100, help="Child normal range: 80-120")
+                    if is_parent:
+                        heart_rate = st.number_input("Heart Rate (bpm)", min_value=50, max_value=200, value=80, help="Adult normal range: 60-100")
+                    else:
+                        heart_rate = st.number_input("Heart Rate (bpm)", min_value=60, max_value=200, value=100, help="Child normal range: 80-120")
+                    
                     temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
                 
                 with col3:
-                    # Child-appropriate ranges
-                    child_age = current_member.get('age', 5)
-                    if child_age < 2:
+                    # Age-appropriate weight and height ranges
+                    if is_parent:
+                        weight = st.number_input("Weight (kg)", min_value=40.0, max_value=150.0, value=None, step=0.1, help="Adult weight")
+                        height = st.number_input("Height (inches)", min_value=48.0, max_value=84.0, value=None, step=0.5, help="Adult height")
+                    elif member_age < 2:
                         weight = st.number_input("Weight (kg)", min_value=2.0, max_value=20.0, value=None, step=0.1, help="Infant/toddler weight")
                         height = st.number_input("Height (inches)", min_value=12.0, max_value=36.0, value=None, step=0.5, help="Infant/toddler height")
-                    elif child_age < 12:
+                    elif member_age < 12:
                         weight = st.number_input("Weight (kg)", min_value=10.0, max_value=60.0, value=None, step=0.1, help="Child weight")
                         height = st.number_input("Height (inches)", min_value=24.0, max_value=60.0, value=None, step=0.5, help="Child height")
                     else:
                         weight = st.number_input("Weight (kg)", min_value=20.0, max_value=100.0, value=None, step=0.1, help="Adolescent weight")
                         height = st.number_input("Height (inches)", min_value=36.0, max_value=72.0, value=None, step=0.5, help="Adolescent height")
                     
-                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=85, max_value=100, value=99)
+                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=85, max_value=100, value=98 if is_parent else 99)
                 
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
@@ -2372,17 +2390,24 @@ def new_patient_form():
                     
                     st.success(f"✅ Vital signs recorded for {current_member['patient_name']}!")
                     
-                    # Green confirmation box for child
-                    st.markdown("""
+                    # Show appropriate confirmation message
+                    if current_member['relationship'] == 'parent':
+                        status_message = "PARENT SENT TO DOCTOR QUEUE"
+                        icon = "👨‍👩‍👧‍👦"
+                    else:
+                        status_message = "CHILD SENT TO DOCTOR QUEUE"
+                        icon = "👶"
+                    
+                    st.markdown(f"""
                         <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 0.375rem; padding: 1rem; margin: 0.5rem 0;">
                             <div style="color: #155724; font-weight: bold; font-size: 1.1rem;">
-                                🟢 CHILD SENT TO DOCTOR QUEUE
+                                🟢 {status_message}
                             </div>
                             <div style="color: #155724; margin-top: 0.5rem;">
-                                <strong>{}</strong> is now waiting for consultation
+                                <strong>{current_member['patient_name']}</strong> is now waiting for consultation
                             </div>
                         </div>
-                    """.format(current_member['patient_name']), unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
                     
                     # Move to next child
                     st.session_state.current_family_vital_index = current_index + 1
