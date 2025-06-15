@@ -3940,31 +3940,28 @@ def daily_reports():
     
     st.markdown("---")
     
-    # Export functionality
-    st.markdown("### Export Today's Data")
+    # Data Export
+    st.markdown("### Data Export")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("Download CSV", type="primary"):
-            export_data = generate_daily_export()
-            
-            # Create downloadable CSV
-            csv_data = export_data.to_csv(index=False)
-            today_date = datetime.now().strftime("%Y-%m-%d")
-            filename = f"parakaleo_clinic_data_{today_date}.csv"
-            
-            st.download_button(
-                label="Download CSV File",
-                data=csv_data,
-                file_name=filename,
-                mime="text/csv"
-            )
-            
-            st.success("Data exported successfully!")
+        # Generate export data when button is clicked
+        export_data = generate_daily_export()
+        csv_data = export_data.to_csv(index=False)
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        filename = f"parakaleo_clinic_data_{today_date}.csv"
+        
+        st.download_button(
+            label="📄 Download Today's Data (CSV)",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv",
+            type="primary"
+        )
     
     with col2:
-        if st.button("Connect to OneDrive", type="secondary"):
+        if st.button("☁️ Connect to OneDrive", type="secondary"):
             st.session_state.show_onedrive = True
             st.rerun()
     
