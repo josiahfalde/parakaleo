@@ -3610,107 +3610,88 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show centered modal dialog
+    # Show deletion confirmation dialog
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create modal overlay that covers entire screen
-        st.markdown(f"""
+        # Create a prominent bordered container for the modal
+        st.markdown("""
         <style>
-        .modal-overlay {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }}
-        .modal-dialog {{
+        .deletion-modal {
             background: white;
-            border: 3px solid #dc3545;
+            border: 4px solid #dc3545;
             border-radius: 15px;
-            padding: 20px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }}
-        .modal-close-btn {{
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            color: #dc3545;
-            font-weight: bold;
-        }}
-        .modal-close-btn:hover {{
-            background-color: #f8f9fa;
-            border-radius: 50%;
-            padding: 5px;
-        }}
+            padding: 30px;
+            margin: 20px auto;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         </style>
-        <div class="modal-overlay" onclick="closeModal(event)">
-            <div class="modal-dialog" onclick="event.stopPropagation()">
-                <button class="modal-close-btn" onclick="closeModal()" id="modalCloseBtn">✕</button>
-                <h2 style="color: #dc3545; text-align: center; margin-top: 20px;">🚨 CONFIRM DELETION</h2>
-                <hr>
-                <div style="text-align: center; margin: 20px 0;">
-                    <strong style="color: #dc3545;">Patient: {patient_to_delete['patient_name']}</strong><br>
-                    <strong>ID: {patient_to_delete['patient_id']}</strong>
-                </div>
-            </div>
-        </div>
-        <script>
-        function closeModal(event) {{
-            if (event) event.preventDefault();
-            // Find and click the cancel button
-            const cancelBtn = document.querySelector('[data-testid*="cancel"]') || 
-                             Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('CANCEL'));
-            if (cancelBtn) cancelBtn.click();
-        }}
-        </script>
         """, unsafe_allow_html=True)
         
-        # Center the Streamlit content in the modal
-        st.markdown('<div style="text-align: center; padding: 20px;">', unsafe_allow_html=True)
-        
-        # Action buttons
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            if st.button("🗑️ DELETE FOREVER", 
-                       type="primary", 
-                       key="confirm_delete_btn", 
-                       use_container_width=True):
-                try:
-                    success = db.delete_patient(patient_to_delete['patient_id'])
-                    if success:
-                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
-                        del st.session_state.confirm_delete
-                        st.rerun()
-                    else:
-                        st.error("❌ Failed to delete patient.")
-                except Exception as e:
-                    st.error(f"❌ Error deleting patient: {str(e)}")
-        
-        with col2:
-            if st.button("❌ CANCEL", 
-                       key="cancel_delete_btn", 
-                       use_container_width=True):
-                del st.session_state.confirm_delete
-                st.rerun()
-        
-        # Warning message
-        st.warning("""
+        with st.container():
+            st.markdown('<div class="deletion-modal">', unsafe_allow_html=True)
+            
+            # Header with close button
+            header_col1, header_col2, header_col3 = st.columns([1, 4, 1])
+            with header_col1:
+                st.markdown("")
+            with header_col2:
+                st.markdown("## 🚨 CONFIRM PATIENT DELETION")
+            with header_col3:
+                if st.button("✕", key="close_modal", help="Close", use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            st.markdown("---")
+            
+            # Patient info
+            st.error(f"**Patient: {patient_to_delete['patient_name']}**")
+            st.markdown(f"**Patient ID: {patient_to_delete['patient_id']}**")
+            
+            st.markdown("---")
+            
+            # Main action buttons
+            button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
+            
+            with button_col1:
+                if st.button("🗑️ DELETE FOREVER", 
+                           type="primary", 
+                           key="confirm_delete_btn", 
+                           use_container_width=True):
+                    try:
+                        success = db.delete_patient(patient_to_delete['patient_id'])
+                        if success:
+                            st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
+                            del st.session_state.confirm_delete
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to delete patient.")
+                    except Exception as e:
+                        st.error(f"❌ Error deleting patient: {str(e)}")
+            
+            with button_col2:
+                if st.button("❌ CANCEL", 
+                           key="cancel_delete_btn", 
+                           use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            with button_col3:
+                # Alternative close button for mobile
+                if st.button("Close", key="close_alt", use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            st.markdown("---")
+            
+            # Warning
+            st.warning("""
 **⚠️ WARNING: This will permanently delete:**
 - All patient information and demographics
 - All visits and consultations  
@@ -3719,9 +3700,9 @@ def patient_management():
 - All family member relationships
 
 **THIS ACTION CANNOT BE UNDONE!**
-        """)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            """)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
         
         return  # Don't show rest of page when modal is active
     
