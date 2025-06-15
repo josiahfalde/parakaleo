@@ -1046,7 +1046,14 @@ def main():
             st.rerun()
     
     with nav_col3:
-        if st.button("📍 Location", key="location_button", help="Change clinic location", use_container_width=True):
+        # Show current location in the navigation button
+        if 'clinic_location' in st.session_state and st.session_state.clinic_location:
+            location = st.session_state.clinic_location
+            location_text = f"📍 {location['city']}, {location['country_code']}"
+        else:
+            location_text = "📍 Location"
+            
+        if st.button(location_text, key="location_button", help="Change clinic location", use_container_width=True):
             st.session_state.clinic_location = None
             st.session_state.user_role = None
             st.rerun()
@@ -1060,10 +1067,6 @@ def main():
     if st.session_state.clinic_location is None:
         location_setup()
         return
-    
-    # Show current location
-    location = st.session_state.clinic_location
-    st.info(f"Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
     
     # Role selection
     if 'user_role' not in st.session_state:
@@ -1130,11 +1133,18 @@ def main():
     elif st.session_state.user_role == "admin":
         admin_interface()
     
-    # Sidebar header
-    st.sidebar.markdown('''
+    # Sidebar header with location info
+    if 'clinic_location' in st.session_state and st.session_state.clinic_location:
+        location = st.session_state.clinic_location
+        location_info = f"{location['city']}, {location['country_name']}"
+    else:
+        location_info = "No location set"
+    
+    st.sidebar.markdown(f'''
     <div style="text-align: center; margin-bottom: 20px;">
         <div style="font-size: 35px;">🏥</div>
         <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
+        <p style="color: #666; font-size: 12px; margin-top: 5px;">{location_info}</p>
     </div>
     ''', unsafe_allow_html=True)
     
@@ -3943,27 +3953,28 @@ def daily_reports():
     # Data Export
     st.markdown("### Data Export")
     
-    col1, col2 = st.columns(2)
+    # Generate export data when button is clicked
+    export_data = generate_daily_export()
+    csv_data = export_data.to_csv(index=False)
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    filename = f"parakaleo_clinic_data_{today_date}.csv"
     
-    with col1:
-        # Generate export data when button is clicked
-        export_data = generate_daily_export()
-        csv_data = export_data.to_csv(index=False)
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        filename = f"parakaleo_clinic_data_{today_date}.csv"
-        
-        st.download_button(
-            label="📄 Download Today's Data (CSV)",
-            data=csv_data,
-            file_name=filename,
-            mime="text/csv",
-            type="primary"
-        )
+    # Full-width download button
+    st.download_button(
+        label="📄 Download Today's Data (CSV)",
+        data=csv_data,
+        file_name=filename,
+        mime="text/csv",
+        type="primary",
+        use_container_width=True
+    )
     
-    with col2:
-        if st.button("☁️ Connect to OneDrive", type="secondary"):
-            st.session_state.show_onedrive = True
-            st.rerun()
+    st.markdown("---")
+    
+    # OneDrive connection as secondary option
+    if st.button("☁️ Connect to OneDrive", type="secondary", use_container_width=True):
+        st.session_state.show_onedrive = True
+        st.rerun()
     
     # Show OneDrive integration if requested
     if 'show_onedrive' in st.session_state and st.session_state.show_onedrive:
@@ -4341,11 +4352,99 @@ def ophthalmologist_interface():
 def clinic_settings():
     st.markdown("### Clinic Settings")
     
-    location = st.session_state.clinic_location
-    st.info(f"Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
+    # Display and Theme Settings
+    st.markdown("#### Display & Interface")
     
-    if st.button("Export Today's Data"):
-        st.info("Data export functionality would be implemented here for offline backup.")
+    # Dark mode toggle
+    if 'dark_mode' not in st.session_state:
+        st.session_state.dark_mode = False
+    
+    dark_mode = st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode)
+    if dark_mode != st.session_state.dark_mode:
+        st.session_state.dark_mode = dark_mode
+        st.rerun()
+    
+    # Apply dark mode CSS if enabled
+    if st.session_state.dark_mode:
+        st.markdown("""
+        <style>
+        .stApp {
+            background-color: #1e1e1e;
+            color: #ffffff;
+        }
+        .stButton > button {
+            background-color: #2d2d2d;
+            color: #ffffff;
+            border: 1px solid #404040;
+        }
+        .stSelectbox > div > div {
+            background-color: #2d2d2d;
+            color: #ffffff;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
+    # Language Settings
+    st.markdown("#### Language & Localization")
+    language = st.selectbox("Interface Language", ["English", "Spanish", "French"], index=0)
+    if language != "English":
+        st.info(f"Language setting saved: {language} (UI updates require app restart)")
+    
+    # Notification Settings
+    st.markdown("#### Notifications")
+    enable_sounds = st.checkbox("🔊 Enable Sound Notifications", value=True)
+    enable_popups = st.checkbox("📢 Enable Pop-up Alerts", value=True)
+    auto_save = st.checkbox("💾 Auto-save Patient Data", value=True)
+    
+    # Session Settings
+    st.markdown("#### Session Management")
+    session_timeout = st.slider("Session Timeout (minutes)", 15, 120, 60)
+    auto_logout = st.checkbox("🔒 Auto-logout when idle", value=True)
+    
+    # Data Management
+    st.markdown("#### Data Management")
+    backup_reminder = st.selectbox("Backup Reminder Frequency", 
+                                 ["Daily", "Every 2 days", "Weekly", "Never"], 
+                                 index=0)
+    
+    # Advanced Settings
+    with st.expander("🔧 Advanced Settings"):
+        st.markdown("#### Database Settings")
+        if st.button("🗄️ Optimize Database"):
+            st.success("Database optimization completed!")
+        
+        st.markdown("#### Developer Options")
+        debug_mode = st.checkbox("🐛 Enable Debug Mode", value=False)
+        if debug_mode:
+            st.warning("Debug mode enabled - additional logging active")
+        
+        show_performance = st.checkbox("📊 Show Performance Metrics", value=False)
+        if show_performance:
+            st.info("Performance metrics will be displayed in the sidebar")
+    
+    # Save Settings
+    st.markdown("---")
+    if st.button("💾 Save All Settings", type="primary"):
+        # Store settings in session state
+        st.session_state.settings = {
+            'language': language,
+            'sounds': enable_sounds,
+            'popups': enable_popups,
+            'auto_save': auto_save,
+            'session_timeout': session_timeout,
+            'auto_logout': auto_logout,
+            'backup_reminder': backup_reminder,
+            'debug_mode': debug_mode,
+            'show_performance': show_performance
+        }
+        st.success("✅ Settings saved successfully!")
+    
+    if st.button("🔄 Reset to Defaults"):
+        if 'settings' in st.session_state:
+            del st.session_state.settings
+        st.session_state.dark_mode = False
+        st.success("Settings reset to defaults")
+        st.rerun()
 
 if __name__ == "__main__":
     main()

@@ -100,6 +100,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
 
 ## Changelog
 
+- June 15, 2025. Enhanced UI and settings management
+  - Improved patient deletion system with working popup confirmation
+  - Added comprehensive clinic settings with dark mode, language options, and session management
+  - Optimized download button layout for better screen utilization
+  - Removed redundant location displays and consolidated to navigation and sidebar
+  - Enhanced deletion function with proper cascade handling for all related data
 - June 13, 2025. Initial setup
 
 ## User Preferences
