@@ -3594,37 +3594,29 @@ def patient_management():
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create visual modal overlay styling only (no JavaScript)
-        st.markdown(f"""
+        # Create visual highlighting for the deletion dialog
+        st.markdown("""
         <style>
-        .deletion-modal {{
-            background-color: rgba(0, 0, 0, 0.8);
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 999;
-        }}
-        .deletion-content {{
-            background: white;
-            border: 3px solid #dc3545;
+        .deletion-dialog {
+            background: #fff;
+            border: 4px solid #dc3545;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            animation: slideIn 0.3s ease-out;
-        }}
-        @keyframes slideIn {{
-            from {{ opacity: 0; transform: translateY(-20px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(220, 53, 69, 0.3);
+            animation: highlightDialog 0.5s ease-out;
+        }
+        @keyframes highlightDialog {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); opacity: 1; }
+        }
         </style>
         """, unsafe_allow_html=True)
         
-        # Create prominent modal dialog
-        st.markdown('<div class="deletion-modal"></div>', unsafe_allow_html=True)
-        
+        # Create a highlighted container for the deletion confirmation
         with st.container():
-            st.markdown('<div class="deletion-content">', unsafe_allow_html=True)
+            st.markdown('<div class="deletion-dialog">', unsafe_allow_html=True)
             
             # Header with close button
             header_col1, header_col2, header_col3 = st.columns([1, 6, 1])
@@ -3633,7 +3625,7 @@ def patient_management():
             with header_col2:
                 st.markdown("## 🚨 CONFIRM PATIENT DELETION")
             with header_col3:
-                if st.button("✕", key="close_delete_modal", help="Close"):
+                if st.button("✕", key="close_delete_modal", help="Close", use_container_width=True):
                     del st.session_state.confirm_delete
                     st.rerun()
             
@@ -3663,7 +3655,7 @@ def patient_management():
             # Action buttons - prominently displayed
             st.markdown("### Choose an action:")
             
-            button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
+            button_col1, button_col2 = st.columns([1, 1])
             
             with button_col1:
                 if st.button("🗑️ DELETE FOREVER", 
@@ -3686,41 +3678,15 @@ def patient_management():
                     del st.session_state.confirm_delete
                     st.rerun()
             
-            with button_col3:
-                st.markdown("")  # spacer
-            
             st.markdown("---")
-            
-            # Add a prominent "click anywhere outside" area
-            st.markdown("### Click outside this box to cancel:")
-            
-            # Create an invisible clickable area that closes the modal
-            outside_col1, outside_col2, outside_col3 = st.columns([1, 2, 1])
-            
-            with outside_col1:
-                if st.button("Cancel (Click Here)", key="outside_cancel_left", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            with outside_col3:
-                if st.button("Cancel (Click Here)", key="outside_cancel_right", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
+            st.markdown("*Click the X button above or CANCEL to close this dialog*")
             
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Auto-scroll to modal without JavaScript
-        st.markdown("""
-        <style>
-        .deletion-modal {
-            animation: fadeIn 0.3s ease-in;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        # Ensure the dialog is prominently visible
+        st.markdown("---")
+        st.markdown("**⬆️ PATIENT DELETION CONFIRMATION ABOVE ⬆️**")
+        st.markdown("---")
         
         return  # Don't show rest of page when modal is active
     
