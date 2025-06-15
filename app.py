@@ -875,11 +875,39 @@ def doctor_login():
     selected_doctor = st.selectbox("Choose your name:", [""] + doctor_names)
     
     if selected_doctor and st.button("Login as Doctor", type="primary"):
-        st.session_state.doctor_name = selected_doctor
-        # Update doctor status to available
-        db.update_doctor_status(selected_doctor, "available")
-        st.success(f"Logged in as {selected_doctor}")
-        st.rerun()
+        try:
+            st.session_state.doctor_name = selected_doctor
+            # Update doctor status to available
+            db.update_doctor_status(selected_doctor, "available")
+            st.success(f"Logged in as {selected_doctor}")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Login error: {str(e)}")
+            # Try to fix the issue by ensuring the doctor exists in status table
+            try:
+                # Check if doctor exists in the doctors table first
+                doctors_list = db.get_doctors()
+                doctor_exists = any(doc['name'] == selected_doctor for doc in doctors_list)
+                
+                if doctor_exists:
+                    # Force create status entry
+                    conn = sqlite3.connect("clinic_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (selected_doctor,))
+                    cursor.execute('''
+                        INSERT INTO doctor_status (doctor_name, status, last_updated)
+                        VALUES (?, ?, ?)
+                    ''', (selected_doctor, "available", datetime.now().isoformat()))
+                    conn.commit()
+                    conn.close()
+                    
+                    st.session_state.doctor_name = selected_doctor
+                    st.success(f"Logged in as {selected_doctor}")
+                    st.rerun()
+                else:
+                    st.error(f"Doctor {selected_doctor} not found in system")
+            except Exception as e2:
+                st.error(f"Could not fix login issue: {str(e2)}")
     
     if st.button("Back to Role Selection"):
         if 'user_role' in st.session_state:
@@ -1215,7 +1243,7 @@ def consultation_interface():
     st.markdown("### Select Patient for Consultation")
     
     # Get patients waiting for consultation
-    conn = sqlite3.connect(db.db_name)
+    conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -1270,7 +1298,7 @@ def consultation_interface():
     if st.session_state.get('current_consultation'):
         st.markdown("---")
         # Get patient information for the selected consultation
-        conn = sqlite3.connect(db.db_name)
+        conn = sqlite3.connect("clinic_database.db")
         cursor = conn.cursor()
         cursor.execute('''
             SELECT v.visit_id, v.patient_id, p.name
