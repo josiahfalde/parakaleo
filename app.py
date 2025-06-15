@@ -1588,6 +1588,10 @@ def new_patient_form():
                 st.session_state.family_vital_signs_queue = family_visits.copy()
                 st.session_state.current_family_vital_index = 0
                 
+                # Start with the first family member's vital signs immediately
+                first_member = family_visits[0]
+                st.session_state.processing_family_vitals = True
+                
                 # Clear family registration state
                 if 'family_parent_id' in st.session_state:
                     del st.session_state.family_parent_id
@@ -1641,6 +1645,9 @@ def new_patient_form():
     # Process family vital signs queue
     elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
         current_index = st.session_state.get('current_family_vital_index', 0)
+        
+        # Debug info
+        st.write(f"DEBUG: Queue has {len(st.session_state.family_vital_signs_queue)} members, current index: {current_index}")
         
         if current_index < len(st.session_state.family_vital_signs_queue):
             current_member = st.session_state.family_vital_signs_queue[current_index]
