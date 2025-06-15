@@ -1624,7 +1624,7 @@ def main():
     nav_col1, nav_col2, nav_col3 = st.columns([3, 4, 5])
     
     with nav_col1:
-        if st.button("⚪ Home", key="home_button", help="Return to role selection", use_container_width=True):
+        if st.button("🏠 Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
