@@ -1772,11 +1772,11 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             conn_med = sqlite3.connect(db_manager.db_name)
                             cursor_med = conn_med.cursor()
                             cursor_med.execute('''
-                                INSERT INTO prescriptions (visit_id, medication_id, medication_name, 
+                                INSERT INTO prescriptions (visit_id, medication_name, 
                                                          dosage, frequency, duration, instructions, 
-                                                         indication, awaiting_lab, prescription_time)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (visit_id, med['id'], med['name'], med['dosage'], 
+                                                         indication, awaiting_lab, prescribed_time)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (visit_id, med['name'], med['dosage'], 
                                   med['frequency'], med['duration'], med['instructions'],
                                   med.get('indication', ''), med['awaiting_lab'], 
                                   datetime.now().isoformat()))
