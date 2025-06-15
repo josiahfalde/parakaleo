@@ -1646,8 +1646,7 @@ def new_patient_form():
     elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
         current_index = st.session_state.get('current_family_vital_index', 0)
         
-        # Debug info
-        st.write(f"DEBUG: Queue has {len(st.session_state.family_vital_signs_queue)} members, current index: {current_index}")
+
         
         if current_index < len(st.session_state.family_vital_signs_queue):
             current_member = st.session_state.family_vital_signs_queue[current_index]
@@ -2340,6 +2339,144 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             
                             if photo_count > 0:
                                 st.info(f"Saved {photo_count} photos to patient record.")
+                        
+                        # Check if this patient has children (family consultation)
+                        family_conn = sqlite3.connect(db_manager.db_name)
+                        family_cursor = family_conn.cursor()
+                        family_cursor.execute('''
+                            SELECT patient_id, name FROM patients 
+                            WHERE parent_id = ? AND patient_id != ?
+                        ''', (patient_id, patient_id))
+                        family_children = family_cursor.fetchall()
+                        family_conn.close()
+                        
+                        # If there are family children, show continue button
+                        if family_children:
+                            st.markdown("---")
+                            st.info("👨‍👩‍👧‍👦 **Family Consultation Available**")
+                            st.markdown(f"Parent consultation completed. {len(family_children)} children are waiting for consultation.")
+                            
+                            col1, col2 = st.columns([1, 1])
+                            with col1:
+                                if st.button("🔄 Continue to Children", type="primary", use_container_width=True):
+                                    # Clear current consultation first
+                                    if 'active_consultation' in st.session_state:
+                                        del st.session_state.active_consultation
+                                    
+                                    # Start with first child
+                                    first_child = family_children[0]
+                                    child_id, child_name = first_child
+                                    
+                                    # Get child's visit info
+                                    child_conn = sqlite3.connect(db_manager.db_name)
+                                    child_cursor = child_conn.cursor()
+                                    
+                                    child_cursor.execute('''
+                                        SELECT visit_id FROM visits 
+                                        WHERE patient_id = ? AND status = 'waiting_consultation' 
+                                        AND DATE(visit_date) = DATE('now')
+                                        ORDER BY visit_date DESC LIMIT 1
+                                    ''', (child_id,))
+                                    
+                                    child_visit = child_cursor.fetchone()
+                                    child_conn.close()
+                                    
+                                    if child_visit:
+                                        child_visit_id = child_visit[0]
+                                        # Start consultation for this child
+                                        st.session_state.active_consultation = {
+                                            'visit_id': child_visit_id,
+                                            'patient_id': child_id,
+                                            'patient_name': child_name
+                                        }
+                                        # Store remaining children for sequential consultation
+                                        remaining_children = family_children[1:] if len(family_children) > 1 else []
+                                        if remaining_children:
+                                            st.session_state.remaining_family_children = remaining_children
+                                        
+                                        # Mark this as a family consultation continuation
+                                        st.session_state.family_consultation_mode = True
+                                        
+                                        # Update doctor status
+                                        db_manager.update_doctor_status(st.session_state.doctor_name, "with_patient", child_id, child_name)
+                                        st.rerun()
+                                    else:
+                                        st.error(f"No active visit found for {child_name}")
+                            
+                            with col2:
+                                if st.button("🏠 Return to Queue", type="secondary", use_container_width=True):
+                                    st.session_state.page = 'doctor'
+                                    st.rerun()
+                            
+                            # Don't proceed further, wait for user choice
+                            return
+                        
+                        # Check if we're in family consultation mode and have remaining children
+                        if st.session_state.get('family_consultation_mode', False) and 'remaining_family_children' in st.session_state and st.session_state.remaining_family_children:
+                            # Show next child consultation
+                            st.markdown("---")
+                            st.info("👶 **Next Family Member Ready**")
+                            
+                            next_child = st.session_state.remaining_family_children[0]
+                            child_id, child_name = next_child
+                            
+                            col1, col2 = st.columns([1, 1])
+                            with col1:
+                                if st.button(f"🔄 Continue to {child_name}", type="primary", use_container_width=True):
+                                    # Get next child's visit info
+                                    child_conn = sqlite3.connect(db_manager.db_name)
+                                    child_cursor = child_conn.cursor()
+                                    
+                                    child_cursor.execute('''
+                                        SELECT visit_id FROM visits 
+                                        WHERE patient_id = ? AND status = 'waiting_consultation' 
+                                        AND DATE(visit_date) = DATE('now')
+                                        ORDER BY visit_date DESC LIMIT 1
+                                    ''', (child_id,))
+                                    
+                                    child_visit = child_cursor.fetchone()
+                                    child_conn.close()
+                                    
+                                    if child_visit:
+                                        child_visit_id = child_visit[0]
+                                        # Start consultation for next child
+                                        st.session_state.active_consultation = {
+                                            'visit_id': child_visit_id,
+                                            'patient_id': child_id,
+                                            'patient_name': child_name
+                                        }
+                                        
+                                        # Remove this child from remaining list
+                                        st.session_state.remaining_family_children = st.session_state.remaining_family_children[1:]
+                                        
+                                        # Update doctor status
+                                        db_manager.update_doctor_status(st.session_state.doctor_name, "with_patient", child_id, child_name)
+                                        st.rerun()
+                                    else:
+                                        st.error(f"No active visit found for {child_name}")
+                            
+                            with col2:
+                                if st.button("🏠 Finish Family Consultation", type="secondary", use_container_width=True):
+                                    # Clear family consultation state
+                                    if 'remaining_family_children' in st.session_state:
+                                        del st.session_state.remaining_family_children
+                                    if 'family_consultation_mode' in st.session_state:
+                                        del st.session_state.family_consultation_mode
+                                    
+                                    st.session_state.page = 'doctor'
+                                    st.rerun()
+                            
+                            return
+                        
+                        # Clear family consultation mode if no more children
+                        if st.session_state.get('family_consultation_mode', False):
+                            if 'remaining_family_children' in st.session_state:
+                                del st.session_state.remaining_family_children
+                            if 'family_consultation_mode' in st.session_state:
+                                del st.session_state.family_consultation_mode
+                            
+                            st.success("✅ Family consultation completed for all members!")
+                            st.info("All family members have been seen by the doctor.")
                         
                         # If this is a family consultation, show children consultations below
                         if is_family_consultation:
