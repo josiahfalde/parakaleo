@@ -1000,10 +1000,9 @@ def show_loading_screen():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 st.markdown('<div style="text-align: center; margin-top: 100px;">', unsafe_allow_html=True)
-                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=120)
+                st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=250)
                 st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
-                st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
+                st.markdown('<p style="text-align: center; color: #666; margin-top: 30px;">Loading...</p>', unsafe_allow_html=True)
         
         time.sleep(2)
         placeholder.empty()
@@ -1649,9 +1648,11 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=120)
+        # Center the ParakaleoMed logo
+        st.markdown('<div style="display: flex; justify-content: center; margin-bottom: 30px;">', unsafe_allow_html=True)
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
@@ -1718,14 +1719,13 @@ def main():
     else:
         location_info = "No location set"
     
-    # Display logo in sidebar
-    col1, col2, col3 = st.sidebar.columns([1, 1, 1])
-    with col2:
-        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=50)
+    # Display compact logo in sidebar
+    st.sidebar.markdown('<div style="display: flex; justify-content: center; margin-bottom: 10px;">', unsafe_allow_html=True)
+    st.sidebar.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png", width=40)
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
     
     st.sidebar.markdown(f'''
     <div style="text-align: center; margin-bottom: 20px;">
-        <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
         <p style="color: #666; font-size: 12px; margin-top: 5px;">{location_info}</p>
     </div>
     ''', unsafe_allow_html=True)
