@@ -1587,8 +1587,10 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with improved navigation layout
-    st.markdown('<h1 style="text-align: center; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
+    # Header with logo
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
     st.markdown('<p style="text-align: center; color: #666; margin-bottom: 20px;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
