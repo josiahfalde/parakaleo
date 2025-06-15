@@ -373,6 +373,55 @@ class DatabaseManager:
         
         return visit_id
     
+    def delete_patient(self, patient_id: str) -> bool:
+        """Delete a patient and all associated data"""
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            # Delete prescriptions for all visits of this patient
+            cursor.execute('''
+                DELETE FROM prescriptions 
+                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
+            ''', (patient_id,))
+            
+            # Delete lab tests for all visits of this patient
+            cursor.execute('''
+                DELETE FROM lab_tests 
+                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
+            ''', (patient_id,))
+            
+            # Delete lab results for all visits of this patient
+            cursor.execute('''
+                DELETE FROM lab_results 
+                WHERE test_id IN (
+                    SELECT id FROM lab_tests 
+                    WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
+                )
+            ''', (patient_id,))
+            
+            # Delete consultations for all visits of this patient
+            cursor.execute('''
+                DELETE FROM consultations 
+                WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
+            ''', (patient_id,))
+            
+            # Delete all visits for this patient
+            cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+            
+            # Finally delete the patient
+            cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception:
+            if conn:
+                conn.close()
+            return False
+    
     def add_location(self, country_code: str, country_name: str, city: str) -> int:
         """Add a new clinic location"""
         conn = sqlite3.connect(self.db_name)
@@ -520,7 +569,7 @@ def main():
     
     # Show current location
     location = st.session_state.clinic_location
-    st.info(f"📍 Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
+    st.info(f"Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
     
     # Role selection
     if 'user_role' not in st.session_state:
@@ -1537,18 +1586,67 @@ def completed_lab_tests():
     else:
         st.info("No lab tests completed today.")
 
-def admin_interface():
-    st.markdown("## ⚙️ Administration")
+def patient_management():
+    st.markdown("### Patient Management")
     
-    tab1, tab2, tab3 = st.tabs(["Medication Management", "Reports", "Settings"])
+    # Search for patients to delete
+    search_query = st.text_input("Search for Patient to Delete", placeholder="Enter patient name or ID")
+    
+    if search_query:
+        patients = db.search_patients(search_query)
+        
+        if patients:
+            st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
+            
+            for patient in patients:
+                with st.container():
+                    st.markdown(f"""
+                    <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                        <h4>{patient['name']}</h4>
+                        <p><strong>ID:</strong> {patient['patient_id']}</p>
+                        <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
+                        <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
+                        <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        confirmation = st.text_input(f"Type 'DELETE {patient['patient_id']}' to confirm deletion", 
+                                                   key=f"confirm_{patient['patient_id']}")
+                    
+                    with col2:
+                        if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
+                            if confirmation == f"DELETE {patient['patient_id']}":
+                                if db.delete_patient(patient['patient_id']):
+                                    st.success(f"Patient {patient['name']} has been deleted successfully.")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete patient. Please try again.")
+                            else:
+                                st.error(f"Please type 'DELETE {patient['patient_id']}' to confirm deletion.")
+                    
+                    st.markdown("---")
+        else:
+            st.info("No patients found matching your search.")
+    else:
+        st.info("Enter a patient name or ID to search for patients to delete.")
+
+def admin_interface():
+    st.markdown("## Administrator Dashboard")
+    
+    tab1, tab2, tab3, tab4 = st.tabs(["Patient Management", "Medication Management", "Reports", "Settings"])
     
     with tab1:
-        medication_management()
+        patient_management()
     
     with tab2:
-        daily_reports()
+        medication_management()
     
     with tab3:
+        daily_reports()
+    
+    with tab4:
         clinic_settings()
 
 def medication_management():
