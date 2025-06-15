@@ -2270,31 +2270,6 @@ def new_patient_form():
                     del st.session_state.family_parent_name
                 
                 st.rerun()
-                
-                with col2:
-                    if st.button("Finish Without Visits", type="secondary"):
-                        if 'family_parent_id' in st.session_state:
-                            del st.session_state.family_parent_id
-                        if 'family_parent_name' in st.session_state:
-                            del st.session_state.family_parent_name
-                        st.success("Family registration completed!")
-                        st.rerun()
-                
-                # Show family members for individual visit creation
-                if family_members and len(family_members) > 1:
-                    st.markdown("**Create individual visits for children:**")
-                    for member in family_members:
-                        if member['relationship'] != 'parent':
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                st.write(f"👶 {member['name']} ({member['age']} yrs) - ID: {member['patient_id']}")
-                            with col2:
-                                if st.button(f"Create Visit", key=f"visit_{member['patient_id']}"):
-                                    visit_id = db.create_visit(member['patient_id'])
-                                    st.session_state.pending_vitals = visit_id
-                                    st.session_state.patient_name = member['name']
-                                    st.success(f"Visit created for {member['name']}")
-                                    st.rerun()
     
     # Show vital signs form outside the main form if there's a pending visit
     if 'pending_vitals' in st.session_state:
