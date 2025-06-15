@@ -1587,8 +1587,10 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with logo - no extra spacing
-    st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+    # Header with centered logo - no extra spacing
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
     st.markdown('<p style="text-align: center; color: #666; margin: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
@@ -1608,7 +1610,7 @@ def main():
             st.rerun()
     
     with nav_col2:
-        if st.button("🏠 Home", key="home_button", help="Return to role selection", use_container_width=True):
+        if st.button("⚪ Home", key="home_button", help="Return to role selection", use_container_width=True):
             # Clear user role to return to role selection but keep location
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
