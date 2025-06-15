@@ -889,6 +889,12 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
             
+            if st.button("Ophthalmologist", key="ophthalmologist", type="primary", use_container_width=True):
+                st.session_state.user_role = "ophthalmologist"
+                st.rerun()
+        
+        col3, col4 = st.columns(2)
+        with col3:
             if st.button("Admin", key="admin", type="primary", use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
@@ -920,6 +926,8 @@ def main():
             doctor_interface()
     elif st.session_state.user_role == "pharmacy":
         pharmacy_interface()
+    elif st.session_state.user_role == "ophthalmologist":
+        ophthalmologist_interface()
     elif st.session_state.user_role == "admin":
         admin_interface()
     
@@ -1625,9 +1633,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     
                     with col2:
                         # Show dosage field for pharmacy clarity
-                        pharmacy_dosage = st.text_input("Dosage for Pharmacy", 
-                                                      placeholder="e.g., 500mg twice daily for 7 days",
-                                                      key=f"pharma_dose_{med['id']}")
+                        col2a, col2b = st.columns(2)
+                        with col2a:
+                            pharmacy_dosage = st.text_input("Dosage for Pharmacy", 
+                                                          placeholder="e.g., 500mg twice daily for 7 days",
+                                                          key=f"pharma_dose_{med['id']}")
+                        with col2b:
+                            indication = st.text_input("Indication", 
+                                                     placeholder="e.g., UTI, hypertension",
+                                                     key=f"indication_{med['id']}")
                     
                     if selected:
                         col3, col4, col5 = st.columns([1, 1, 1])
@@ -1659,7 +1673,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             'duration': duration,
                             'instructions': instructions,
                             'awaiting_lab': awaiting_lab,
-                            'pharmacy_notes': pharmacy_dosage
+                            'pharmacy_notes': pharmacy_dosage,
+                            'indication': indication
                         })
         
         # Custom medication section
@@ -1676,6 +1691,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 
                 custom_instructions = st.text_input("Instructions", key="custom_instructions")
                 custom_awaiting = st.checkbox("Pending Lab", key="custom_awaiting")
+                custom_indication = st.text_input("Indication", key="custom_indication")
                 
                 selected_medications.append({
                     'id': None,
@@ -1685,8 +1701,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     'duration': custom_duration,
                     'instructions': custom_instructions,
                     'awaiting_lab': "yes" if custom_awaiting else "no",
-                    'pharmacy_notes': ""
+                    'pharmacy_notes': "",
+                    'indication': custom_indication
                 })
+        
+        st.markdown("#### Ophthalmology Referral")
+        needs_ophthalmology = st.checkbox("Patient needs to see ophthalmologist after receiving medications")
         
         if st.form_submit_button("Complete Consultation", type="primary"):
             if doctor_name and chief_complaint:
@@ -1699,10 +1719,11 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     
                     cursor.execute('''
                         INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
-                                                 symptoms, diagnosis, treatment_plan, notes, consultation_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                                 symptoms, diagnosis, treatment_plan, notes, 
+                                                 needs_ophthalmology, consultation_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
-                          treatment_plan, notes, datetime.now().isoformat()))
+                          treatment_plan, notes, needs_ophthalmology, datetime.now().isoformat()))
                     
                     # Update visit status first
                     if selected_medications:
@@ -2333,34 +2354,19 @@ def patient_management():
         if 'confirm_delete' in st.session_state:
             patient_to_delete = st.session_state.confirm_delete
             
-            # Create modal-style popup
+            # Create modal-style popup with fixed styling
             st.markdown("""
             <style>
             .delete-modal {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
                 background: white;
                 padding: 30px;
                 border-radius: 15px;
                 box-shadow: 0 10px 30px rgba(0,0,0,0.5);
                 border: 3px solid #ff4444;
-                z-index: 1000;
                 max-width: 500px;
-                width: 90%;
-            }
-            .modal-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: rgba(0,0,0,0.7);
-                z-index: 999;
+                margin: 20px auto;
             }
             </style>
-            <div class="modal-overlay"></div>
             """, unsafe_allow_html=True)
             
             with st.container():
