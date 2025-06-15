@@ -4404,7 +4404,6 @@ def medication_management():
 
 def daily_reports():
     add_to_history('daily_reports')
-    show_back_button()
     st.markdown("### Daily Statistics")
     
     conn = sqlite3.connect(db.db_name)
@@ -4839,7 +4838,6 @@ def ophthalmologist_interface():
 
 def clinic_settings():
     add_to_history('clinic_settings')
-    show_back_button()
     st.markdown("### Clinic Settings")
     
     # Display and Theme Settings
