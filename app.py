@@ -558,14 +558,11 @@ def show_loading_screen():
         st.session_state.loading_shown = False
     
     if not st.session_state.loading_shown:
-        with open("parakaleo_logo.svg", "r") as f:
-            logo_svg = f.read()
-        
         placeholder = st.empty()
         with placeholder.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                st.markdown(f'<div style="text-align: center; margin-top: 100px; transform: scale(2);">{logo_svg}</div>', unsafe_allow_html=True)
+                st.markdown('<div style="text-align: center; margin-top: 100px;">🔗</div>', unsafe_allow_html=True)
                 st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
         
@@ -578,13 +575,22 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Load and display Parakaleo logo
-    with open("parakaleo_logo.svg", "r") as f:
-        logo_svg = f.read()
-    
+    # Display header with logo
     col1, col2 = st.columns([1, 6])
     with col1:
-        st.markdown(f'<div style="margin-top: 10px;">{logo_svg}</div>', unsafe_allow_html=True)
+        # Display SVG logo directly
+        st.markdown('''
+        <svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(25, 25)">
+            <circle cx="0" cy="0" r="18" fill="none" stroke="#FF6B35" stroke-width="2.5"/>
+            <circle cx="8" cy="-6" r="14" fill="none" stroke="#3498DB" stroke-width="2.5"/>
+            <circle cx="-8" cy="-6" r="14" fill="none" stroke="#2ECC71" stroke-width="2.5"/>
+            <circle cx="0" cy="10" r="12" fill="none" stroke="#9B59B6" stroke-width="2.5"/>
+            <circle cx="5" cy="3" r="8" fill="none" stroke="#F1C40F" stroke-width="2.5"/>
+            <circle cx="-5" cy="3" r="8" fill="none" stroke="#E74C3C" stroke-width="2.5"/>
+          </g>
+        </svg>
+        ''', unsafe_allow_html=True)
     with col2:
         st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
         st.markdown("*Mission Trip Patient Management*")

@@ -1,22 +1,32 @@
-<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- Parakaleo interlocking circles logo based on user's image -->
-  <g transform="translate(30, 30)">
-    <!-- Orange outer ring segments -->
-    <path d="M -15 -10 A 18 18 0 0 1 0 -18 A 18 18 0 0 1 15 -10" stroke="#FF8C00" stroke-width="3" fill="none"/>
-    <path d="M 15 -10 A 18 18 0 0 1 18 0 A 18 18 0 0 1 15 10" stroke="#FF8C00" stroke-width="3" fill="none"/>
-    <path d="M 15 10 A 18 18 0 0 1 0 18 A 18 18 0 0 1 -15 10" stroke="#FF8C00" stroke-width="3" fill="none"/>
-    <path d="M -15 10 A 18 18 0 0 1 -18 0 A 18 18 0 0 1 -15 -10" stroke="#FF8C00" stroke-width="3" fill="none"/>
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .ring { fill: none; stroke-width: 2.5; }
+      .orange { stroke: #FF6B35; }
+      .blue { stroke: #3498DB; }
+      .green { stroke: #2ECC71; }
+      .purple { stroke: #9B59B6; }
+      .yellow { stroke: #F1C40F; }
+      .red { stroke: #E74C3C; }
+    </style>
+  </defs>
+  
+  <!-- Interlocking rings based on Parakaleo logo -->
+  <g transform="translate(25, 25)">
+    <!-- Outer ring - Orange -->
+    <circle cx="0" cy="0" r="18" class="ring orange"/>
     
-    <!-- Blue middle ring segments -->
-    <path d="M -8 -12 A 14 14 0 0 1 8 -12 A 14 14 0 0 1 12 -8" stroke="#4A90E2" stroke-width="3" fill="none"/>
-    <path d="M 12 -8 A 14 14 0 0 1 12 8 A 14 14 0 0 1 8 12" stroke="#4A90E2" stroke-width="3" fill="none"/>
-    <path d="M 8 12 A 14 14 0 0 1 -8 12 A 14 14 0 0 1 -12 8" stroke="#4A90E2" stroke-width="3" fill="none"/>
-    <path d="M -12 8 A 14 14 0 0 1 -12 -8 A 14 14 0 0 1 -8 -12" stroke="#4A90E2" stroke-width="3" fill="none"/>
+    <!-- Second ring - Blue -->
+    <circle cx="8" cy="-6" r="14" class="ring blue"/>
     
-    <!-- Green inner ring segments -->
-    <path d="M -5 -8 A 10 10 0 0 1 5 -8 A 10 10 0 0 1 8 -5" stroke="#50C878" stroke-width="3" fill="none"/>
-    <path d="M 8 -5 A 10 10 0 0 1 8 5 A 10 10 0 0 1 5 8" stroke="#50C878" stroke-width="3" fill="none"/>
-    <path d="M 5 8 A 10 10 0 0 1 -5 8 A 10 10 0 0 1 -8 5" stroke="#50C878" stroke-width="3" fill="none"/>
-    <path d="M -8 5 A 10 10 0 0 1 -8 -5 A 10 10 0 0 1 -5 -8" stroke="#50C878" stroke-width="3" fill="none"/>
+    <!-- Third ring - Green -->
+    <circle cx="-8" cy="-6" r="14" class="ring green"/>
+    
+    <!-- Fourth ring - Purple -->
+    <circle cx="0" cy="10" r="12" class="ring purple"/>
+    
+    <!-- Inner elements -->
+    <circle cx="5" cy="3" r="8" class="ring yellow"/>
+    <circle cx="-5" cy="3" r="8" class="ring red"/>
   </g>
 </svg>
