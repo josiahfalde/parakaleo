@@ -1651,7 +1651,56 @@ def new_patient_form():
             st.markdown(f"**Patient ID:** {current_member['patient_id']} | **Visit ID:** {current_member['visit_id']}")
             
             # Use modified vital signs form for family members
-            family_vital_signs_form(current_member['visit_id'], current_member['patient_name'], current_member['relationship'])
+            with st.form(f"family_vitals_{current_member['visit_id']}"):
+                st.markdown("#### Vital Signs")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    systolic = st.number_input("Systolic BP", min_value=50, max_value=300, value=120)
+                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=200, value=80)
+                
+                with col2:
+                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=30, max_value=250, value=72)
+                    temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
+                
+                with col3:
+                    # Age-appropriate weight ranges
+                    if current_member['relationship'] == 'parent':
+                        weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=0.1)
+                        height = st.number_input("Height (cm)", min_value=120.0, max_value=220.0, value=None, step=0.5)
+                    else:  # child
+                        weight = st.number_input("Weight (kg)", min_value=2.0, max_value=100.0, value=None, step=0.1, help="Child weight in kg")
+                        height = st.number_input("Height (cm)", min_value=40.0, max_value=180.0, value=None, step=0.5, help="Child height in cm")
+                    
+                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
+                
+                if st.form_submit_button(f"Save Vital Signs for {current_member['patient_name']}", type="primary"):
+                    conn = sqlite3.connect("clinic_database.db")
+                    cursor = conn.cursor()
+                    
+                    cursor.execute('''
+                        INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
+                                               temperature, weight, height, oxygen_saturation, recorded_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (current_member['visit_id'], systolic, diastolic, heart_rate, temperature, 
+                          weight, height, oxygen_sat, datetime.now().isoformat()))
+                    
+                    # Update visit status
+                    cursor.execute('''
+                        UPDATE visits SET triage_time = ?, status = ? WHERE visit_id = ?
+                    ''', (datetime.now().isoformat(), 'waiting_consultation', current_member['visit_id']))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    st.success(f"✅ Vital signs recorded for {current_member['patient_name']}!")
+                    st.info(f"**{current_member['patient_name']}** has been sent to the doctor queue.")
+                    
+                    # Move to next family member
+                    st.session_state.current_family_vital_index = st.session_state.get('current_family_vital_index', 0) + 1
+                    
+                    st.rerun()
         else:
             # All family members processed
             st.success("✅ All family members have completed vital signs!")
@@ -1665,57 +1714,7 @@ def new_patient_form():
             
             st.rerun()
 
-def family_vital_signs_form(visit_id: str, patient_name: str, relationship: str):
-    """Modified vital signs form for family members with age-appropriate inputs"""
-    with st.form(f"family_vitals_{visit_id}"):
-        st.markdown("#### Vital Signs")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            systolic = st.number_input("Systolic BP", min_value=50, max_value=300, value=120)
-            diastolic = st.number_input("Diastolic BP", min_value=30, max_value=200, value=80)
-        
-        with col2:
-            heart_rate = st.number_input("Heart Rate (bpm)", min_value=30, max_value=250, value=72)
-            temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
-        
-        with col3:
-            # Age-appropriate weight ranges
-            if relationship == 'parent':
-                weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=0.1)
-                height = st.number_input("Height (cm)", min_value=120.0, max_value=220.0, value=None, step=0.5)
-            else:  # child
-                weight = st.number_input("Weight (kg)", min_value=2.0, max_value=100.0, value=None, step=0.1, help="Child weight in kg")
-                height = st.number_input("Height (cm)", min_value=40.0, max_value=180.0, value=None, step=0.5, help="Child height in cm")
-            
-            oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
-        
-        if st.form_submit_button(f"Save Vital Signs for {patient_name}", type="primary"):
-            conn = sqlite3.connect("clinic_database.db")
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                       temperature, weight, height, oxygen_saturation, recorded_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (visit_id, systolic, diastolic, heart_rate, temperature, 
-                  weight, height, oxygen_sat, datetime.now().isoformat()))
-            
-            # Update visit status
-            cursor.execute('''
-                UPDATE visits SET triage_time = ?, status = ? WHERE visit_id = ?
-            ''', (datetime.now().isoformat(), 'waiting_consultation', visit_id))
-            
-            conn.commit()
-            conn.close()
-            
-            st.success(f"✅ Vital signs recorded for {patient_name}!")
-            
-            # Move to next family member
-            st.session_state.current_family_vital_index = st.session_state.get('current_family_vital_index', 0) + 1
-            
-            st.rerun()
+
 
 def existing_patient_search():
     st.markdown("### Find Existing Patient")
