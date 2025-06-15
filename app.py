@@ -441,6 +441,76 @@ class DatabaseManager:
         
         return patient_id
     
+    def check_duplicate_patient(self, name: str, age: int = None, phone: str = None) -> dict:
+        """Check for potential duplicate patients based on name, age, and phone"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Search for exact name matches
+        cursor.execute('''
+            SELECT patient_id, name, age, phone, address, registration_time
+            FROM patients 
+            WHERE LOWER(name) = LOWER(?)
+            ORDER BY registration_time DESC
+        ''', (name,))
+        
+        exact_matches = cursor.fetchall()
+        
+        # Search for similar names (fuzzy matching)
+        name_parts = name.lower().split()
+        if len(name_parts) >= 2:
+            first_name = name_parts[0]
+            last_name = name_parts[-1]
+            cursor.execute('''
+                SELECT patient_id, name, age, phone, address, registration_time
+                FROM patients 
+                WHERE (LOWER(name) LIKE ? OR LOWER(name) LIKE ?) 
+                AND patient_id NOT IN (
+                    SELECT patient_id FROM patients WHERE LOWER(name) = LOWER(?)
+                )
+                ORDER BY registration_time DESC
+                LIMIT 5
+            ''', (f'%{first_name}%{last_name}%', f'%{last_name}%{first_name}%', name))
+        else:
+            cursor.execute('''
+                SELECT patient_id, name, age, phone, address, registration_time
+                FROM patients 
+                WHERE LOWER(name) LIKE ? 
+                AND patient_id NOT IN (
+                    SELECT patient_id FROM patients WHERE LOWER(name) = LOWER(?)
+                )
+                ORDER BY registration_time DESC
+                LIMIT 5
+            ''', (f'%{name.lower()}%', name))
+        
+        similar_matches = cursor.fetchall()
+        
+        conn.close()
+        
+        return {
+            'exact_matches': exact_matches,
+            'similar_matches': similar_matches
+        }
+    
+    def link_to_existing_patient(self, existing_patient_id: str) -> str:
+        """Create a new visit for an existing patient from previous clinic"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Update last visit time
+        cursor.execute('''
+            UPDATE patients 
+            SET last_visit = ?
+            WHERE patient_id = ?
+        ''', (datetime.now().isoformat(), existing_patient_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # Create new visit
+        visit_id = self.create_visit(existing_patient_id)
+        return visit_id
+    
     def add_family_member(self, parent_id: str, location_code: str, **kwargs) -> str:
         """Add a family member under a parent"""
         # Get parent's family_id or create one
@@ -1209,9 +1279,13 @@ def new_patient_form():
                 phone = st.text_input("Phone Number", placeholder="Optional")
                 emergency_contact = st.text_input("Emergency Contact", placeholder="Optional")
             
-            if st.form_submit_button("Register Patient", type="primary"):
+            if st.form_submit_button("Check for Existing Patient", type="primary"):
                 if name.strip():
-                    patient_data = {
+                    # Check for duplicate patients
+                    duplicates = db.check_duplicate_patient(name.strip(), age, phone.strip() if phone else None)
+                    
+                    st.session_state.duplicate_check_results = duplicates
+                    st.session_state.new_patient_data = {
                         'name': name.strip(),
                         'age': age,
                         'gender': gender if gender else None,
@@ -1220,21 +1294,123 @@ def new_patient_form():
                         'medical_history': None,
                         'allergies': None
                     }
-                    
-                    location_code = st.session_state.clinic_location['country_code']
-                    patient_id = db.add_patient(location_code, **patient_data)
-                    visit_id = db.create_visit(patient_id)
-                    
-                    st.success(f"✅ Patient registered successfully!")
-                    st.info(f"**Patient ID:** {patient_id}")
-                    st.info(f"**Visit ID:** {visit_id}")
-                    
-                    # Store visit_id in session state to show vital signs form
-                    st.session_state.pending_vitals = visit_id
-                    st.session_state.patient_name = name.strip()
                     st.rerun()
                 else:
                     st.error("Please enter the patient's name.")
+        
+        # Show duplicate check results
+        if 'duplicate_check_results' in st.session_state and 'new_patient_data' in st.session_state:
+            duplicates = st.session_state.duplicate_check_results
+            patient_data = st.session_state.new_patient_data
+            
+            if duplicates['exact_matches'] or duplicates['similar_matches']:
+                st.markdown("### 🔍 Potential Existing Patients Found")
+                st.warning("This patient may have been seen at a previous clinic. Please review:")
+                
+                # Show exact matches
+                if duplicates['exact_matches']:
+                    st.markdown("#### Exact Name Matches:")
+                    for match in duplicates['exact_matches']:
+                        patient_id, match_name, match_age, match_phone, match_address, reg_time = match
+                        reg_date = reg_time[:10] if reg_time else "Unknown"
+                        
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.info(f"**{match_name}** (ID: {patient_id})\n"
+                                   f"Age: {match_age or 'Unknown'} | Phone: {match_phone or 'N/A'}\n"
+                                   f"Registered: {reg_date}")
+                        with col2:
+                            if st.button(f"Use Existing", key=f"use_{patient_id}"):
+                                visit_id = db.link_to_existing_patient(patient_id)
+                                st.success(f"✅ Connected to existing patient!")
+                                st.info(f"**Patient ID:** {patient_id}")
+                                st.info(f"**Visit ID:** {visit_id}")
+                                
+                                # Clear duplicate check data
+                                del st.session_state.duplicate_check_results
+                                del st.session_state.new_patient_data
+                                
+                                # Store visit_id to show vital signs
+                                st.session_state.pending_vitals = visit_id
+                                st.session_state.patient_name = match_name
+                                st.rerun()
+                
+                # Show similar matches
+                if duplicates['similar_matches']:
+                    st.markdown("#### Similar Names:")
+                    for match in duplicates['similar_matches']:
+                        patient_id, match_name, match_age, match_phone, match_address, reg_time = match
+                        reg_date = reg_time[:10] if reg_time else "Unknown"
+                        
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"**{match_name}** (ID: {patient_id})\n"
+                                   f"Age: {match_age or 'Unknown'} | Phone: {match_phone or 'N/A'}\n"
+                                   f"Registered: {reg_date}")
+                        with col2:
+                            if st.button(f"Use This", key=f"similar_{patient_id}"):
+                                visit_id = db.link_to_existing_patient(patient_id)
+                                st.success(f"✅ Connected to existing patient!")
+                                st.info(f"**Patient ID:** {patient_id}")
+                                st.info(f"**Visit ID:** {visit_id}")
+                                
+                                # Clear duplicate check data
+                                del st.session_state.duplicate_check_results
+                                del st.session_state.new_patient_data
+                                
+                                # Store visit_id to show vital signs
+                                st.session_state.pending_vitals = visit_id
+                                st.session_state.patient_name = match_name
+                                st.rerun()
+                
+                st.markdown("---")
+                
+                # Option to register as new patient anyway
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Register as New Patient", type="secondary"):
+                        location_code = st.session_state.clinic_location['country_code']
+                        patient_id = db.add_patient(location_code, **patient_data)
+                        visit_id = db.create_visit(patient_id)
+                        
+                        st.success(f"✅ New patient registered!")
+                        st.info(f"**Patient ID:** {patient_id}")
+                        st.info(f"**Visit ID:** {visit_id}")
+                        
+                        # Clear duplicate check data
+                        del st.session_state.duplicate_check_results
+                        del st.session_state.new_patient_data
+                        
+                        # Store visit_id to show vital signs
+                        st.session_state.pending_vitals = visit_id
+                        st.session_state.patient_name = patient_data['name']
+                        st.rerun()
+                
+                with col2:
+                    if st.button("Start Over", type="secondary"):
+                        # Clear duplicate check data
+                        del st.session_state.duplicate_check_results
+                        del st.session_state.new_patient_data
+                        st.rerun()
+            
+            else:
+                # No duplicates found, register new patient
+                location_code = st.session_state.clinic_location['country_code']
+                patient_id = db.add_patient(location_code, **patient_data)
+                visit_id = db.create_visit(patient_id)
+                
+                st.success(f"✅ New patient registered!")
+                st.info(f"**Patient ID:** {patient_id}")
+                st.info(f"**Visit ID:** {visit_id}")
+                
+                # Clear duplicate check data
+                del st.session_state.duplicate_check_results
+                del st.session_state.new_patient_data
+                
+                # Store visit_id to show vital signs
+                st.session_state.pending_vitals = visit_id
+                st.session_state.patient_name = patient_data['name']
+                st.rerun()
     
     else:  # Family Registration
         st.markdown("#### Family Registration")
