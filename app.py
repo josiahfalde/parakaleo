@@ -3862,13 +3862,15 @@ def pending_prescriptions():
                     
                     with col1:
                         st.markdown(f"""
-                        <div class="metric-card">
-                            <h5>💊 {prescription[2]}</h5>
-                            <p><strong>Dosage:</strong> {prescription[3]}</p>
-                            <p><strong>Frequency:</strong> {prescription[4]}</p>
-                            <p><strong>Duration:</strong> {prescription[5]}</p>
-                            {f'<p><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
-                            {f'<p><strong>Indication:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <h5 style="color: #1f2937; margin: 0 0 12px 0; font-size: 16px;">💊 {prescription[2]}</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
+                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                            </div>
+                            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
+                            {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                            {f'<p style="margin: 0; color: #6b7280; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -3878,9 +3880,11 @@ def pending_prescriptions():
                         else:
                             all_filled = False
                 
-                if st.button(f"Complete All Prescriptions for {patient_data['name']}", 
-                           key=f"complete_{patient_id}", 
-                           disabled=not all_filled):
+                if st.button(f"✅ Complete All Prescriptions for {patient_data['name']}", 
+                           key=f"complete_{patient_data['name'].replace(' ', '_')}", 
+                           disabled=not all_filled, 
+                           type="primary", 
+                           use_container_width=True):
                     
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
@@ -3989,13 +3993,15 @@ def awaiting_lab_prescriptions():
                     
                     with col1:
                         st.markdown(f"""
-                        <div class="metric-card">
-                            <h5>💊 {prescription[2]}</h5>
-                            <p><strong>Dosage:</strong> {prescription[3]}</p>
-                            <p><strong>Frequency:</strong> {prescription[4]}</p>
-                            <p><strong>Duration:</strong> {prescription[5]}</p>
-                            {f'<p><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
-                            {f'<p><strong>Indication:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                            <h5 style="color: #92400e; margin: 0 0 12px 0; font-size: 16px;">⏳ {prescription[2]} (Awaiting Lab)</h5>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
+                                <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                            </div>
+                            <p style="margin: 0 0 8px 0; color: #78350f; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
+                            {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                            {f'<p style="margin: 0; color: #a16207; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -4058,12 +4064,14 @@ def filled_prescriptions():
     if filled:
         for prescription in filled:
             st.markdown(f"""
-            <div class="patient-card completed">
-                <h5>✅ {prescription[6]} (ID: {prescription[7]})</h5>
-                <p><strong>Medication:</strong> {prescription[0]}</p>
-                <p><strong>Dosage:</strong> {prescription[1]}</p>
-                {f'<p><strong>Indication:</strong> {prescription[4]}</p>' if prescription[4] else ''}
-                <p><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
+            <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <h5 style="color: #047857; margin: 0 0 12px 0; font-size: 16px;">✅ {prescription[6]} (ID: {prescription[7]})</h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Medication:</strong> {prescription[0]}</p>
+                    <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Dosage:</strong> {prescription[1]}</p>
+                </div>
+                {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[4]}</p>' if prescription[4] else ''}
+                <p style="margin: 0; color: #047857; font-size: 13px;"><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
             </div>
             """, unsafe_allow_html=True)
     else:
