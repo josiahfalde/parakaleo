@@ -1935,17 +1935,38 @@ def family_vital_signs_collection():
     family_queue = st.session_state.family_vital_signs_queue
     
     if current_index >= len(family_queue):
-        # All family members completed
+        # All family members completed - show confirmation
         st.success("✅ All family members' vital signs have been recorded!")
-        st.info("Family is ready for consultation.")
         
-        # Clear family vital signs workflow
-        if 'family_vital_signs_queue' in st.session_state:
-            del st.session_state.family_vital_signs_queue
-        if 'current_family_vital_index' in st.session_state:
-            del st.session_state.current_family_vital_index
+        # Show summary of completed family
+        st.markdown("### Family Vital Signs Summary")
+        for i, member in enumerate(family_queue):
+            status_icon = "✅" 
+            st.markdown(f"{status_icon} **{member['patient_name']}** ({member['relationship'].title()}) - Vital signs recorded")
         
-        st.rerun()
+        st.markdown("---")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Confirm - Family Ready for Consultation", type="primary", use_container_width=True):
+                # Clear family vital signs workflow
+                if 'family_vital_signs_queue' in st.session_state:
+                    del st.session_state.family_vital_signs_queue
+                if 'current_family_vital_index' in st.session_state:
+                    del st.session_state.current_family_vital_index
+                if 'family_workflow_active' in st.session_state:
+                    del st.session_state.family_workflow_active
+                
+                st.success("🎉 Family consultation ready! All members added to doctor queue.")
+                st.rerun()
+        
+        with col2:
+            if st.button("📝 Review/Edit Family Vital Signs", type="secondary", use_container_width=True):
+                # Reset to allow editing
+                st.session_state.current_family_vital_index = 0
+                st.info("You can now review and edit each family member's vital signs.")
+                st.rerun()
+        
         return
     
     current_member = family_queue[current_index]
@@ -2002,6 +2023,9 @@ def family_vital_signs_collection():
                 conn = sqlite3.connect(db.db_name)
                 cursor = conn.cursor()
                 
+                # First, delete any existing vital signs for this visit (in case of editing)
+                cursor.execute('DELETE FROM vital_signs WHERE visit_id = ?', (current_member['visit_id'],))
+                
                 cursor.execute('''
                     INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
                                            temperature, weight, height, oxygen_saturation, recorded_time)
@@ -2028,13 +2052,35 @@ def family_vital_signs_collection():
                 st.warning(f"Skipped vital signs for {current_member['patient_name']}")
                 st.session_state.current_family_vital_index = current_index + 1
                 st.rerun()
+    
+    # Navigation buttons outside the form
+    st.markdown("---")
+    nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+    
+    with nav_col1:
+        if current_index > 0:
+            if st.button("⬅️ Previous Family Member", use_container_width=True):
+                st.session_state.current_family_vital_index = current_index - 1
+                st.rerun()
+    
+    with nav_col3:
+        if current_index < len(family_queue) - 1:
+            if st.button("Next Family Member ➡️", use_container_width=True):
+                st.session_state.current_family_vital_index = current_index + 1
+                st.rerun()
+        elif current_index == len(family_queue) - 1:
+            if st.button("Complete Family ✅", type="primary", use_container_width=True):
+                st.session_state.current_family_vital_index = len(family_queue)
+                st.rerun()
 
 def triage_interface():
     add_to_history('triage')
     st.markdown("## 🩺 Triage Station")
     
     # Check if we need to collect family vital signs
-    if 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
+    if ('family_vital_signs_queue' in st.session_state and 
+        st.session_state.family_vital_signs_queue and 
+        'family_workflow_active' in st.session_state):
         family_vital_signs_collection()
         return
     
@@ -2687,12 +2733,15 @@ def vital_signs_form(visit_id: str):
                     if family_vitals_queue:
                         st.session_state.family_vital_signs_queue = family_vitals_queue
                         st.session_state.current_family_vital_index = 0
-                        st.info(f"👶 Found {len(family_vitals_queue)} children who need vital signs recorded.")
+                        st.session_state.family_workflow_active = True
                         
-                        # Clear the pending vitals but don't clear patient_name yet as we'll need it
+                        # Clear the pending vitals to stop showing parent form
                         if 'pending_vitals' in st.session_state:
                             del st.session_state.pending_vitals
+                        if 'patient_name' in st.session_state:
+                            del st.session_state.patient_name
                         
+                        st.success(f"✅ Parent vital signs recorded! Now collecting vital signs for {len(family_vitals_queue)} children.")
                         st.rerun()
                         return  # Exit early to start children's vital signs workflow
             else:
