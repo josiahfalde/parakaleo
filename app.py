@@ -1256,6 +1256,9 @@ def consultation_interface():
                     with col4:
                         if st.button(f"Start Consultation", key=f"consult_{visit_id}"):
                             st.session_state.current_consultation = visit_id
+                            # Update doctor status to show they are with this patient
+                            db = get_db_manager()
+                            db.update_doctor_status(st.session_state.doctor_name, "with_patient", patient_id, name)
                             st.rerun()
                 
                 # Show consultation button only
@@ -1467,6 +1470,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             st.info(f"{ready_count} prescriptions sent to pharmacy.")
                         if awaiting_count > 0:
                             st.info(f"{awaiting_count} prescriptions awaiting lab results.")
+                    
+                    # Update doctor status back to available
+                    db.update_doctor_status(st.session_state.doctor_name, "available")
                     
                     # Clear current consultation
                     if 'current_consultation' in st.session_state:
@@ -2063,19 +2069,90 @@ def patient_management():
 def admin_interface():
     st.markdown("## Admin Dashboard")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["Patient Management", "Medication Management", "Reports", "Settings"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Patient Management", "Doctor Management", "Medication Management", "Reports", "Settings"])
     
     with tab1:
         patient_management()
     
     with tab2:
-        medication_management()
+        doctor_management()
     
     with tab3:
-        daily_reports()
+        medication_management()
     
     with tab4:
+        daily_reports()
+    
+    with tab5:
         clinic_settings()
+
+def doctor_management():
+    """Admin interface for managing doctors"""
+    st.markdown("### Doctor Management")
+    
+    db = get_db_manager()
+    
+    # Add new doctor
+    with st.expander("Add New Doctor"):
+        with st.form("add_doctor"):
+            doctor_name = st.text_input("Doctor Name", placeholder="e.g., Dr. Smith")
+            
+            if st.form_submit_button("Add Doctor", type="primary"):
+                if doctor_name.strip():
+                    if db.add_doctor(doctor_name.strip()):
+                        st.success(f"Doctor {doctor_name} added successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to add doctor. Name may already exist.")
+                else:
+                    st.error("Please enter a doctor name.")
+    
+    # Display current doctors and their status
+    st.markdown("#### Current Doctors")
+    doctors = db.get_doctors()
+    doctor_status = db.get_all_doctor_status()
+    
+    if doctors:
+        for doctor in doctors:
+            # Find current status for this doctor
+            current_status = next((s for s in doctor_status if s['doctor_name'] == doctor['name']), None)
+            
+            col1, col2, col3 = st.columns([2, 2, 1])
+            
+            with col1:
+                st.write(f"**{doctor['name']}**")
+            
+            with col2:
+                if current_status:
+                    status_color = "🟢" if current_status['status'] == 'available' else "🟡" if current_status['status'] == 'with_patient' else "🔴"
+                    patient_info = f" - {current_status['current_patient_name']}" if current_status['current_patient_id'] else ""
+                    st.write(f"{status_color} {current_status['status'].replace('_', ' ').title()}{patient_info}")
+                else:
+                    st.write("🔴 Offline")
+            
+            with col3:
+                if st.button("Remove", key=f"remove_doctor_{doctor['name']}", type="secondary"):
+                    if db.remove_doctor(doctor['name']):
+                        st.success(f"Doctor {doctor['name']} removed.")
+                        st.rerun()
+                    else:
+                        st.error("Failed to remove doctor.")
+    else:
+        st.info("No doctors in the system.")
+    
+    # Real-time status updates
+    st.markdown("#### Real-Time Doctor Status")
+    if st.button("🔄 Refresh Status"):
+        st.rerun()
+    
+    if doctor_status:
+        for status in doctor_status:
+            status_color = "🟢" if status['status'] == 'available' else "🟡" if status['status'] == 'with_patient' else "🔴"
+            patient_info = f" - {status['current_patient_name']} ({status['current_patient_id']})" if status['current_patient_id'] else ""
+            last_update = status['last_updated'][:16].replace('T', ' ') if status['last_updated'] else "Unknown"
+            
+            st.write(f"{status_color} **{status['doctor_name']}** - {status['status'].replace('_', ' ').title()}{patient_info}")
+            st.caption(f"Last updated: {last_update}")
 
 def medication_management():
     st.markdown("### Preset Medications")
