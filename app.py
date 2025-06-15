@@ -1106,35 +1106,13 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Universal back button positioned where menu button would be
+    # Universal back button positioned in top-right area
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Position back button in top-right where hamburger menu was
-        st.markdown("""
-        <style>
-        /* Position back button in top-right corner like hamburger menu */
-        .back-button-container {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 999999;
-            background: #ffffff;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            padding: 8px 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        </style>
-        <div class="back-button-container">
-            <button onclick="window.parent.postMessage({type: 'streamlit:setComponentValue', value: true}, '*')" 
-                    style="background: none; border: none; color: #374151; font-size: 16px; cursor: pointer;">
-                ← Back
-            </button>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Handle back button click
-        if st.button("← Back", key="universal_back_btn", help="Go back"):
-            go_back()
+        # Create a container for the back button in top-right
+        back_col1, back_col2, back_col3 = st.columns([8, 1, 1])
+        with back_col3:
+            if st.button("← Back", key="universal_back_btn", help="Go back", use_container_width=True):
+                go_back()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -1646,7 +1624,7 @@ def main():
                 del st.session_state.active_consultation
             st.rerun()
     
-    with nav_col3:
+    with nav_col2:
         # Show current location in the navigation button
         if 'clinic_location' in st.session_state and st.session_state.clinic_location:
             location = st.session_state.clinic_location
