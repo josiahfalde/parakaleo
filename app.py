@@ -3343,88 +3343,16 @@ def patient_management():
                     if patient['allergies']:
                         st.markdown("**Allergies:**")
                         st.text(patient['allergies'])
-                
-                # Get visit history
-                conn = sqlite3.connect("clinic_database.db")
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    SELECT v.visit_id, v.visit_date, v.status, c.chief_complaint, c.diagnosis, c.doctor_name
-                    FROM visits v
-                    LEFT JOIN consultations c ON v.visit_id = c.visit_id
-                    WHERE v.patient_id = ?
-                    ORDER BY v.visit_date DESC
-                ''', (patient['patient_id'],))
-                
-                visits = cursor.fetchall()
-                
-                # Get prescriptions for this patient
-                cursor.execute('''
-                    SELECT p.medication_name, p.dosage, p.frequency, p.duration, p.indication, p.prescribed_time
-                    FROM prescriptions p
-                    JOIN visits v ON p.visit_id = v.visit_id
-                    WHERE v.patient_id = ?
-                    ORDER BY p.prescribed_time DESC
-                ''', (patient['patient_id'],))
-                
-                prescriptions = cursor.fetchall()
-                
-                # Get lab tests for this patient
-                cursor.execute('''
-                    SELECT test_type, status, results, ordered_time
-                    FROM lab_tests
-                    WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-                    ORDER BY ordered_time DESC
-                ''', (patient['patient_id'],))
-                
-                lab_tests = cursor.fetchall()
-                conn.close()
-                
-                # Display visit history
-                if visits:
-                    st.markdown("**Visit History:**")
-                    for visit in visits:
-                        visit_id, visit_date, status, chief_complaint, diagnosis, doctor_name = visit
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="border: 1px solid #eee; padding: 10px; margin: 5px 0; border-radius: 5px; background-color: #f9f9f9;">
-                                <strong>Date:</strong> {visit_date[:10]}<br>
-                                <strong>Status:</strong> {status.replace('_', ' ').title()}<br>
-                                {f'<strong>Doctor:</strong> {doctor_name}<br>' if doctor_name else ''}
-                                {f'<strong>Chief Complaint:</strong> {chief_complaint}<br>' if chief_complaint else ''}
-                                {f'<strong>Diagnosis:</strong> {diagnosis}' if diagnosis else ''}
-                            </div>
-                            """, unsafe_allow_html=True)
-                
-                # Display prescriptions
-                if prescriptions:
-                    st.markdown("**Prescription History:**")
-                    for prescription in prescriptions:
-                        med_name, dosage, frequency, duration, indication, prescription_time = prescription
-                        st.markdown(f"• **{med_name}** - {dosage} {frequency} for {duration}")
-                        if indication:
-                            st.markdown(f"  *Indication: {indication}*")
-                        st.caption(f"Prescribed: {prescription_time[:10]}")
-                
-                # Display lab tests
-                if lab_tests:
-                    st.markdown("**Lab Test History:**")
-                    for lab_test in lab_tests:
-                        test_type, status, results, ordered_time = lab_test
-                        st.markdown(f"• **{test_type}** - {status.title()}")
-                        if results:
-                            st.markdown(f"  *Results: {results}*")
-                        st.caption(f"Ordered: {ordered_time[:10] if ordered_time else 'Unknown'}")
-                
-                # Delete button
-                st.markdown("---")
-                if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
-                    # Store the patient to delete in session state
-                    st.session_state.confirm_delete = {
-                        'patient_id': patient['patient_id'],
-                        'patient_name': patient['name']
-                    }
-                    st.rerun()
+                    
+                    # Delete button in quick info
+                    st.markdown("---")
+                    if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
+                        # Store the patient to delete in session state
+                        st.session_state.confirm_delete = {
+                            'patient_id': patient['patient_id'],
+                            'patient_name': patient['name']
+                        }
+                        st.rerun()
         
         # Show confirmation dialog as centered popup if there's a patient to delete
         if 'confirm_delete' in st.session_state:
@@ -3479,6 +3407,15 @@ def patient_management():
                 st.markdown('</div>', unsafe_allow_html=True)
             
             return  # Don't show rest of page when modal is active
+    
+    # Check if we should show patient history detail page
+    if 'show_patient_history' in st.session_state:
+        show_patient_history_detail(
+            st.session_state.show_patient_history['patient_id'],
+            st.session_state.show_patient_history['patient_name']
+        )
+        return
+    
     else:
         if search_query:
             st.info("No patients found matching your search.")
