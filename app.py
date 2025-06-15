@@ -983,7 +983,7 @@ def show_loading_screen():
                     st.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=200)
                 except FileNotFoundError:
                     st.markdown('<div style="text-align: center; margin-top: 100px;">🔗</div>', unsafe_allow_html=True)
-                st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
+
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
         
         time.sleep(2)
@@ -1024,7 +1024,16 @@ def main():
             st.rerun()
     
     with col3:
-        st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
+        # Display Parakaleo logo
+        try:
+            with open("parakaleo_logo.svg", "r") as f:
+                logo_svg = f.read()
+            st.markdown(f'<div style="text-align: center; margin-top: 10px; margin-bottom: 10px;">{logo_svg}</div>', unsafe_allow_html=True)
+        except FileNotFoundError:
+            try:
+                st.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=150)
+            except FileNotFoundError:
+                st.markdown('<div style="text-align: center; margin-top: 15px;">🔗</div>', unsafe_allow_html=True)
         st.markdown("*Mission Trip Patient Management*")
     
     st.markdown("---")
@@ -1046,13 +1055,18 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        # Show Parakaleo logo after loading completes
+        # Show Parakaleo logo centered after loading completes
         try:
             with open("parakaleo_logo.svg", "r") as f:
                 logo_svg = f.read()
-            st.markdown(f'<div style="text-align: center; margin-bottom: 30px;">{logo_svg}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="text-align: center; margin: 50px 0;">{logo_svg}</div>', unsafe_allow_html=True)
         except FileNotFoundError:
-            st.markdown('<h1 style="text-align: center; color: #1f77b4; margin-bottom: 30px;">ParakaleoMed</h1>', unsafe_allow_html=True)
+            try:
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    st.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=200)
+            except FileNotFoundError:
+                st.markdown('<div style="text-align: center; font-size: 4rem; margin: 50px 0;">🔗</div>', unsafe_allow_html=True)
         
         st.markdown("### Select Your Role")
         
