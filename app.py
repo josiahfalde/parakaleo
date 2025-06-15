@@ -1646,46 +1646,59 @@ def new_patient_form():
     elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
         current_index = st.session_state.get('current_family_vital_index', 0)
         
-        # Debug information
-        st.write(f"DEBUG: Family vital signs queue - {len(st.session_state.family_vital_signs_queue)} members")
-        st.write(f"DEBUG: Current index: {current_index}")
-        for i, member in enumerate(st.session_state.family_vital_signs_queue):
-            st.write(f"DEBUG: Member {i}: {member['patient_name']} ({member['relationship']})")
+
         
         if current_index < len(st.session_state.family_vital_signs_queue):
             current_member = st.session_state.family_vital_signs_queue[current_index]
             
-            st.markdown("### Family Vital Signs Collection")
-            st.info(f"Recording vitals for family member {current_index + 1} of {len(st.session_state.family_vital_signs_queue)}")
-            st.markdown(f"**Current Patient:** {current_member['patient_name']} ({current_member['relationship']})")
+            # Show progress indicator
+            remaining_children = len(st.session_state.family_vital_signs_queue) - current_index
+            if remaining_children == 1:
+                st.info(f"👶 **Last Child:** Recording vital signs for {current_member['patient_name']} (Age: {current_member.get('age', 'Unknown')})")
+            else:
+                st.info(f"👶 **Child {current_index + 1} of {len(st.session_state.family_vital_signs_queue)}:** Recording vital signs for {current_member['patient_name']} (Age: {current_member.get('age', 'Unknown')})")
+                st.progress((current_index) / len(st.session_state.family_vital_signs_queue))
+            
+            st.markdown(f"### Record Vital Signs - {current_member['patient_name']}")
             st.markdown(f"**Patient ID:** {current_member['patient_id']} | **Visit ID:** {current_member['visit_id']}")
             
-            # Use modified vital signs form for family members
-            with st.form(f"family_vitals_{current_member['visit_id']}"):
+            # Child-specific vital signs form
+            with st.form(f"child_vitals_{current_member['visit_id']}"):
                 st.markdown("#### Vital Signs")
                 
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    systolic = st.number_input("Systolic BP", min_value=50, max_value=300, value=120)
-                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=200, value=80)
+                    systolic = st.number_input("Systolic BP", min_value=50, max_value=200, value=100, help="Child normal range: 90-110")
+                    diastolic = st.number_input("Diastolic BP", min_value=30, max_value=150, value=60, help="Child normal range: 50-70")
                 
                 with col2:
-                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=30, max_value=250, value=72)
+                    heart_rate = st.number_input("Heart Rate (bpm)", min_value=60, max_value=200, value=100, help="Child normal range: 80-120")
                     temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
                 
                 with col3:
-                    # Age-appropriate weight ranges
-                    if current_member['relationship'] == 'parent':
-                        weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=0.1)
-                        height = st.number_input("Height (inches)", min_value=48.0, max_value=84.0, value=None, step=0.5)
-                    else:  # child
-                        weight = st.number_input("Weight (kg)", min_value=2.0, max_value=100.0, value=None, step=0.1, help="Child weight in kg")
-                        height = st.number_input("Height (inches)", min_value=12.0, max_value=72.0, value=None, step=0.5, help="Child height in inches")
+                    # Child-appropriate ranges
+                    child_age = current_member.get('age', 5)
+                    if child_age < 2:
+                        weight = st.number_input("Weight (kg)", min_value=2.0, max_value=20.0, value=None, step=0.1, help="Infant/toddler weight")
+                        height = st.number_input("Height (inches)", min_value=12.0, max_value=36.0, value=None, step=0.5, help="Infant/toddler height")
+                    elif child_age < 12:
+                        weight = st.number_input("Weight (kg)", min_value=10.0, max_value=60.0, value=None, step=0.1, help="Child weight")
+                        height = st.number_input("Height (inches)", min_value=24.0, max_value=60.0, value=None, step=0.5, help="Child height")
+                    else:
+                        weight = st.number_input("Weight (kg)", min_value=20.0, max_value=100.0, value=None, step=0.1, help="Adolescent weight")
+                        height = st.number_input("Height (inches)", min_value=36.0, max_value=72.0, value=None, step=0.5, help="Adolescent height")
                     
-                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
+                    oxygen_sat = st.number_input("O2 Saturation (%)", min_value=85, max_value=100, value=99)
                 
-                if st.form_submit_button(f"Save Vital Signs for {current_member['patient_name']}", type="primary"):
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    save_button = st.form_submit_button(f"✅ Save Vitals - {current_member['patient_name']}", type="primary", use_container_width=True)
+                
+                with col_btn2:
+                    skip_button = st.form_submit_button("⏭️ Skip This Child", type="secondary", use_container_width=True)
+                
+                if save_button:
                     conn = sqlite3.connect("clinic_database.db")
                     cursor = conn.cursor()
                     
@@ -1706,11 +1719,11 @@ def new_patient_form():
                     
                     st.success(f"✅ Vital signs recorded for {current_member['patient_name']}!")
                     
-                    # Green confirmation box for family members
+                    # Green confirmation box for child
                     st.markdown("""
                         <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 0.375rem; padding: 1rem; margin: 0.5rem 0;">
                             <div style="color: #155724; font-weight: bold; font-size: 1.1rem;">
-                                🟢 PATIENT SENT TO DOCTOR QUEUE
+                                🟢 CHILD SENT TO DOCTOR QUEUE
                             </div>
                             <div style="color: #155724; margin-top: 0.5rem;">
                                 <strong>{}</strong> is now waiting for consultation
@@ -1718,9 +1731,14 @@ def new_patient_form():
                         </div>
                     """.format(current_member['patient_name']), unsafe_allow_html=True)
                     
-                    # Move to next family member
-                    st.session_state.current_family_vital_index = st.session_state.get('current_family_vital_index', 0) + 1
-                    
+                    # Move to next child
+                    st.session_state.current_family_vital_index = current_index + 1
+                    st.rerun()
+                
+                if skip_button:
+                    st.warning(f"⏭️ Skipped vital signs for {current_member['patient_name']}")
+                    # Move to next child without recording vitals
+                    st.session_state.current_family_vital_index = current_index + 1
                     st.rerun()
         else:
             # All family members processed
@@ -1823,6 +1841,60 @@ def vital_signs_form(visit_id: str):
                     </div>
                 </div>
             """.format(st.session_state.get('patient_name', 'Patient')), unsafe_allow_html=True)
+            
+            # Check if this patient has children - if so, start family vital signs workflow
+            patient_conn = sqlite3.connect(db.db_name)
+            patient_cursor = patient_conn.cursor()
+            
+            # Get the patient ID from the visit
+            patient_cursor.execute('SELECT patient_id FROM visits WHERE visit_id = ?', (visit_id,))
+            patient_result = patient_cursor.fetchone()
+            
+            if patient_result:
+                current_patient_id = patient_result[0]
+                
+                # Check for children
+                patient_cursor.execute('''
+                    SELECT p.patient_id, p.name, p.age 
+                    FROM patients p
+                    JOIN visits v ON p.patient_id = v.patient_id
+                    WHERE p.parent_id = ? AND DATE(v.visit_date) = DATE('now')
+                    ORDER BY p.age DESC
+                ''', (current_patient_id,))
+                
+                children = patient_cursor.fetchall()
+                patient_conn.close()
+                
+                if children:
+                    # Start family vital signs workflow for children
+                    family_vitals_queue = []
+                    for child_id, child_name, child_age in children:
+                        # Get child's visit ID
+                        child_conn = sqlite3.connect(db.db_name)
+                        child_cursor = child_conn.cursor()
+                        child_cursor.execute('''
+                            SELECT visit_id FROM visits 
+                            WHERE patient_id = ? AND DATE(visit_date) = DATE('now')
+                            ORDER BY visit_date DESC LIMIT 1
+                        ''', (child_id,))
+                        child_visit = child_cursor.fetchone()
+                        child_conn.close()
+                        
+                        if child_visit:
+                            family_vitals_queue.append({
+                                'patient_id': child_id,
+                                'patient_name': child_name,
+                                'visit_id': child_visit[0],
+                                'relationship': 'child',
+                                'age': child_age
+                            })
+                    
+                    if family_vitals_queue:
+                        st.session_state.family_vital_signs_queue = family_vitals_queue
+                        st.session_state.current_family_vital_index = 0
+                        st.info(f"👶 Found {len(family_vitals_queue)} children who need vital signs recorded.")
+            else:
+                patient_conn.close()
             
             # Clear the pending vitals from session state
             if 'pending_vitals' in st.session_state:
