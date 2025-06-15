@@ -279,13 +279,23 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        # Ensure counters table exists
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS counters (
-                location_code TEXT PRIMARY KEY,
-                value INTEGER
-            )
-        ''')
+        # Drop and recreate counters table to ensure correct schema
+        try:
+            cursor.execute('DROP TABLE IF EXISTS counters')
+            cursor.execute('''
+                CREATE TABLE counters (
+                    location_code TEXT PRIMARY KEY,
+                    value INTEGER DEFAULT 0
+                )
+            ''')
+        except Exception:
+            # If drop fails, just create the table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS counters (
+                    location_code TEXT PRIMARY KEY,
+                    value INTEGER DEFAULT 0
+                )
+            ''')
         
         # Get current counter for this location
         cursor.execute('SELECT value FROM counters WHERE location_code = ?', (location_code,))
