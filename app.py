@@ -2079,8 +2079,7 @@ def triage_interface():
     
     # Check if we need to collect family vital signs
     if ('family_vital_signs_queue' in st.session_state and 
-        st.session_state.family_vital_signs_queue and 
-        'family_workflow_active' in st.session_state):
+        st.session_state.family_vital_signs_queue):
         family_vital_signs_collection()
         return
     
@@ -2438,10 +2437,7 @@ def new_patient_form():
                 # Store family visits for vital signs processing
                 st.session_state.family_vital_signs_queue = family_visits.copy()
                 st.session_state.current_family_vital_index = 0
-                
-                # Start with the first family member's vital signs immediately
-                first_member = family_visits[0]
-                st.session_state.processing_family_vitals = True
+                st.session_state.family_workflow_active = True
                 
                 # Clear family registration state
                 if 'family_parent_id' in st.session_state:
@@ -2456,15 +2452,6 @@ def new_patient_form():
         st.markdown("### Record Vital Signs")
         st.info(f"Recording vitals for **{st.session_state.patient_name}** (Visit ID: {st.session_state.pending_vitals})")
         vital_signs_form(st.session_state.pending_vitals)
-    
-    # Process family vital signs queue
-    elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
-        current_index = st.session_state.get('current_family_vital_index', 0)
-        
-
-        
-        if current_index < len(st.session_state.family_vital_signs_queue):
-            current_member = st.session_state.family_vital_signs_queue[current_index]
             
             # Show progress indicator
             total_members = len(st.session_state.family_vital_signs_queue)
