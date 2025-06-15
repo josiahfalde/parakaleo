@@ -1056,42 +1056,40 @@ def go_back():
 def show_back_button():
     """Display universal back button on all pages - fixed position"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create sticky back button that's always visible
+        # Create unique key based on current page
+        current_page = st.session_state.get('current_page', 'unknown')
+        back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
+        
+        # Use CSS to position the back button fixed
         st.markdown("""
         <style>
-        .sticky-back-button {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 999;
-            background-color: #0066cc;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            font-size: 18px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
+        .fixed-back-button {
+            position: fixed !important;
+            top: 20px !important;
+            left: 20px !important;
+            z-index: 9999 !important;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 50% !important;
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 18px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            transition: all 0.3s ease !important;
         }
         
-        .sticky-back-button:hover {
-            background-color: #0052a3;
-            transform: scale(1.1);
-        }
-        
-        .sticky-back-button:active {
-            transform: scale(0.95);
+        .fixed-back-button:hover {
+            transform: scale(1.1) !important;
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
         }
         </style>
         """, unsafe_allow_html=True)
         
-        # Create unique key based on current page
-        current_page = st.session_state.get('current_page', 'unknown')
-        back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
-        if st.button("←", key=back_key, help="Go to previous page"):
-            go_back()
+        # Create a container at the top for the fixed button
+        with st.container():
+            if st.button("←", key=back_key, help="Go to previous page"):
+                go_back()
 
 def main():
     # Initialize navigation
@@ -1099,6 +1097,9 @@ def main():
     
     # Show loading screen on first load
     show_loading_screen()
+    
+    # Show universal back button at the very top
+    show_back_button()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -1109,17 +1110,26 @@ def main():
     }
     
     /* Hamburger menu styling - three lines instead of arrow */
-    .css-1rs6os, .css-17ziqus {
+    button[title="Open navigation menu"] {
         background-color: transparent !important;
         border: none !important;
         padding: 8px !important;
-        margin-left: 30px !important;
+        margin-left: 60px !important;
+        position: fixed !important;
+        top: 15px !important;
+        right: 20px !important;
+        z-index: 998 !important;
     }
     
-    .css-1rs6os::before {
+    button[title="Open navigation menu"] svg {
+        display: none !important;
+    }
+    
+    button[title="Open navigation menu"]::after {
         content: "☰" !important;
         font-size: 24px !important;
         color: #333 !important;
+        display: block !important;
     }
     
     /* Modern button styling */
@@ -4010,7 +4020,6 @@ def completed_lab_tests():
 
 def patient_management():
     add_to_history('patient_management')
-    show_back_button()
     st.markdown("### Patient Management")
     
     # Get all patients first
@@ -4062,14 +4071,34 @@ def patient_management():
                         st.rerun()
                 
                 with col2:
-                    # Delete button prominently placed
-                    if st.button("🗑️ Delete", key=f"delete_{patient['patient_id']}", type="secondary", use_container_width=True):
-                        # Store the patient to delete in session state
-                        st.session_state.confirm_delete = {
-                            'patient_id': patient['patient_id'],
-                            'patient_name': patient['name']
-                        }
-                        st.rerun()
+                    # Check if this patient is in delete confirmation mode
+                    delete_key = f"deleting_{patient['patient_id']}"
+                    if st.session_state.get(delete_key, False):
+                        # Show confirm/cancel split buttons
+                        sub_col1, sub_col2 = st.columns(2)
+                        with sub_col1:
+                            if st.button("✓ Confirm", key=f"confirm_{patient['patient_id']}", type="primary", use_container_width=True):
+                                # Store the patient to delete in session state
+                                st.session_state.confirm_delete = {
+                                    'patient_id': patient['patient_id'],
+                                    'patient_name': patient['name']
+                                }
+                                # Clear the deleting state
+                                if delete_key in st.session_state:
+                                    del st.session_state[delete_key]
+                                st.rerun()
+                        with sub_col2:
+                            if st.button("✕ Cancel", key=f"cancel_{patient['patient_id']}", type="secondary", use_container_width=True):
+                                # Clear the deleting state
+                                if delete_key in st.session_state:
+                                    del st.session_state[delete_key]
+                                st.rerun()
+                    else:
+                        # Show regular delete button
+                        if st.button("🗑️ Delete", key=f"delete_{patient['patient_id']}", type="secondary", use_container_width=True):
+                            # Set deleting state to show confirm/cancel
+                            st.session_state[delete_key] = True
+                            st.rerun()
                 
                 st.markdown("---")
         
@@ -4195,7 +4224,6 @@ def admin_interface():
 def doctor_management():
     """Admin interface for managing doctors"""
     add_to_history('doctor_management')
-    show_back_button()
     st.markdown("### Doctor Management")
     
     db = get_db_manager()
@@ -4264,7 +4292,6 @@ def doctor_management():
 
 def medication_management():
     add_to_history('medication_management')
-    show_back_button()
     st.markdown("### Preset Medications")
     
     # Clean up duplicates button

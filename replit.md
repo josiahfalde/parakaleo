@@ -100,6 +100,14 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
 
 ## Changelog
 
+- June 15, 2025. Modern UI redesign and navigation improvements
+  - Implemented BackpackEMR-inspired design with gradient buttons and hover animations
+  - Added always-visible back button system with fixed positioning outside scroll area
+  - Enhanced family registration workflow to allow multiple children before creating visits
+  - Implemented family consultation grouping in doctor interface
+  - Fixed delete button to split into confirm/cancel buttons on click
+  - Updated hamburger menu to three horizontal lines positioned top-right
+  - Modernized patient cards with colored borders and smooth transitions
 - June 15, 2025. Enhanced UI and settings management
   - Improved patient deletion system with working popup confirmation
   - Added comprehensive clinic settings with dark mode, language options, and session management
