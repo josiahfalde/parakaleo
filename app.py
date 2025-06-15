@@ -3567,10 +3567,10 @@ def patient_management():
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # JavaScript to create modal overlay
-        st.markdown("""
+        # Create visual modal overlay
+        st.markdown(f"""
         <style>
-        .modal-overlay {
+        .modal-overlay {{
             position: fixed;
             top: 0;
             left: 0;
@@ -3581,8 +3581,8 @@ def patient_management():
             display: flex;
             justify-content: center;
             align-items: center;
-        }
-        .modal-content {
+        }}
+        .modal-content {{
             background: white;
             padding: 30px;
             border-radius: 15px;
@@ -3592,18 +3592,18 @@ def patient_management():
             width: 90%;
             text-align: center;
             animation: modalFadeIn 0.3s ease-out;
-        }
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.7); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .modal-header {
+        }}
+        @keyframes modalFadeIn {{
+            from {{ opacity: 0; transform: scale(0.7); }}
+            to {{ opacity: 1; transform: scale(1); }}
+        }}
+        .modal-header {{
             color: #dc3545;
             font-size: 1.8rem;
             font-weight: bold;
             margin-bottom: 20px;
-        }
-        .modal-warning {
+        }}
+        .modal-warning {{
             background-color: #f8d7da;
             border: 1px solid #f5c6cb;
             color: #721c24;
@@ -3611,13 +3611,13 @@ def patient_management():
             border-radius: 8px;
             margin: 20px 0;
             text-align: left;
-        }
+        }}
         </style>
-        <div class="modal-overlay" onclick="window.parent.postMessage({type: 'streamlit:closeModal'}, '*')">
-            <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-overlay">
+            <div class="modal-content">
                 <div class="modal-header">⚠️ CONFIRM PATIENT DELETION</div>
-                <p><strong>Patient:</strong> {}</p>
-                <p><strong>ID:</strong> {}</p>
+                <p><strong>Patient:</strong> {patient_to_delete['patient_name']}</p>
+                <p><strong>ID:</strong> {patient_to_delete['patient_id']}</p>
                 <div class="modal-warning">
                     <strong>This will permanently delete:</strong><br>
                     • Patient information<br>
@@ -3628,7 +3628,7 @@ def patient_management():
                 </div>
             </div>
         </div>
-        """.format(patient_to_delete['patient_name'], patient_to_delete['patient_id']).replace('{', '{{').replace('}', '}}'), unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
         
         # Create modal dialog using Streamlit modal approach
         with st.container():
