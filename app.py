@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 import os
 from typing import Dict, List, Optional
+import time
 
 # Configure page for mobile/tablet use
 st.set_page_config(
@@ -551,7 +552,32 @@ def get_db_manager():
 
 db = get_db_manager()
 
+def show_loading_screen():
+    """Display loading screen with Parakaleo logo for iPad"""
+    if 'loading_shown' not in st.session_state:
+        st.session_state.loading_shown = False
+    
+    if not st.session_state.loading_shown:
+        with open("parakaleo_logo.svg", "r") as f:
+            logo_svg = f.read()
+        
+        placeholder = st.empty()
+        with placeholder.container():
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.markdown(f'<div style="text-align: center; margin-top: 100px; transform: scale(2);">{logo_svg}</div>', unsafe_allow_html=True)
+                st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
+                st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
+        
+        time.sleep(2)
+        placeholder.empty()
+        st.session_state.loading_shown = True
+        st.rerun()
+
 def main():
+    # Show loading screen on first load
+    show_loading_screen()
+    
     # Load and display Parakaleo logo
     with open("parakaleo_logo.svg", "r") as f:
         logo_svg = f.read()
@@ -1595,48 +1621,72 @@ def completed_lab_tests():
 def patient_management():
     st.markdown("### Patient Management")
     
-    # Search for patients to delete
-    search_query = st.text_input("Search for Patient to Delete", placeholder="Enter patient name or ID")
+    # Get all patients first
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT patient_id, name, age, gender, phone, emergency_contact, 
+               medical_history, allergies, created_date, last_visit
+        FROM patients
+        ORDER BY created_date DESC
+    ''')
+    all_patients = cursor.fetchall()
+    conn.close()
     
+    # Convert to list of dictionaries
+    columns = ['patient_id', 'name', 'age', 'gender', 'phone', 'emergency_contact', 
+               'medical_history', 'allergies', 'created_date', 'last_visit']
+    patients = [dict(zip(columns, row)) for row in all_patients]
+    
+    # Search filter
+    search_query = st.text_input("Search Patients", placeholder="Filter by name or ID")
+    
+    # Filter patients based on search
     if search_query:
-        patients = db.search_patients(search_query)
-        
-        if patients:
-            st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
-            
-            for patient in patients:
-                with st.container():
-                    st.markdown(f"""
-                    <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
-                        <h4>{patient['name']}</h4>
-                        <p><strong>ID:</strong> {patient['patient_id']}</p>
-                        <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
-                        <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
-                        <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        confirmation = st.text_input(f"Type 'DELETE {patient['patient_id']}' to confirm deletion", 
-                                                   key=f"confirm_{patient['patient_id']}")
-                    
-                    with col2:
-                        if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
-                            if confirmation == f"DELETE {patient['patient_id']}":
-                                if db.delete_patient(patient['patient_id']):
-                                    st.success(f"Patient {patient['name']} has been deleted successfully.")
-                                    st.rerun()
-                                else:
-                                    st.error("Failed to delete patient. Please try again.")
-                            else:
-                                st.error(f"Please type 'DELETE {patient['patient_id']}' to confirm deletion.")
-                    
-                    st.markdown("---")
-        else:
-            st.info("No patients found matching your search.")
+        filtered_patients = [p for p in patients if 
+                           search_query.lower() in p['name'].lower() or 
+                           search_query.lower() in p['patient_id'].lower()]
     else:
-        st.info("Enter a patient name or ID to search for patients to delete.")
+        filtered_patients = patients
+    
+    if filtered_patients:
+        st.info(f"Showing {len(filtered_patients)} of {len(patients)} patients")
+        st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
+        
+        for patient in filtered_patients:
+            with st.container():
+                st.markdown(f"""
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                    <h4>{patient['name']}</h4>
+                    <p><strong>ID:</strong> {patient['patient_id']}</p>
+                    <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
+                    <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
+                    <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    confirmation = st.text_input(f"Type 'DELETE {patient['patient_id']}' to confirm deletion", 
+                                               key=f"confirm_{patient['patient_id']}")
+                
+                with col2:
+                    if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
+                        if confirmation == f"DELETE {patient['patient_id']}":
+                            if db.delete_patient(patient['patient_id']):
+                                st.success(f"Patient {patient['name']} has been deleted successfully.")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete patient. Please try again.")
+                        else:
+                            st.error(f"Please type 'DELETE {patient['patient_id']}' to confirm deletion.")
+                
+                st.markdown("---")
+    else:
+        if search_query:
+            st.info("No patients found matching your search.")
+        else:
+            st.info("No patients in the system yet.")
 
 def admin_interface():
     st.markdown("## Admin Dashboard")
