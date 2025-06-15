@@ -1582,7 +1582,11 @@ def new_patient_form():
                 }
                 
                 st.success(f"✅ Created visits for entire family ({len(family_visits)} members)")
-                st.info("Family is ready for consultation. Doctor will see parent first, then children.")
+                st.info("Family is ready for vital signs and consultation. Each family member needs vital signs recorded.")
+                
+                # Store family visits for vital signs processing
+                st.session_state.family_vital_signs_queue = family_visits.copy()
+                st.session_state.current_family_vital_index = 0
                 
                 # Clear family registration state
                 if 'family_parent_id' in st.session_state:
@@ -1633,6 +1637,85 @@ def new_patient_form():
         st.markdown("### Record Vital Signs")
         st.info(f"Recording vitals for **{st.session_state.patient_name}** (Visit ID: {st.session_state.pending_vitals})")
         vital_signs_form(st.session_state.pending_vitals)
+    
+    # Process family vital signs queue
+    elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
+        current_index = st.session_state.get('current_family_vital_index', 0)
+        
+        if current_index < len(st.session_state.family_vital_signs_queue):
+            current_member = st.session_state.family_vital_signs_queue[current_index]
+            
+            st.markdown("### Family Vital Signs Collection")
+            st.info(f"Recording vitals for family member {current_index + 1} of {len(st.session_state.family_vital_signs_queue)}")
+            st.markdown(f"**Current Patient:** {current_member['patient_name']} ({current_member['relationship']})")
+            st.markdown(f"**Patient ID:** {current_member['patient_id']} | **Visit ID:** {current_member['visit_id']}")
+            
+            # Use modified vital signs form for family members
+            family_vital_signs_form(current_member['visit_id'], current_member['patient_name'], current_member['relationship'])
+        else:
+            # All family members processed
+            st.success("✅ All family members have completed vital signs!")
+            st.info("The entire family has been sent to the doctor queue for consultation.")
+            
+            # Clear family vital signs queue
+            if 'family_vital_signs_queue' in st.session_state:
+                del st.session_state.family_vital_signs_queue
+            if 'current_family_vital_index' in st.session_state:
+                del st.session_state.current_family_vital_index
+            
+            st.rerun()
+
+def family_vital_signs_form(visit_id: str, patient_name: str, relationship: str):
+    """Modified vital signs form for family members with age-appropriate inputs"""
+    with st.form(f"family_vitals_{visit_id}"):
+        st.markdown("#### Vital Signs")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            systolic = st.number_input("Systolic BP", min_value=50, max_value=300, value=120)
+            diastolic = st.number_input("Diastolic BP", min_value=30, max_value=200, value=80)
+        
+        with col2:
+            heart_rate = st.number_input("Heart Rate (bpm)", min_value=30, max_value=250, value=72)
+            temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
+        
+        with col3:
+            # Age-appropriate weight ranges
+            if relationship == 'parent':
+                weight = st.number_input("Weight (kg)", min_value=30.0, max_value=200.0, value=None, step=0.1)
+                height = st.number_input("Height (cm)", min_value=120.0, max_value=220.0, value=None, step=0.5)
+            else:  # child
+                weight = st.number_input("Weight (kg)", min_value=2.0, max_value=100.0, value=None, step=0.1, help="Child weight in kg")
+                height = st.number_input("Height (cm)", min_value=40.0, max_value=180.0, value=None, step=0.5, help="Child height in cm")
+            
+            oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
+        
+        if st.form_submit_button(f"Save Vital Signs for {patient_name}", type="primary"):
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
+                                       temperature, weight, height, oxygen_saturation, recorded_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (visit_id, systolic, diastolic, heart_rate, temperature, 
+                  weight, height, oxygen_sat, datetime.now().isoformat()))
+            
+            # Update visit status
+            cursor.execute('''
+                UPDATE visits SET triage_time = ?, status = ? WHERE visit_id = ?
+            ''', (datetime.now().isoformat(), 'waiting_consultation', visit_id))
+            
+            conn.commit()
+            conn.close()
+            
+            st.success(f"✅ Vital signs recorded for {patient_name}!")
+            
+            # Move to next family member
+            st.session_state.current_family_vital_index = st.session_state.get('current_family_vital_index', 0) + 1
+            
+            st.rerun()
 
 def existing_patient_search():
     st.markdown("### Find Existing Patient")
@@ -1684,8 +1767,8 @@ def vital_signs_form(visit_id: str):
             temperature = st.number_input("Temperature (°F)", min_value=90.0, max_value=110.0, value=98.6, step=0.1)
         
         with col3:
-            weight = st.number_input("Weight (lbs)", min_value=1.0, max_value=1000.0, value=None, step=0.1)
-            height = st.number_input("Height (inches)", min_value=12.0, max_value=96.0, value=None, step=0.5)
+            weight = st.number_input("Weight (kg)", min_value=0.5, max_value=500.0, value=None, step=0.1)
+            height = st.number_input("Height (cm)", min_value=30.0, max_value=250.0, value=None, step=0.5)
             oxygen_sat = st.number_input("O2 Saturation (%)", min_value=70, max_value=100, value=98)
         
         if st.form_submit_button("Save Vital Signs", type="primary"):
@@ -1708,6 +1791,7 @@ def vital_signs_form(visit_id: str):
             conn.close()
             
             st.success("✅ Vital signs recorded! Patient is ready for consultation.")
+            st.info(f"**{st.session_state.get('patient_name', 'Patient')}** has been sent to the doctor queue for consultation.")
             
             # Clear the pending vitals from session state
             if 'pending_vitals' in st.session_state:
@@ -3225,10 +3309,10 @@ def patient_management():
                 
                 # Get lab tests for this patient
                 cursor.execute('''
-                    SELECT test_type, status, results, test_time
+                    SELECT test_type, status, results, ordered_time
                     FROM lab_tests
                     WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
-                    ORDER BY test_time DESC
+                    ORDER BY ordered_time DESC
                 ''', (patient['patient_id'],))
                 
                 lab_tests = cursor.fetchall()
@@ -3264,11 +3348,11 @@ def patient_management():
                 if lab_tests:
                     st.markdown("**Lab Test History:**")
                     for lab_test in lab_tests:
-                        test_type, status, results, test_time = lab_test
+                        test_type, status, results, ordered_time = lab_test
                         st.markdown(f"• **{test_type}** - {status.title()}")
                         if results:
                             st.markdown(f"  *Results: {results}*")
-                        st.caption(f"Ordered: {test_time[:10]}")
+                        st.caption(f"Ordered: {ordered_time[:10] if ordered_time else 'Unknown'}")
                 
                 # Delete button
                 st.markdown("---")
