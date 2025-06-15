@@ -211,6 +211,32 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
         
+        # Add family columns to patients table if they don't exist
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN family_id TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN relationship TEXT DEFAULT "self"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN parent_id TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN created_date TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN last_visit TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
         # Create counter table for location-based patient numbering
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS counters (
@@ -911,13 +937,10 @@ def main():
                 st.session_state.user_role = "ophthalmologist"
                 st.rerun()
         
-        col3, col4 = st.columns(2)
-        with col3:
-            if st.button("Admin", key="admin", type="primary", use_container_width=True):
-                st.session_state.user_role = "admin"
-                st.rerun()
-        with col4:
-            pass  # Empty column for proper spacing
+        # Admin button spans full width
+        if st.button("Admin", key="admin", type="primary", use_container_width=True):
+            st.session_state.user_role = "admin"
+            st.rerun()
         
         st.markdown("---")
         st.info("This system works offline and stores all patient data locally for mission trips in remote areas.")
@@ -1831,6 +1854,11 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 def consultation_history():
     st.markdown("### Today's Consultations")
     
+    # Check if we should show patient history
+    if hasattr(st.session_state, 'show_patient_history') and st.session_state.show_patient_history:
+        show_patient_history_detail(st.session_state.show_patient_history, st.session_state.patient_history_name)
+        return
+    
     conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
@@ -1873,8 +1901,111 @@ def consultation_history():
                     st.write(f"**Treatment Plan:** {treatment_plan}")
                 if notes:
                     st.write(f"**Notes:** {notes}")
+                
+                # Add patient history link button
+                if st.button(f"View Full Patient History", key=f"history_{patient_id}_{consultation[0]}"):
+                    st.session_state.show_patient_history = patient_id
+                    st.session_state.patient_history_name = patient_name
+                    st.rerun()
     else:
         st.info("No consultations recorded today.")
+
+def show_patient_history_detail(patient_id: str, patient_name: str):
+    """Display detailed patient history in a new view"""
+    st.markdown(f"### 📋 Complete Patient History: {patient_name} (ID: {patient_id})")
+    
+    # Back button
+    if st.button("← Back to Consultation History"):
+        if 'show_patient_history' in st.session_state:
+            del st.session_state.show_patient_history
+        if 'patient_history_name' in st.session_state:
+            del st.session_state.patient_history_name
+        st.rerun()
+    
+    conn = sqlite3.connect("clinic_database.db")
+    cursor = conn.cursor()
+    
+    # Get patient basic info
+    cursor.execute('SELECT * FROM patients WHERE patient_id = ?', (patient_id,))
+    patient = cursor.fetchone()
+    
+    if patient:
+        st.markdown("#### Patient Information")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Name:** {patient[1]}")
+            st.write(f"**Age:** {patient[2] or 'Not specified'}")
+            st.write(f"**Gender:** {patient[3] or 'Not specified'}")
+        with col2:
+            st.write(f"**Phone:** {patient[4] or 'Not provided'}")
+            st.write(f"**Emergency Contact:** {patient[6] or 'Not provided'}")
+        
+        if patient[9]:  # medical_history
+            st.markdown("**Medical History:**")
+            st.text(patient[9])
+        if patient[8]:  # allergies
+            st.markdown("**Allergies:**")
+            st.text(patient[8])
+    
+    # Get all visits
+    cursor.execute('''
+        SELECT v.visit_id, v.visit_date, v.status, c.chief_complaint, c.diagnosis, c.doctor_name, c.consultation_time
+        FROM visits v
+        LEFT JOIN consultations c ON v.visit_id = c.visit_id
+        WHERE v.patient_id = ?
+        ORDER BY v.visit_date DESC
+    ''', (patient_id,))
+    
+    visits = cursor.fetchall()
+    
+    if visits:
+        st.markdown("#### Visit History")
+        for visit in visits:
+            visit_date = visit[1][:10] if visit[1] else "Unknown"
+            status = visit[2] or "In Progress"
+            
+            with st.expander(f"Visit {visit_date} - {status}"):
+                if visit[3]:  # chief_complaint
+                    st.write(f"**Chief Complaint:** {visit[3]}")
+                if visit[4]:  # diagnosis
+                    st.write(f"**Diagnosis:** {visit[4]}")
+                if visit[5]:  # doctor_name
+                    st.write(f"**Doctor:** {visit[5]}")
+                if visit[6]:  # consultation_time
+                    st.write(f"**Consultation Time:** {visit[6][:16].replace('T', ' ')}")
+                
+                # Get prescriptions for this visit
+                cursor.execute('''
+                    SELECT medication_name, dosage, frequency, duration, indication, prescribed_time
+                    FROM prescriptions
+                    WHERE visit_id = ?
+                    ORDER BY prescribed_time DESC
+                ''', (visit[0],))
+                
+                prescriptions = cursor.fetchall()
+                if prescriptions:
+                    st.markdown("**Prescriptions:**")
+                    for rx in prescriptions:
+                        indication_text = f" - {rx[4]}" if rx[4] else ""
+                        st.write(f"• {rx[0]} {rx[1]} {rx[2]} for {rx[3]}{indication_text}")
+                
+                # Get lab tests for this visit
+                cursor.execute('''
+                    SELECT test_type, status, results, ordered_time, completed_time
+                    FROM lab_tests
+                    WHERE visit_id = ?
+                    ORDER BY ordered_time DESC
+                ''', (visit[0],))
+                
+                lab_tests = cursor.fetchall()
+                if lab_tests:
+                    st.markdown("**Lab Tests:**")
+                    for test in lab_tests:
+                        status_text = f"({test[1]})"
+                        results_text = f" - {test[2]}" if test[2] else ""
+                        st.write(f"• {test[0]} {status_text}{results_text}")
+    
+    conn.close()
 
 def pharmacy_interface():
     st.markdown("## 💊 Pharmacy Station")
@@ -2410,11 +2541,11 @@ def patient_management():
                 
                 # Get prescriptions for this patient
                 cursor.execute('''
-                    SELECT p.medication_name, p.dosage, p.frequency, p.duration, p.indication, p.prescription_time
+                    SELECT p.medication_name, p.dosage, p.frequency, p.duration, p.indication, p.prescribed_time
                     FROM prescriptions p
                     JOIN visits v ON p.visit_id = v.visit_id
                     WHERE v.patient_id = ?
-                    ORDER BY p.prescription_time DESC
+                    ORDER BY p.prescribed_time DESC
                 ''', (patient['patient_id'],))
                 
                 prescriptions = cursor.fetchall()
