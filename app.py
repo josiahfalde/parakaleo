@@ -198,6 +198,12 @@ class DatabaseManager:
             cursor.execute('ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
+            
+        # Add address column to patients table if it doesn't exist
+        try:
+            cursor.execute('ALTER TABLE patients ADD COLUMN address TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Add needs_ophthalmology column if it doesn't exist
         try:
