@@ -177,41 +177,122 @@ class DatabaseManager:
             )
         ''')
         
-        # Create counter table for patient numbering
+        # Create counter table for location-based patient numbering
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS counters (
-                name TEXT PRIMARY KEY,
+                location_code TEXT PRIMARY KEY,
                 value INTEGER
             )
         ''')
         
-        # Initialize patient counter if it doesn't exist
-        cursor.execute('INSERT OR IGNORE INTO counters (name, value) VALUES (?, ?)', 
-                      ('patient_counter', 0))
+        # Create locations table for clinic locations
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS locations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_code TEXT NOT NULL,
+                country_name TEXT NOT NULL,
+                city TEXT NOT NULL,
+                created_date TEXT
+            )
+        ''')
+        
+        # Create lab_tests table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lab_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visit_id TEXT,
+                test_type TEXT,
+                ordered_by TEXT,
+                ordered_time TEXT,
+                completed_time TEXT,
+                results TEXT,
+                status TEXT DEFAULT 'pending',
+                FOREIGN KEY (visit_id) REFERENCES visits (visit_id)
+            )
+        ''')
+        
+        # Create lab_results table for detailed urinalysis
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lab_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lab_test_id INTEGER,
+                parameter TEXT,
+                result TEXT,
+                normal_range TEXT,
+                FOREIGN KEY (lab_test_id) REFERENCES lab_tests (id)
+            )
+        ''')
+        
+        # Create preset_medications table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS preset_medications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                medication_name TEXT NOT NULL,
+                common_dosages TEXT,
+                category TEXT,
+                requires_lab TEXT DEFAULT 'no',
+                active INTEGER DEFAULT 1
+            )
+        ''')
+        
+        # Initialize default medications
+        default_meds = [
+            ('Acetaminophen', '325mg, 500mg, 650mg', 'Pain Relief', 'no'),
+            ('Ibuprofen', '200mg, 400mg, 600mg, 800mg', 'Pain Relief', 'no'),
+            ('Amoxicillin', '250mg, 500mg, 875mg', 'Antibiotic', 'no'),
+            ('Azithromycin', '250mg, 500mg', 'Antibiotic', 'no'),
+            ('Metronidazole', '250mg, 500mg', 'Antibiotic', 'no'),
+            ('Ciprofloxacin', '250mg, 500mg', 'Antibiotic', 'yes'),
+            ('Nitrofurantoin', '50mg, 100mg', 'UTI Antibiotic', 'yes'),
+            ('Metformin', '500mg, 850mg, 1000mg', 'Diabetes', 'yes'),
+            ('Lisinopril', '5mg, 10mg, 20mg', 'Blood Pressure', 'yes'),
+            ('Amlodipine', '2.5mg, 5mg, 10mg', 'Blood Pressure', 'no'),
+            ('Omeprazole', '20mg, 40mg', 'Stomach', 'no'),
+            ('Prednisone', '5mg, 10mg, 20mg', 'Steroid', 'no'),
+            ('Albuterol Inhaler', '90mcg/puff', 'Respiratory', 'no'),
+            ('Multivitamin', 'Daily', 'Vitamin', 'no'),
+            ('Iron Supplement', '65mg', 'Vitamin', 'no')
+        ]
+        
+        for med in default_meds:
+            cursor.execute('''
+                INSERT OR IGNORE INTO preset_medications 
+                (medication_name, common_dosages, category, requires_lab)
+                VALUES (?, ?, ?, ?)
+            ''', med)
         
         conn.commit()
         conn.close()
     
-    def get_next_patient_id(self) -> str:
-        """Get the next patient ID in format 00001, 00002, etc."""
+    def get_next_patient_id(self, location_code: str) -> str:
+        """Get the next patient ID in format DR00001, H00001, etc."""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT value FROM counters WHERE name = ?', ('patient_counter',))
-        current_value = cursor.fetchone()[0]
-        new_value = current_value + 1
+        # Get current counter for this location
+        cursor.execute('SELECT value FROM counters WHERE location_code = ?', (location_code,))
+        result = cursor.fetchone()
         
-        cursor.execute('UPDATE counters SET value = ? WHERE name = ?', 
-                      (new_value, 'patient_counter'))
+        if result:
+            current_value = result[0]
+            new_value = current_value + 1
+        else:
+            # First patient for this location
+            new_value = 1
+            cursor.execute('INSERT INTO counters (location_code, value) VALUES (?, ?)', 
+                          (location_code, 0))
+        
+        cursor.execute('UPDATE counters SET value = ? WHERE location_code = ?', 
+                      (new_value, location_code))
         
         conn.commit()
         conn.close()
         
-        return f"{new_value:05d}"
+        return f"{location_code}{new_value:05d}"
     
-    def add_patient(self, **kwargs) -> str:
+    def add_patient(self, location_code: str, **kwargs) -> str:
         """Add a new patient and return their ID"""
-        patient_id = self.get_next_patient_id()
+        patient_id = self.get_next_patient_id(location_code)
         
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -280,6 +361,50 @@ class DatabaseManager:
         conn.close()
         
         return visit_id
+    
+    def add_location(self, country_code: str, country_name: str, city: str) -> int:
+        """Add a new clinic location"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO locations (country_code, country_name, city, created_date)
+            VALUES (?, ?, ?, ?)
+        ''', (country_code, country_name, city, datetime.now().isoformat()))
+        
+        location_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return int(location_id) if location_id else 0
+    
+    def get_locations(self) -> List[Dict]:
+        """Get all clinic locations"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM locations ORDER BY country_name, city')
+        results = cursor.fetchall()
+        conn.close()
+        
+        columns = ['id', 'country_code', 'country_name', 'city', 'created_date']
+        return [dict(zip(columns, row)) for row in results]
+    
+    def get_preset_medications(self) -> List[Dict]:
+        """Get all active preset medications"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM preset_medications 
+            WHERE active = 1 
+            ORDER BY category, medication_name
+        ''')
+        results = cursor.fetchall()
+        conn.close()
+        
+        columns = ['id', 'medication_name', 'common_dosages', 'category', 'requires_lab', 'active']
+        return [dict(zip(columns, row)) for row in results]
 
 # Initialize database
 @st.cache_resource
@@ -291,6 +416,18 @@ db = get_db_manager()
 def main():
     st.title("🏥 Medical Clinic Charting System")
     st.markdown("### Mission Trip Patient Management")
+    
+    # Location selection first
+    if 'clinic_location' not in st.session_state:
+        st.session_state.clinic_location = None
+    
+    if st.session_state.clinic_location is None:
+        location_setup()
+        return
+    
+    # Show current location
+    location = st.session_state.clinic_location
+    st.info(f"📍 Current Location: {location['city']}, {location['country_name']} ({location['country_code']})")
     
     # Role selection
     if 'user_role' not in st.session_state:
@@ -334,6 +471,62 @@ def main():
     if st.sidebar.button("🔄 Change Role"):
         st.session_state.user_role = None
         st.rerun()
+    
+    if st.sidebar.button("📍 Change Location"):
+        st.session_state.clinic_location = None
+        st.session_state.user_role = None
+        st.rerun()
+
+def location_setup():
+    st.markdown("## 📍 Clinic Location Setup")
+    st.markdown("Please select or add your clinic location before starting patient registration.")
+    
+    # Get existing locations
+    locations = db.get_locations()
+    
+    tab1, tab2 = st.tabs(["Select Location", "Add New Location"])
+    
+    with tab1:
+        if locations:
+            st.markdown("### Existing Locations:")
+            for location in locations:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**{location['city']}, {location['country_name']}** ({location['country_code']})")
+                with col2:
+                    if st.button("Select", key=f"select_{location['id']}"):
+                        st.session_state.clinic_location = location
+                        st.rerun()
+        else:
+            st.info("No locations found. Please add a new location below.")
+    
+    with tab2:
+        st.markdown("### Add New Clinic Location")
+        with st.form("new_location"):
+            col1, col2 = st.columns(2)
+            with col1:
+                country = st.selectbox("Country", ["Dominican Republic", "Haiti"])
+                country_code = "DR" if country == "Dominican Republic" else "H"
+            with col2:
+                city = st.text_input("City/Town", placeholder="Enter clinic city")
+            
+            if st.form_submit_button("Add Location", type="primary"):
+                if city.strip():
+                    location_id = db.add_location(country_code, country, city.strip())
+                    st.success(f"Location added successfully!")
+                    
+                    # Auto-select the new location
+                    new_location = {
+                        'id': location_id,
+                        'country_code': country_code,
+                        'country_name': country,
+                        'city': city.strip(),
+                        'created_date': datetime.now().isoformat()
+                    }
+                    st.session_state.clinic_location = new_location
+                    st.rerun()
+                else:
+                    st.error("Please enter a city name.")
 
 def triage_interface():
     st.markdown("## 🩺 Triage Station")
