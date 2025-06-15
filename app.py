@@ -3559,33 +3559,127 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show confirmation dialog as centered popup if there's a patient to delete
+    # Show confirmation dialog as centered modal popup
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-
+        # JavaScript to create modal overlay
+        st.markdown("""
+        <style>
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 3px solid #dc3545;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.7); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-header {
+            color: #dc3545;
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .modal-warning {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        </style>
+        <div class="modal-overlay" onclick="window.parent.postMessage({type: 'streamlit:closeModal'}, '*')">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">⚠️ CONFIRM PATIENT DELETION</div>
+                <p><strong>Patient:</strong> {}</p>
+                <p><strong>ID:</strong> {}</p>
+                <div class="modal-warning">
+                    <strong>This will permanently delete:</strong><br>
+                    • Patient information<br>
+                    • All visits and consultations<br>
+                    • All prescriptions<br>
+                    • All lab results<br><br>
+                    <strong style="color: #dc3545;">⚠️ This action CANNOT be undone!</strong>
+                </div>
+            </div>
+        </div>
+        """.format(patient_to_delete['patient_name'], patient_to_delete['patient_id']), unsafe_allow_html=True)
         
-        # Create the buttons in Streamlit
-        st.markdown("### ")  # Add spacing
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("#### Confirm Patient Deletion")
-            st.error(f"⚠️ Delete **{patient_to_delete['patient_name']}** (ID: {patient_to_delete['patient_id']})?")
+        # Create modal dialog using Streamlit modal approach
+        with st.container():
+            st.markdown("---")
+            st.markdown("### 🚨 PATIENT DELETION CONFIRMATION")
             
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if st.button("🗑️ DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
-                    if db.delete_patient(patient_to_delete['patient_id']):
-                        st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
+            # Center the modal content
+            col1, col2, col3 = st.columns([1, 3, 1])
+            with col2:
+                st.error(f"⚠️ **DELETE PATIENT: {patient_to_delete['patient_name']}**")
+                st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+                
+                st.markdown("""
+                <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 8px; margin: 15px 0; color: #721c24;">
+                    <strong>⚠️ WARNING: This will permanently delete:</strong><br>
+                    • All patient information<br>
+                    • All visits and consultations<br>
+                    • All prescriptions and lab results<br>
+                    • All medical history and photos<br><br>
+                    <strong style="color: #dc3545;">This action CANNOT be undone!</strong>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("---")
+                
+                # Confirmation buttons
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("🗑️ DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
+                        if db.delete_patient(patient_to_delete['patient_id']):
+                            st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
+                            del st.session_state.confirm_delete
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to delete patient.")
+                
+                with col_btn2:
+                    if st.button("❌ CANCEL", key="cancel_delete_btn", use_container_width=True):
                         del st.session_state.confirm_delete
                         st.rerun()
-                    else:
-                        st.error("Failed to delete patient.")
             
-            with col_btn2:
-                if st.button("❌ CANCEL", key="cancel_delete_btn", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
+            st.markdown("---")
+        
+        # Add script to auto-scroll to modal
+        st.markdown("""
+        <script>
+        setTimeout(function() {
+            // Scroll to the modal section
+            const modalSection = document.querySelector('h3').parentElement;
+            if (modalSection) {
+                modalSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+        </script>
+        """, unsafe_allow_html=True)
         
         return  # Don't show rest of page when modal is active
     
