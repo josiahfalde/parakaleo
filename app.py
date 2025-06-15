@@ -1726,7 +1726,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                           treatment_plan, notes, needs_ophthalmology, datetime.now().isoformat()))
                     
                     # Update visit status first
-                    if selected_medications:
+                    if needs_ophthalmology:
+                        new_status = 'needs_ophthalmology'
+                    elif selected_medications:
                         new_status = 'prescribed'
                     elif lab_tests:
                         new_status = 'waiting_lab'
@@ -1746,16 +1748,20 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     
                     for med in selected_medications:
                         if med['name']:
-                            db_manager.add_prescription(
-                                visit_id=visit_id,
-                                medication_id=med['id'],
-                                medication_name=med['name'],
-                                dosage=med['dosage'],
-                                frequency=med['frequency'],
-                                duration=med['duration'],
-                                instructions=med['instructions'],
-                                awaiting_lab=med['awaiting_lab']
-                            )
+                            # Add prescription with indication
+                            conn_med = sqlite3.connect(db_manager.db_name)
+                            cursor_med = conn_med.cursor()
+                            cursor_med.execute('''
+                                INSERT INTO prescriptions (visit_id, medication_id, medication_name, 
+                                                         dosage, frequency, duration, instructions, 
+                                                         indication, awaiting_lab, prescription_time)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (visit_id, med['id'], med['name'], med['dosage'], 
+                                  med['frequency'], med['duration'], med['instructions'],
+                                  med.get('indication', ''), med['awaiting_lab'], 
+                                  datetime.now().isoformat()))
+                            conn_med.commit()
+                            conn_med.close()
                     
                     st.success("Consultation completed successfully!")
                     
@@ -2833,6 +2839,187 @@ def onedrive_integration():
         4. Upload the downloaded file
         5. OneDrive will automatically sync to the cloud
         """)
+
+def ophthalmologist_interface():
+    st.markdown("### 👁️ Ophthalmologist Interface")
+    
+    # Get patients who need ophthalmology consultation
+    conn = sqlite3.connect("clinic_database.db")
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT v.visit_id, v.patient_id, p.name, c.needs_ophthalmology
+        FROM visits v
+        JOIN patients p ON v.patient_id = p.patient_id
+        LEFT JOIN consultations c ON v.visit_id = c.visit_id
+        WHERE c.needs_ophthalmology = 1 AND v.status != 'completed'
+        ORDER BY v.visit_date DESC
+    ''')
+    
+    ophthalmology_patients = cursor.fetchall()
+    conn.close()
+    
+    if ophthalmology_patients:
+        st.markdown("#### Patients Needing Eye Examination")
+        
+        for patient in ophthalmology_patients:
+            visit_id, patient_id, name, needs_ophthalmology = patient
+            
+            with st.expander(f"👁️ {name} (ID: {patient_id})", expanded=False):
+                # Get patient's eye history
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                cursor.execute('SELECT medical_history, allergies FROM patients WHERE patient_id = ?', (patient_id,))
+                patient_data = cursor.fetchone()
+                conn.close()
+                
+                if patient_data:
+                    st.markdown("**Current Medical History:**")
+                    st.text(patient_data[0] or "No history recorded")
+                
+                # Eye examination form
+                with st.form(f"eye_exam_{visit_id}"):
+                    st.markdown("#### Eye Examination")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        eye_history = st.text_area("Eye History", placeholder="Previous eye problems, surgeries, conditions...")
+                        visual_acuity_right = st.text_input("Visual Acuity Right Eye", placeholder="e.g., 20/20, 20/40")
+                        visual_acuity_left = st.text_input("Visual Acuity Left Eye", placeholder="e.g., 20/20, 20/40")
+                    
+                    with col2:
+                        eye_pressure_right = st.text_input("Eye Pressure Right", placeholder="e.g., 15 mmHg")
+                        eye_pressure_left = st.text_input("Eye Pressure Left", placeholder="e.g., 15 mmHg")
+                        eye_findings = st.text_area("Eye Findings", placeholder="Examination findings, abnormalities...")
+                    
+                    st.markdown("#### Eyeglass Prescription")
+                    
+                    col3, col4 = st.columns(2)
+                    with col3:
+                        st.markdown("**Right Eye (OD)**")
+                        od_sphere = st.text_input("Sphere", key=f"od_sphere_{visit_id}", placeholder="e.g., -2.00")
+                        od_cylinder = st.text_input("Cylinder", key=f"od_cylinder_{visit_id}", placeholder="e.g., -0.50")
+                        od_axis = st.text_input("Axis", key=f"od_axis_{visit_id}", placeholder="e.g., 90")
+                    
+                    with col4:
+                        st.markdown("**Left Eye (OS)**")
+                        os_sphere = st.text_input("Sphere", key=f"os_sphere_{visit_id}", placeholder="e.g., -2.00")
+                        os_cylinder = st.text_input("Cylinder", key=f"os_cylinder_{visit_id}", placeholder="e.g., -0.50")
+                        os_axis = st.text_input("Axis", key=f"os_axis_{visit_id}", placeholder="e.g., 90")
+                    
+                    add_power = st.text_input("Add Power (if needed)", placeholder="e.g., +1.50")
+                    pd = st.text_input("Pupillary Distance (PD)", placeholder="e.g., 62mm")
+                    
+                    recommendations = st.text_area("Recommendations", placeholder="Follow-up instructions, referrals...")
+                    
+                    if st.form_submit_button("Complete Eye Examination", type="primary"):
+                        # Save eye examination data
+                        conn = sqlite3.connect("clinic_database.db")
+                        cursor = conn.cursor()
+                        
+                        # Create eye_examinations table if it doesn't exist
+                        cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS eye_examinations (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                visit_id TEXT,
+                                patient_id TEXT,
+                                eye_history TEXT,
+                                visual_acuity_right TEXT,
+                                visual_acuity_left TEXT,
+                                eye_pressure_right TEXT,
+                                eye_pressure_left TEXT,
+                                eye_findings TEXT,
+                                od_sphere TEXT,
+                                od_cylinder TEXT,
+                                od_axis TEXT,
+                                os_sphere TEXT,
+                                os_cylinder TEXT,
+                                os_axis TEXT,
+                                add_power TEXT,
+                                pd TEXT,
+                                recommendations TEXT,
+                                examination_time TEXT,
+                                FOREIGN KEY (visit_id) REFERENCES visits (visit_id),
+                                FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+                            )
+                        ''')
+                        
+                        cursor.execute('''
+                            INSERT INTO eye_examinations (
+                                visit_id, patient_id, eye_history, visual_acuity_right, visual_acuity_left,
+                                eye_pressure_right, eye_pressure_left, eye_findings, od_sphere, od_cylinder,
+                                od_axis, os_sphere, os_cylinder, os_axis, add_power, pd, recommendations,
+                                examination_time
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            visit_id, patient_id, eye_history, visual_acuity_right, visual_acuity_left,
+                            eye_pressure_right, eye_pressure_left, eye_findings, od_sphere, od_cylinder,
+                            od_axis, os_sphere, os_cylinder, os_axis, add_power, pd, recommendations,
+                            datetime.now().isoformat()
+                        ))
+                        
+                        # Update patient's medical history with eye history
+                        if eye_history:
+                            cursor.execute('''
+                                UPDATE patients 
+                                SET medical_history = COALESCE(medical_history, '') || '\nEye History: ' || ?
+                                WHERE patient_id = ?
+                            ''', (eye_history, patient_id))
+                        
+                        # Update visit status to completed
+                        cursor.execute('''
+                            UPDATE visits SET status = 'completed' WHERE visit_id = ?
+                        ''', (visit_id,))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success("Eye examination completed successfully!")
+                        st.rerun()
+    else:
+        st.info("No patients currently need ophthalmology consultation.")
+    
+    # Show completed eye examinations
+    st.markdown("---")
+    st.markdown("#### Recent Eye Examinations")
+    
+    conn = sqlite3.connect("clinic_database.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT e.*, p.name
+        FROM eye_examinations e
+        JOIN patients p ON e.patient_id = p.patient_id
+        ORDER BY e.examination_time DESC
+        LIMIT 10
+    ''')
+    recent_exams = cursor.fetchall()
+    conn.close()
+    
+    if recent_exams:
+        for exam in recent_exams:
+            with st.expander(f"👁️ {exam[-1]} - {exam[18][:10]}", expanded=False):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**Visual Acuity:** R: {exam[4] or 'N/A'}, L: {exam[5] or 'N/A'}")
+                    st.write(f"**Eye Pressure:** R: {exam[6] or 'N/A'}, L: {exam[7] or 'N/A'}")
+                    if exam[9] or exam[12]:  # If prescription exists
+                        st.write("**Prescription:**")
+                        st.write(f"OD: {exam[9]} {exam[10]} x {exam[11]}")
+                        st.write(f"OS: {exam[12]} {exam[13]} x {exam[14]}")
+                        if exam[15]:
+                            st.write(f"Add: {exam[15]}")
+                        if exam[16]:
+                            st.write(f"PD: {exam[16]}")
+                
+                with col2:
+                    if exam[8]:
+                        st.write(f"**Findings:** {exam[8]}")
+                    if exam[17]:
+                        st.write(f"**Recommendations:** {exam[17]}")
+    else:
+        st.info("No eye examinations completed yet.")
 
 def clinic_settings():
     st.markdown("### Clinic Settings")
