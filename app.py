@@ -2122,6 +2122,25 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     history_conn.commit()
                     history_conn.close()
                     
+                    # Save any photos that were captured during this consultation
+                    if f"symptom_photos_{visit_id}" in st.session_state:
+                        for photo in st.session_state[f"symptom_photos_{visit_id}"]:
+                            db_manager.save_patient_photo(
+                                visit_id=visit_id,
+                                patient_id=patient_id,
+                                photo_data=photo['data'],
+                                description=photo['description']
+                            )
+                        
+                        # Get photo count before clearing
+                        photo_count = len(st.session_state[f"symptom_photos_{visit_id}"])
+                        
+                        # Clear photos from session state after saving
+                        del st.session_state[f"symptom_photos_{visit_id}"]
+                        
+                        if photo_count > 0:
+                            st.info(f"Saved {photo_count} photos to patient record.")
+                    
                     st.session_state.page = 'doctor'
                     st.rerun()
                     
