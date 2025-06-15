@@ -351,7 +351,7 @@ class DatabaseManager:
         
         return [dict(zip(columns, row)) for row in results]
     
-    def create_visit(self, patient_id: str, priority: str = 'normal') -> str:
+    def create_visit(self, patient_id: str) -> str:
         """Create a new visit for a patient"""
         visit_id = f"{patient_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
@@ -359,9 +359,9 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO visits (visit_id, patient_id, visit_date, status, priority)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (visit_id, patient_id, datetime.now().isoformat(), 'triage', priority))
+            INSERT INTO visits (visit_id, patient_id, visit_date, status)
+            VALUES (?, ?, ?, ?)
+        ''', (visit_id, patient_id, datetime.now().isoformat(), 'triage'))
         
         # Update patient's last visit
         cursor.execute('''
@@ -672,7 +672,7 @@ def new_patient_form():
                 
                 location_code = st.session_state.clinic_location['country_code']
                 patient_id = db.add_patient(location_code, **patient_data)
-                visit_id = db.create_visit(patient_id, priority.lower())
+                visit_id = db.create_visit(patient_id)
                 
                 st.success(f"✅ Patient registered successfully!")
                 st.info(f"**Patient ID:** {patient_id}")
@@ -714,22 +714,15 @@ def existing_patient_search():
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        priority = st.selectbox(f"Priority for {patient['name']}", 
-                                              ["Normal", "Urgent", "Critical"], 
-                                              key=f"priority_{patient['patient_id']}")
-                    
-                    with col2:
-                        if st.button(f"Start New Visit", key=f"visit_{patient['patient_id']}"):
-                            visit_id = db.create_visit(patient['patient_id'], priority.lower())
-                            st.success(f"✅ New visit created for {patient['name']}")
-                            st.info(f"**Visit ID:** {visit_id}")
-                            
-                            # Store visit_id in session state to show vital signs form
-                            st.session_state.pending_vitals = visit_id
-                            st.session_state.patient_name = patient['name']
-                            st.rerun()
+                    if st.button(f"Start New Visit", key=f"visit_{patient['patient_id']}", use_container_width=True):
+                        visit_id = db.create_visit(patient['patient_id'])
+                        st.success(f"✅ New visit created for {patient['name']}")
+                        st.info(f"**Visit ID:** {visit_id}")
+                        
+                        # Store visit_id in session state to show vital signs form
+                        st.session_state.pending_vitals = visit_id
+                        st.session_state.patient_name = patient['name']
+                        st.rerun()
         else:
             st.warning("No patients found matching your search.")
 
@@ -988,7 +981,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         
                         awaiting_lab = "no"
                         if med['requires_lab'] == 'yes':
-                            awaiting_lab = "yes" if st.checkbox("Awaiting Lab Results", key=f"await_{med['id']}") else "no"
+                            awaiting_lab = "yes" if st.checkbox("Pending Lab", key=f"await_{med['id']}", value=True) else "no"
                         
                         selected_medications.append({
                             'id': med['id'],
