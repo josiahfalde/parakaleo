@@ -1060,28 +1060,35 @@ def show_back_button():
         current_page = st.session_state.get('current_page', 'unknown')
         back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
         
-        # Use CSS to position the back button fixed
+        # Use CSS to position the back button fixed - BackpackEMR style
         st.markdown("""
         <style>
-        .fixed-back-button {
+        /* Fixed back button - clean BackpackEMR style */
+        div[data-testid="stButton"]:has(button[title="Go to previous page"]) {
             position: fixed !important;
             top: 20px !important;
             left: 20px !important;
             z-index: 9999 !important;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 50% !important;
-            width: 50px !important;
-            height: 50px !important;
-            font-size: 18px !important;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-            transition: all 0.3s ease !important;
+            margin: 0 !important;
         }
         
-        .fixed-back-button:hover {
-            transform: scale(1.1) !important;
-            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+        button[title="Go to previous page"] {
+            background: #ffffff !important;
+            color: #374151 !important;
+            border: 1px solid #d1d5db !important;
+            border-radius: 50% !important;
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 16px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+            transition: all 0.2s ease !important;
+            padding: 0 !important;
+        }
+        
+        button[title="Go to previous page"]:hover {
+            background: #f3f4f6 !important;
+            border-color: #9ca3af !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -1132,48 +1139,65 @@ def main():
         display: block !important;
     }
     
-    /* Modern button styling */
+    /* BackpackEMR-inspired button styling - clean and professional */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 12px 24px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+        background: #ffffff !important;
+        color: #374151 !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
-        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+        background: #f9fafb !important;
+        border-color: #9ca3af !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
     }
     
     .stButton > button:active {
-        transform: translateY(0px) !important;
+        background: #f3f4f6 !important;
     }
     
-    /* Primary button styling */
+    /* Primary button styling - subtle blue */
     .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #11cdef 0%, #1171ef 100%) !important;
-        box-shadow: 0 4px 15px rgba(17, 205, 239, 0.3) !important;
+        background: #3b82f6 !important;
+        color: white !important;
+        border: 1px solid #3b82f6 !important;
     }
     
     .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #0bb5d6 0%, #0d5fd6 100%) !important;
-        box-shadow: 0 8px 25px rgba(17, 205, 239, 0.4) !important;
+        background: #2563eb !important;
+        border-color: #2563eb !important;
     }
     
-    /* Secondary button styling */
+    /* Secondary button styling - subtle gray */
     .stButton > button[kind="secondary"] {
-        background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%) !important;
-        box-shadow: 0 4px 15px rgba(253, 126, 20, 0.3) !important;
+        background: #6b7280 !important;
+        color: white !important;
+        border: 1px solid #6b7280 !important;
     }
     
     .stButton > button[kind="secondary"]:hover {
-        background: linear-gradient(135deg, #e8680a 0%, #d21e7a 100%) !important;
-        box-shadow: 0 8px 25px rgba(253, 126, 20, 0.4) !important;
+        background: #4b5563 !important;
+        border-color: #4b5563 !important;
+    }
+    
+    /* Danger/Delete button styling */
+    .stButton > button[data-testid*="delete"], 
+    .stButton > button:has-text("Delete"),
+    .stButton > button[title*="delete"] {
+        background: #ef4444 !important;
+        color: white !important;
+        border: 1px solid #ef4444 !important;
+    }
+    
+    .stButton > button[data-testid*="delete"]:hover,
+    .stButton > button:has-text("Delete"):hover {
+        background: #dc2626 !important;
+        border-color: #dc2626 !important;
     }
     
     /* Modern card styling */
@@ -1242,26 +1266,34 @@ def main():
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
     }
     
-    /* Modern tabs */
+    /* BackpackEMR-style tabs */
     .stTabs [data-baseweb="tab-list"] {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
-        border-radius: 12px !important;
-        padding: 4px !important;
+        background: #f9fafb !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        padding: 2px !important;
     }
     
     .stTabs [data-baseweb="tab"] {
         background: transparent !important;
-        color: #6c757d !important;
-        border-radius: 8px !important;
-        padding: 12px 24px !important;
+        color: #6b7280 !important;
+        border-radius: 6px !important;
+        padding: 8px 16px !important;
         font-weight: 500 !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #f3f4f6 !important;
+        color: #374151 !important;
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3) !important;
+        background: #ffffff !important;
+        color: #111827 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        border: 1px solid #e5e7eb !important;
     }
     
     /* Modern headers */
@@ -4023,7 +4055,8 @@ def patient_management():
     st.markdown("### Patient Management")
     
     # Get all patients first
-    conn = sqlite3.connect(db.db_name)
+    db = get_db_manager()
+    conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     cursor.execute('''
         SELECT patient_id, name, age, gender, phone, emergency_contact, 
@@ -4074,28 +4107,29 @@ def patient_management():
                     # Check if this patient is in delete confirmation mode
                     delete_key = f"deleting_{patient['patient_id']}"
                     if st.session_state.get(delete_key, False):
-                        # Show confirm/cancel split buttons
-                        sub_col1, sub_col2 = st.columns(2)
-                        with sub_col1:
-                            if st.button("✓ Confirm", key=f"confirm_{patient['patient_id']}", type="primary", use_container_width=True):
-                                # Store the patient to delete in session state
-                                st.session_state.confirm_delete = {
-                                    'patient_id': patient['patient_id'],
-                                    'patient_name': patient['name']
-                                }
-                                # Clear the deleting state
-                                if delete_key in st.session_state:
-                                    del st.session_state[delete_key]
-                                st.rerun()
-                        with sub_col2:
-                            if st.button("✕ Cancel", key=f"cancel_{patient['patient_id']}", type="secondary", use_container_width=True):
+                        # Show confirm/cancel split buttons in the same column
+                        confirm_col, cancel_col = st.columns(2)
+                        with confirm_col:
+                            if st.button("✓", key=f"confirm_{patient['patient_id']}", help="Confirm delete"):
+                                # Perform the actual deletion here
+                                db = get_db_manager()
+                                if db.delete_patient(patient['patient_id']):
+                                    st.success(f"Patient {patient['name']} deleted successfully.")
+                                    # Clear the deleting state
+                                    if delete_key in st.session_state:
+                                        del st.session_state[delete_key]
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete patient.")
+                        with cancel_col:
+                            if st.button("✕", key=f"cancel_{patient['patient_id']}", help="Cancel delete"):
                                 # Clear the deleting state
                                 if delete_key in st.session_state:
                                     del st.session_state[delete_key]
                                 st.rerun()
                     else:
                         # Show regular delete button
-                        if st.button("🗑️ Delete", key=f"delete_{patient['patient_id']}", type="secondary", use_container_width=True):
+                        if st.button("🗑️ Delete", key=f"delete_{patient['patient_id']}", help="Delete patient"):
                             # Set deleting state to show confirm/cancel
                             st.session_state[delete_key] = True
                             st.rerun()
