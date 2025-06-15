@@ -1602,7 +1602,6 @@ def main():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
-    st.markdown('<p style="text-align: center; color: #666; margin: 0; line-height: 1;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
     nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
