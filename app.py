@@ -3995,6 +3995,7 @@ def awaiting_lab_prescriptions():
                             <p><strong>Frequency:</strong> {prescription[4]}</p>
                             <p><strong>Duration:</strong> {prescription[5]}</p>
                             {f'<p><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
+                            {f'<p><strong>Indication:</strong> {prescription[7]}</p>' if prescription[7] else ''}
                         </div>
                         """, unsafe_allow_html=True)
                     
@@ -4043,7 +4044,7 @@ def filled_prescriptions():
     
     cursor.execute('''
         SELECT p.medication_name, p.dosage, p.frequency, p.duration, 
-               p.filled_time, pt.name, v.patient_id
+               p.indication, p.filled_time, pt.name, v.patient_id
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -4058,10 +4059,11 @@ def filled_prescriptions():
         for prescription in filled:
             st.markdown(f"""
             <div class="patient-card completed">
-                <h5>✅ {prescription[5]} (ID: {prescription[6]})</h5>
+                <h5>✅ {prescription[6]} (ID: {prescription[7]})</h5>
                 <p><strong>Medication:</strong> {prescription[0]}</p>
                 <p><strong>Dosage:</strong> {prescription[1]}</p>
-                <p><strong>Filled:</strong> {prescription[4][:16].replace('T', ' ')}</p>
+                {f'<p><strong>Indication:</strong> {prescription[4]}</p>' if prescription[4] else ''}
+                <p><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
             </div>
             """, unsafe_allow_html=True)
     else:
