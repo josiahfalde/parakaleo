@@ -1054,13 +1054,43 @@ def go_back():
         st.rerun()
 
 def show_back_button():
-    """Display universal back button on all pages"""
+    """Display universal back button on all pages - fixed position"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create unique key based on current page and timestamp
-        import time
+        # Create sticky back button that's always visible
+        st.markdown("""
+        <style>
+        .sticky-back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .sticky-back-button:hover {
+            background-color: #0052a3;
+            transform: scale(1.1);
+        }
+        
+        .sticky-back-button:active {
+            transform: scale(0.95);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Create unique key based on current page
         current_page = st.session_state.get('current_page', 'unknown')
         back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
-        if st.button("← Back", key=back_key, help="Go to previous page"):
+        if st.button("←", key=back_key, help="Go to previous page"):
             go_back()
 
 def main():
@@ -1069,6 +1099,174 @@ def main():
     
     # Show loading screen on first load
     show_loading_screen()
+    
+    # Modern UI styling with BackpackEMR-inspired design
+    st.markdown("""
+    <style>
+    /* Modern BackpackEMR-inspired styling */
+    .stApp {
+        font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
+    }
+    
+    /* Hamburger menu styling - three lines instead of arrow */
+    .css-1rs6os, .css-17ziqus {
+        background-color: transparent !important;
+        border: none !important;
+        padding: 8px !important;
+        margin-left: 30px !important;
+    }
+    
+    .css-1rs6os::before {
+        content: "☰" !important;
+        font-size: 24px !important;
+        color: #333 !important;
+    }
+    
+    /* Modern button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 12px 24px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+    }
+    
+    .stButton > button:active {
+        transform: translateY(0px) !important;
+    }
+    
+    /* Primary button styling */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #11cdef 0%, #1171ef 100%) !important;
+        box-shadow: 0 4px 15px rgba(17, 205, 239, 0.3) !important;
+    }
+    
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #0bb5d6 0%, #0d5fd6 100%) !important;
+        box-shadow: 0 8px 25px rgba(17, 205, 239, 0.4) !important;
+    }
+    
+    /* Secondary button styling */
+    .stButton > button[kind="secondary"] {
+        background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%) !important;
+        box-shadow: 0 4px 15px rgba(253, 126, 20, 0.3) !important;
+    }
+    
+    .stButton > button[kind="secondary"]:hover {
+        background: linear-gradient(135deg, #e8680a 0%, #d21e7a 100%) !important;
+        box-shadow: 0 8px 25px rgba(253, 126, 20, 0.4) !important;
+    }
+    
+    /* Modern card styling */
+    .patient-card {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        margin: 12px 0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border: 1px solid #f0f0f0;
+        transition: all 0.3s ease;
+    }
+    
+    .patient-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    
+    .patient-card.urgent {
+        border-left: 5px solid #ff6b6b;
+        background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+    }
+    
+    .patient-card.in-progress {
+        border-left: 5px solid #4ecdc4;
+        background: linear-gradient(135deg, #f0fdfc 0%, #ffffff 100%);
+    }
+    
+    .patient-card.completed {
+        border-left: 5px solid #51cf66;
+        background: linear-gradient(135deg, #f3fdf4 0%, #ffffff 100%);
+    }
+    
+    /* Sticky back button */
+    .css-1rs6os ~ div button[title*="Go to previous page"] {
+        position: fixed !important;
+        top: 20px !important;
+        left: 20px !important;
+        z-index: 999 !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 50% !important;
+        width: 50px !important;
+        height: 50px !important;
+        font-size: 18px !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .css-1rs6os ~ div button[title*="Go to previous page"]:hover {
+        transform: scale(1.1) !important;
+        background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%) !important;
+    }
+    
+    /* Modern input styling */
+    .stTextInput input, .stSelectbox select, .stNumberInput input {
+        border-radius: 8px !important;
+        border: 2px solid #e9ecef !important;
+        padding: 12px !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTextInput input:focus, .stSelectbox select:focus, .stNumberInput input:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    }
+    
+    /* Modern tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+        border-radius: 12px !important;
+        padding: 4px !important;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent !important;
+        color: #6c757d !important;
+        border-radius: 8px !important;
+        padding: 12px 24px !important;
+        font-weight: 500 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3) !important;
+    }
+    
+    /* Modern headers */
+    h1, h2, h3 {
+        color: #2d3748 !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Sidebar styling */
+    .css-1d391kg {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
+        border-right: 1px solid #e9ecef !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     # Apply dark mode globally if enabled
     if 'dark_mode' in st.session_state and st.session_state.dark_mode:
@@ -1744,6 +1942,7 @@ def new_patient_form():
                         )
                         
                         st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
+                        st.info("➕ Add another child or create visits for the entire family below.")
                         st.rerun()
             
             # Automatically create visits for entire family when family registration is complete
@@ -2191,18 +2390,20 @@ def consultation_interface():
     add_to_history('consultation_interface')
     st.markdown("### Select Patient for Consultation")
     
-    # Get patients waiting for consultation
+    # Get patients waiting for consultation, including family relationships
     conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
     cursor.execute('''
         SELECT v.visit_id, v.patient_id, p.name, v.priority, vs.systolic_bp, 
-               vs.diastolic_bp, vs.heart_rate, vs.temperature
+               vs.diastolic_bp, vs.heart_rate, vs.temperature, p.parent_id, p.relationship
         FROM visits v
         JOIN patients p ON v.patient_id = p.patient_id
         LEFT JOIN vital_signs vs ON v.visit_id = vs.visit_id
         WHERE v.status = 'waiting_consultation' AND DATE(v.visit_date) = DATE('now')
         ORDER BY 
+            CASE WHEN p.parent_id IS NULL THEN 0 ELSE 1 END,
+            COALESCE(p.parent_id, p.patient_id),
             CASE v.priority 
                 WHEN 'critical' THEN 1 
                 WHEN 'urgent' THEN 2 
@@ -2214,39 +2415,116 @@ def consultation_interface():
     waiting_patients = cursor.fetchall()
     conn.close()
     
-    if waiting_patients:
-        for patient in waiting_patients:
-            visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp = patient
+    # Group patients by family
+    families = {}
+    individual_patients = []
+    
+    for patient in waiting_patients:
+        visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp, parent_id, relationship = patient
+        
+        if parent_id:  # This is a child
+            if parent_id not in families:
+                families[parent_id] = {'parent': None, 'children': []}
+            families[parent_id]['children'].append({
+                'visit_id': visit_id, 'patient_id': patient_id, 'name': name,
+                'priority': priority, 'sys_bp': sys_bp, 'dia_bp': dia_bp,
+                'hr': hr, 'temp': temp, 'relationship': relationship
+            })
+        else:  # This is a parent or individual
+            # Check if this patient has children
+            has_children = any(p[8] == patient_id for p in waiting_patients)
+            if has_children:
+                if patient_id not in families:
+                    families[patient_id] = {'parent': None, 'children': []}
+                families[patient_id]['parent'] = {
+                    'visit_id': visit_id, 'patient_id': patient_id, 'name': name,
+                    'priority': priority, 'sys_bp': sys_bp, 'dia_bp': dia_bp,
+                    'hr': hr, 'temp': temp
+                }
+            else:
+                individual_patients.append({
+                    'visit_id': visit_id, 'patient_id': patient_id, 'name': name,
+                    'priority': priority, 'sys_bp': sys_bp, 'dia_bp': dia_bp,
+                    'hr': hr, 'temp': temp
+                })
+    
+    # Display families first
+    if families:
+        st.markdown("#### 👨‍👩‍👧‍👦 Family Groups")
+        for family_id, family_data in families.items():
+            parent = family_data['parent']
+            children = family_data['children']
             
-            priority_emoji = "🔴" if priority == "critical" else "🟡" if priority == "urgent" else "🟢"
-            
-            with st.expander(f"{priority_emoji} {name} (ID: {patient_id})", expanded=False):
-                # Display vital signs
-                if sys_bp:
+            if parent:
+                priority_emoji = "🔴" if parent['priority'] == "critical" else "🟡" if parent['priority'] == "urgent" else "🟢"
+                
+                with st.expander(f"{priority_emoji} **Family Consultation:** {parent['name']} + {len(children)} children", expanded=False):
+                    st.markdown("**👨‍👩 Parent/Guardian:**")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Blood Pressure", f"{sys_bp}/{dia_bp}")
+                        if parent['sys_bp']:
+                            st.metric("Blood Pressure", f"{parent['sys_bp']}/{parent['dia_bp']}")
                     with col2:
-                        st.metric("Heart Rate", f"{hr} bpm")
+                        if parent['hr']:
+                            st.metric("Heart Rate", f"{parent['hr']} bpm")
                     with col3:
-                        st.metric("Temperature", f"{temp}°F")
+                        if parent['temp']:
+                            st.metric("Temperature", f"{parent['temp']}°F")
                     with col4:
-                        if st.button(f"Start Consultation", key=f"consult_{visit_id}"):
-                            # Store consultation details in session state for new page
-                            st.session_state.active_consultation = {
-                                'visit_id': visit_id,
-                                'patient_id': patient_id,
-                                'patient_name': name
+                        if st.button(f"Start Family Consultation", key=f"family_consult_{parent['patient_id']}"):
+                            # Store family consultation details
+                            st.session_state.family_consultation = {
+                                'parent_id': parent['patient_id'],
+                                'parent_name': parent['name'],
+                                'parent_visit_id': parent['visit_id'],
+                                'children': children
                             }
-                            # Update doctor status to show they are with this patient
+                            st.session_state.active_consultation = {
+                                'visit_id': parent['visit_id'],
+                                'patient_id': parent['patient_id'],
+                                'patient_name': parent['name']
+                            }
+                            # Update doctor status
                             db = get_db_manager()
-                            db.update_doctor_status(st.session_state.doctor_name, "with_patient", patient_id, name)
+                            db.update_doctor_status(st.session_state.doctor_name, "with_patient", parent['patient_id'], f"{parent['name']} (Family)")
                             st.session_state.page = 'consultation_form'
                             st.rerun()
-                
-                # Show consultation button only
-                # Consultation form will be shown outside the expander
-    else:
+                    
+                    st.markdown("**👶 Children:**")
+                    for child in children:
+                        st.write(f"• {child['name']} ({child['age']} yrs, {child['relationship']})")
+    
+    # Display individual patients
+    if individual_patients:
+        st.markdown("#### 👤 Individual Patients")
+        for patient in individual_patients:
+            priority_emoji = "🔴" if patient['priority'] == "critical" else "🟡" if patient['priority'] == "urgent" else "🟢"
+            
+            with st.expander(f"{priority_emoji} {patient['name']} (ID: {patient['patient_id']})", expanded=False):
+                # Display vital signs
+                if patient['sys_bp']:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Blood Pressure", f"{patient['sys_bp']}/{patient['dia_bp']}")
+                    with col2:
+                        st.metric("Heart Rate", f"{patient['hr']} bpm")
+                    with col3:
+                        st.metric("Temperature", f"{patient['temp']}°F")
+                    with col4:
+                        if st.button(f"Start Consultation", key=f"consult_{patient['visit_id']}"):
+                            # Store consultation details
+                            st.session_state.active_consultation = {
+                                'visit_id': patient['visit_id'],
+                                'patient_id': patient['patient_id'],
+                                'patient_name': patient['name']
+                            }
+                            # Update doctor status
+                            db = get_db_manager()
+                            db.update_doctor_status(st.session_state.doctor_name, "with_patient", patient['patient_id'], patient['name'])
+                            st.session_state.page = 'consultation_form'
+                            st.rerun()
+    
+    if not families and not individual_patients:
         st.info("No patients waiting for consultation.")
     
 
