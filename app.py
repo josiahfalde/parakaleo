@@ -276,6 +276,45 @@ class DatabaseManager:
                     VALUES (?, ?, ?, ?)
                 ''', med)
         
+        # Add new tables for multi-user functionality
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS doctors (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                is_active BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS doctor_status (
+                id INTEGER PRIMARY KEY,
+                doctor_name TEXT NOT NULL,
+                current_patient_id TEXT,
+                current_patient_name TEXT,
+                status TEXT DEFAULT 'available',
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Initialize default doctors if table is empty
+        cursor.execute('SELECT COUNT(*) FROM doctors')
+        doctor_count = cursor.fetchone()[0]
+        
+        if doctor_count == 0:
+            default_doctors = [
+                'Dr. Smith',
+                'Dr. Johnson', 
+                'Dr. Williams',
+                'Dr. Brown',
+                'Dr. Garcia'
+            ]
+            
+            for doctor in default_doctors:
+                cursor.execute('''
+                    INSERT INTO doctors (name, is_active) VALUES (?, 1)
+                ''', (doctor,))
+        
         conn.commit()
         conn.close()
     
@@ -394,6 +433,88 @@ class DatabaseManager:
         conn.close()
         
         return visit_id
+    
+    def get_doctors(self) -> List[Dict]:
+        """Get all active doctors"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT name FROM doctors WHERE is_active = 1 ORDER BY name')
+        doctors = [{'name': row[0]} for row in cursor.fetchall()]
+        
+        conn.close()
+        return doctors
+    
+    def add_doctor(self, name: str) -> bool:
+        """Add a new doctor"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('INSERT INTO doctors (name, is_active) VALUES (?, 1)', (name,))
+            conn.commit()
+            conn.close()
+            return True
+        except:
+            return False
+    
+    def remove_doctor(self, name: str) -> bool:
+        """Remove a doctor (set inactive)"""
+        try:
+            conn = sqlite3.connect(self.db_name)
+            cursor = conn.cursor()
+            
+            cursor.execute('UPDATE doctors SET is_active = 0 WHERE name = ?', (name,))
+            conn.commit()
+            conn.close()
+            return True
+        except:
+            return False
+    
+    def update_doctor_status(self, doctor_name: str, status: str, patient_id: str = None, patient_name: str = None):
+        """Update doctor's current status"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # Remove old status for this doctor
+        cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (doctor_name,))
+        
+        # Insert new status
+        cursor.execute('''
+            INSERT INTO doctor_status (doctor_name, current_patient_id, current_patient_name, status, last_updated)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (doctor_name, patient_id, patient_name, status, datetime.now().isoformat()))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_all_doctor_status(self) -> List[Dict]:
+        """Get current status of all doctors"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT ds.doctor_name, ds.current_patient_id, ds.current_patient_name, ds.status, ds.last_updated,
+                   d.is_active
+            FROM doctor_status ds
+            JOIN doctors d ON ds.doctor_name = d.name
+            WHERE d.is_active = 1
+            ORDER BY ds.doctor_name
+        ''')
+        
+        status_list = []
+        for row in cursor.fetchall():
+            status_list.append({
+                'doctor_name': row[0],
+                'current_patient_id': row[1],
+                'current_patient_name': row[2],
+                'status': row[3],
+                'last_updated': row[4],
+                'is_active': bool(row[5])
+            })
+        
+        conn.close()
+        return status_list
     
     def delete_patient(self, patient_id: str) -> bool:
         """Delete a patient and all associated data"""
@@ -677,7 +798,11 @@ def main():
     if st.session_state.user_role == "triage":
         triage_interface()
     elif st.session_state.user_role == "doctor":
-        doctor_interface()
+        # Check if doctor has logged in
+        if 'doctor_name' not in st.session_state:
+            doctor_login()
+        else:
+            doctor_interface()
     elif st.session_state.user_role == "pharmacy":
         pharmacy_interface()
     elif st.session_state.user_role == "admin":
@@ -1219,10 +1344,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         if st.form_submit_button("Complete Consultation", type="primary"):
             if doctor_name and chief_complaint:
                 try:
-                    conn = sqlite3.connect(db.db_name)
-                    cursor = conn.cursor()
-                    
+                    # Use the database manager methods instead of direct connection
                     # Save consultation
+                    db_conn = sqlite3.connect(db.db_name, timeout=10.0)
+                    db_conn.execute('BEGIN IMMEDIATE')
+                    cursor = db_conn.cursor()
+                    
                     cursor.execute('''
                         INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
                                                  symptoms, diagnosis, treatment_plan, notes, consultation_time)
@@ -1230,25 +1357,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
                           treatment_plan, notes, datetime.now().isoformat()))
                     
-                    # Order lab tests
-                    for test_type in lab_tests:
-                        db.order_lab_test(visit_id, test_type, doctor_name)
-                    
-                    # Save prescriptions with awaiting lab functionality
-                    for med in selected_medications:
-                        if med['name']:  # Only save if medication name exists
-                            db.add_prescription(
-                                visit_id=visit_id,
-                                medication_id=med['id'],
-                                medication_name=med['name'],
-                                dosage=med['dosage'],
-                                frequency=med['frequency'],
-                                duration=med['duration'],
-                                instructions=med['instructions'],
-                                awaiting_lab=med['awaiting_lab']
-                            )
-                    
-                    # Update visit status
+                    # Update visit status first
                     if selected_medications:
                         new_status = 'prescribed'
                     elif lab_tests:
@@ -1260,8 +1369,25 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
                     ''', (datetime.now().isoformat(), new_status, visit_id))
                     
-                    conn.commit()
-                    conn.close()
+                    db_conn.commit()
+                    db_conn.close()
+                    
+                    # Now handle lab tests and prescriptions using separate connections
+                    for test_type in lab_tests:
+                        db.order_lab_test(visit_id, test_type, doctor_name)
+                    
+                    for med in selected_medications:
+                        if med['name']:
+                            db.add_prescription(
+                                visit_id=visit_id,
+                                medication_id=med['id'],
+                                medication_name=med['name'],
+                                dosage=med['dosage'],
+                                frequency=med['frequency'],
+                                duration=med['duration'],
+                                instructions=med['instructions'],
+                                awaiting_lab=med['awaiting_lab']
+                            )
                     
                     st.success("Consultation completed successfully!")
                     
@@ -1285,9 +1411,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     
                 except Exception as e:
                     st.error(f"Error completing consultation: {str(e)}")
-                    if 'conn' in locals():
-                        conn.rollback()
-                        conn.close()
+                    # No need to handle db_conn here since it's handled in the try block
             else:
                 st.error("Please fill in required fields: Doctor Name and Chief Complaint")
 
