@@ -838,17 +838,35 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Display header with hospital emoji that navigates home
-    col1, col2 = st.columns([1, 8])
+    # Display header with hospital emoji and back arrow
+    col1, col2, col3 = st.columns([1, 1, 6])
     with col1:
-        if st.button("🏥", key="home_button", help="Return to main menu"):
-            # Clear all session states to return to home
-            keys_to_keep = ['clinic_location']
-            keys_to_clear = [k for k in st.session_state.keys() if k not in keys_to_keep]
-            for key in keys_to_clear:
-                del st.session_state[key]
+        if st.button("←", key="back_button", help="Previous page"):
+            # Navigate back based on current state
+            if st.session_state.get('page') == 'consultation_form':
+                st.session_state.page = 'doctor'
+                if 'active_consultation' in st.session_state:
+                    del st.session_state.active_consultation
+            elif st.session_state.get('user_role'):
+                st.session_state.user_role = None
+            elif st.session_state.get('clinic_location'):
+                st.session_state.clinic_location = None
             st.rerun()
+    
     with col2:
+        if st.button("🏥", key="home_button", help="Return to role selection"):
+            # Clear user role to return to role selection but keep location
+            if 'user_role' in st.session_state:
+                del st.session_state.user_role
+            if 'page' in st.session_state:
+                del st.session_state.page
+            if 'doctor_name' in st.session_state:
+                del st.session_state.doctor_name
+            if 'active_consultation' in st.session_state:
+                del st.session_state.active_consultation
+            st.rerun()
+    
+    with col3:
         st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
         st.markdown("*Mission Trip Patient Management*")
     
@@ -2929,10 +2947,38 @@ def onedrive_integration():
 def ophthalmologist_interface():
     st.markdown("### 👁️ Ophthalmologist Interface")
     
-    # Get patients who need ophthalmology consultation
+    # Ensure eye_examinations table exists
     conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
     
+    # Create eye_examinations table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS eye_examinations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visit_id TEXT,
+            patient_id TEXT,
+            eye_history TEXT,
+            visual_acuity_right TEXT,
+            visual_acuity_left TEXT,
+            eye_pressure_right TEXT,
+            eye_pressure_left TEXT,
+            eye_findings TEXT,
+            od_sphere TEXT,
+            od_cylinder TEXT,
+            od_axis TEXT,
+            os_sphere TEXT,
+            os_cylinder TEXT,
+            os_axis TEXT,
+            add_power TEXT,
+            pd TEXT,
+            recommendations TEXT,
+            examination_time TEXT,
+            FOREIGN KEY (visit_id) REFERENCES visits (visit_id),
+            FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+        )
+    ''')
+    
+    # Get patients who need ophthalmology consultation
     cursor.execute('''
         SELECT v.visit_id, v.patient_id, p.name, c.needs_ophthalmology
         FROM visits v
