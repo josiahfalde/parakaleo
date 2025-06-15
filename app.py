@@ -1587,11 +1587,9 @@ def main():
         </style>
         """, unsafe_allow_html=True)
     
-    # Header with logo
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
-    st.markdown('<p style="text-align: center; color: #666; margin-bottom: 20px;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
+    # Header with logo - no extra spacing
+    st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
+    st.markdown('<p style="text-align: center; color: #666; margin: 0;"><em>Mission Trip Patient Management</em></p>', unsafe_allow_html=True)
     
     # Navigation buttons in a cleaner horizontal layout
     nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
@@ -1650,9 +1648,6 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        # Display ParakaleoMed logo without extra spacing
-        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=400)
-        
         st.markdown("### Select Your Role")
         
         col1, col2 = st.columns(2)
