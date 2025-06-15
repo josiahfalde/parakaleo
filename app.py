@@ -1718,9 +1718,13 @@ def main():
     else:
         location_info = "No location set"
     
+    # Display logo in sidebar
+    col1, col2, col3 = st.sidebar.columns([1, 1, 1])
+    with col2:
+        st.image("attached_assets/Screenshot 2025-06-14 215718_1750022031172.png", width=50)
+    
     st.sidebar.markdown(f'''
     <div style="text-align: center; margin-bottom: 20px;">
-        <div style="text-align: center;"><img src="attached_assets/Screenshot 2025-06-14 215718_1750022031172.png" width="50" style="border-radius: 8px;" alt="ParakaleoMed Logo"></div>
         <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
         <p style="color: #666; font-size: 12px; margin-top: 5px;">{location_info}</p>
     </div>
