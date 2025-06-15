@@ -979,7 +979,10 @@ def show_loading_screen():
         with placeholder.container():
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                st.markdown('<div style="text-align: center; margin-top: 100px;">🔗</div>', unsafe_allow_html=True)
+                try:
+                    st.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=200)
+                except FileNotFoundError:
+                    st.markdown('<div style="text-align: center; margin-top: 100px;">🔗</div>', unsafe_allow_html=True)
                 st.markdown('<h2 style="text-align: center; margin-top: 40px;">ParakaleoMed</h2>', unsafe_allow_html=True)
                 st.markdown('<p style="text-align: center; color: #666;">Loading...</p>', unsafe_allow_html=True)
         
@@ -1103,21 +1106,17 @@ def main():
         admin_interface()
     
     # Sidebar header with Parakaleo logo
-    st.sidebar.markdown('''
-    <div style="text-align: center; margin-bottom: 20px;">
-        <svg width="35" height="35" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <g transform="translate(50, 50)">
-            <circle cx="-15" cy="-15" r="20" fill="none" stroke="#FF8C00" stroke-width="4" opacity="0.8"/>
-            <circle cx="15" cy="-15" r="20" fill="none" stroke="#4A90E2" stroke-width="4" opacity="0.8"/>
-            <circle cx="15" cy="15" r="20" fill="none" stroke="#50C878" stroke-width="4" opacity="0.8"/>
-            <circle cx="-15" cy="15" r="20" fill="none" stroke="#9B59B6" stroke-width="4" opacity="0.8"/>
-            <circle cx="0" cy="0" r="18" fill="none" stroke="#F1C40F" stroke-width="4" opacity="0.8"/>
-            <circle cx="0" cy="0" r="12" fill="none" stroke="#E74C3C" stroke-width="3" opacity="0.8"/>
-          </g>
-        </svg>
-        <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
-    </div>
-    ''', unsafe_allow_html=True)
+    try:
+        st.sidebar.image("attached_assets/Parakaleo_Logo_FullColor_1749953206859.png", width=120)
+        st.sidebar.markdown('<h3 style="text-align: center; color: #333; margin-top: 10px;">ParakaleoMed</h3>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        # Fallback if PNG not found
+        st.sidebar.markdown('''
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 35px;">🔗</div>
+            <h3 style="margin-top: 10px; color: #333;">ParakaleoMed</h3>
+        </div>
+        ''', unsafe_allow_html=True)
     
     # Role change button
     st.sidebar.markdown("---")
