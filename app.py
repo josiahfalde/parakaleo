@@ -1976,6 +1976,48 @@ def completed_lab_tests():
                 st.write(f"**Completed:** {test[5][:16].replace('T', ' ')}")
                 st.write(f"**Results:**")
                 st.text(test[6])
+                
+                # Post-lab treatment options
+                st.markdown("#### Post-Lab Treatment Decision")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Treated by Pharmacy", key=f"pharmacy_{test[0]}", type="primary"):
+                        # Update lab test to indicate pharmacy treatment
+                        conn = sqlite3.connect("clinic_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE lab_tests SET notes = COALESCE(notes, '') || ' - TREATED BY PHARMACY'
+                            WHERE id = ?
+                        ''', (test[0],))
+                        conn.commit()
+                        conn.close()
+                        st.success("Marked as treated by pharmacy")
+                        st.rerun()
+                
+                with col2:
+                    if st.button("Return to Provider", key=f"provider_{test[0]}", type="secondary"):
+                        # Create new consultation requirement
+                        visit_id = test[1]  # visit_id from the test
+                        conn = sqlite3.connect("clinic_database.db")
+                        cursor = conn.cursor()
+                        
+                        # Update visit status to require consultation
+                        cursor.execute('''
+                            UPDATE visits SET status = 'waiting_consultation'
+                            WHERE visit_id = ?
+                        ''', (visit_id,))
+                        
+                        # Add note to lab test
+                        cursor.execute('''
+                            UPDATE lab_tests SET notes = COALESCE(notes, '') || ' - RETURNED TO PROVIDER'
+                            WHERE id = ?
+                        ''', (test[0],))
+                        
+                        conn.commit()
+                        conn.close()
+                        st.success("Patient returned to consultation queue")
+                        st.rerun()
     else:
         st.info("No lab tests completed today.")
 
@@ -2234,8 +2276,7 @@ def medication_management():
                     with col1:
                         st.write(f"**{med['medication_name']}** - {med['common_dosages']}")
                     with col2:
-                        if med['requires_lab'] == 'yes':
-                            st.write("🔬 Lab Required")
+                        st.write(f"Category: {med['category']}")
                     with col3:
                         if st.button("Deactivate", key=f"deactivate_{med['id']}"):
                             conn = sqlite3.connect(db.db_name)
