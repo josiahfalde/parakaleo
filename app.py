@@ -98,7 +98,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        # Create patients table
+        # Create patients table with family grouping
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS patients (
                 patient_id TEXT PRIMARY KEY,
@@ -110,7 +110,10 @@ class DatabaseManager:
                 medical_history TEXT,
                 allergies TEXT,
                 created_date TEXT,
-                last_visit TEXT
+                last_visit TEXT,
+                family_id TEXT,
+                relationship TEXT,
+                parent_id TEXT
             )
         ''')
         
@@ -375,8 +378,8 @@ class DatabaseManager:
         cursor.execute('''
             INSERT INTO patients (patient_id, name, age, gender, phone, 
                                 emergency_contact, medical_history, allergies, 
-                                created_date, last_visit)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                created_date, last_visit, family_id, relationship, parent_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             patient_id, 
             kwargs.get('name', ''),
@@ -387,13 +390,88 @@ class DatabaseManager:
             kwargs.get('medical_history'),
             kwargs.get('allergies'),
             datetime.now().isoformat(),
-            datetime.now().isoformat()
+            datetime.now().isoformat(),
+            kwargs.get('family_id', None),
+            kwargs.get('relationship', 'self'),
+            kwargs.get('parent_id', None)
         ))
         
         conn.commit()
         conn.close()
         
         return patient_id
+    
+    def add_family_member(self, parent_id: str, location_code: str, **kwargs) -> str:
+        """Add a family member under a parent"""
+        # Get parent's family_id or create one
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT family_id FROM patients WHERE patient_id = ?', (parent_id,))
+        parent_data = cursor.fetchone()
+        
+        if parent_data and parent_data[0]:
+            family_id = parent_data[0]
+        else:
+            # Create new family_id and update parent
+            family_id = f"FAM_{parent_id}"
+            cursor.execute('UPDATE patients SET family_id = ? WHERE patient_id = ?', (family_id, parent_id))
+        
+        conn.close()
+        
+        # Add the family member
+        patient_id = self.add_patient(
+            location_code,
+            family_id=family_id,
+            parent_id=parent_id,
+            relationship=kwargs.get('relationship', 'child'),
+            **kwargs
+        )
+        
+        return patient_id
+    
+    def get_family_members(self, patient_id: str) -> List[Dict]:
+        """Get all family members for a patient"""
+        conn = sqlite3.connect(self.db_name)
+        cursor = conn.cursor()
+        
+        # First get the patient's family_id
+        cursor.execute('SELECT family_id FROM patients WHERE patient_id = ?', (patient_id,))
+        result = cursor.fetchone()
+        
+        if not result or not result[0]:
+            conn.close()
+            return []
+        
+        family_id = result[0]
+        
+        # Get all family members
+        cursor.execute('''
+            SELECT patient_id, name, age, gender, relationship, parent_id
+            FROM patients 
+            WHERE family_id = ?
+            ORDER BY 
+                CASE relationship 
+                    WHEN 'parent' THEN 1 
+                    WHEN 'self' THEN 1
+                    ELSE 2 
+                END,
+                age DESC
+        ''', (family_id,))
+        
+        members = []
+        for row in cursor.fetchall():
+            members.append({
+                'patient_id': row[0],
+                'name': row[1],
+                'age': row[2],
+                'gender': row[3],
+                'relationship': row[4],
+                'parent_id': row[5]
+            })
+        
+        conn.close()
+        return members
     
     def search_patients(self, query: str) -> List[Dict]:
         """Search for patients by name or ID"""
@@ -1058,46 +1136,167 @@ def triage_interface():
 def new_patient_form():
     st.markdown("### Register New Patient")
     
-    with st.form("new_patient_form"):
-        col1, col2 = st.columns(2)
+    # Registration type selection
+    registration_type = st.radio("Registration Type", ["Individual Patient", "Family Registration"], horizontal=True)
+    
+    if registration_type == "Individual Patient":
+        with st.form("new_patient_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                name = st.text_input("Patient Name *", placeholder="Enter full name")
+                age = st.number_input("Age", min_value=0, max_value=120, value=None)
+                gender = st.selectbox("Gender", ["", "Male", "Female"])
+            
+            with col2:
+                phone = st.text_input("Phone Number", placeholder="Optional")
+                emergency_contact = st.text_input("Emergency Contact", placeholder="Optional")
+            
+            if st.form_submit_button("Register Patient", type="primary"):
+                if name.strip():
+                    patient_data = {
+                        'name': name.strip(),
+                        'age': age,
+                        'gender': gender if gender else None,
+                        'phone': phone.strip() if phone else None,
+                        'emergency_contact': emergency_contact.strip() if emergency_contact else None,
+                        'medical_history': None,
+                        'allergies': None
+                    }
+                    
+                    location_code = st.session_state.clinic_location['country_code']
+                    patient_id = db.add_patient(location_code, **patient_data)
+                    visit_id = db.create_visit(patient_id)
+                    
+                    st.success(f"✅ Patient registered successfully!")
+                    st.info(f"**Patient ID:** {patient_id}")
+                    st.info(f"**Visit ID:** {visit_id}")
+                    
+                    # Store visit_id in session state to show vital signs form
+                    st.session_state.pending_vitals = visit_id
+                    st.session_state.patient_name = name.strip()
+                    st.rerun()
+                else:
+                    st.error("Please enter the patient's name.")
+    
+    else:  # Family Registration
+        st.markdown("#### Family Registration")
+        st.info("Register a parent/guardian first, then add children to the family.")
         
-        with col1:
-            name = st.text_input("Patient Name *", placeholder="Enter full name")
-            age = st.number_input("Age", min_value=0, max_value=120, value=None)
-            gender = st.selectbox("Gender", ["", "Male", "Female"])
-        
-        with col2:
-            phone = st.text_input("Phone Number", placeholder="Optional")
-            emergency_contact = st.text_input("Emergency Contact", placeholder="Optional")
-        
-
-        
-        if st.form_submit_button("Register Patient", type="primary"):
-            if name.strip():
-                patient_data = {
-                    'name': name.strip(),
-                    'age': age,
-                    'gender': gender if gender else None,
-                    'phone': phone.strip() if phone else None,
-                    'emergency_contact': emergency_contact.strip() if emergency_contact else None,
-                    'medical_history': None,
-                    'allergies': None
-                }
+        # Parent/Guardian Registration
+        with st.expander("👨‍👩‍👧‍👦 Register Parent/Guardian", expanded=True):
+            with st.form("parent_registration"):
+                st.markdown("**Parent/Guardian Information**")
+                col1, col2 = st.columns(2)
                 
-                location_code = st.session_state.clinic_location['country_code']
-                patient_id = db.add_patient(location_code, **patient_data)
-                visit_id = db.create_visit(patient_id)
+                with col1:
+                    parent_name = st.text_input("Parent/Guardian Name *")
+                    parent_age = st.number_input("Age", min_value=18, max_value=120, value=None, key="parent_age")
+                    parent_gender = st.selectbox("Gender", ["", "Male", "Female"], key="parent_gender")
                 
-                st.success(f"✅ Patient registered successfully!")
-                st.info(f"**Patient ID:** {patient_id}")
-                st.info(f"**Visit ID:** {visit_id}")
+                with col2:
+                    parent_phone = st.text_input("Phone Number", key="parent_phone")
+                    emergency_contact = st.text_input("Emergency Contact", key="parent_emergency")
                 
-                # Store visit_id in session state to show vital signs form
-                st.session_state.pending_vitals = visit_id
-                st.session_state.patient_name = name.strip()
-                st.rerun()
-            else:
-                st.error("Please enter the patient's name.")
+                parent_submitted = st.form_submit_button("Register Parent/Guardian", type="primary")
+                
+                if parent_submitted and parent_name.strip():
+                    parent_data = {
+                        'name': parent_name.strip(),
+                        'age': parent_age,
+                        'gender': parent_gender if parent_gender else None,
+                        'phone': parent_phone.strip() if parent_phone else None,
+                        'emergency_contact': emergency_contact.strip() if emergency_contact else None,
+                        'relationship': 'parent'
+                    }
+                    
+                    location_code = st.session_state.clinic_location['country_code']
+                    parent_id = db.add_patient(location_code, **parent_data)
+                    
+                    st.session_state.family_parent_id = parent_id
+                    st.session_state.family_parent_name = parent_name.strip()
+                    st.success(f"✅ Parent registered with ID: **{parent_id}**")
+                    st.rerun()
+        
+        # Children Registration (only show if parent is registered)
+        if 'family_parent_id' in st.session_state:
+            st.markdown(f"**Adding children for: {st.session_state.family_parent_name}** (ID: {st.session_state.family_parent_id})")
+            
+            # Show existing family members
+            family_members = db.get_family_members(st.session_state.family_parent_id)
+            if family_members:
+                st.markdown("**Current Family Members:**")
+                for member in family_members:
+                    relationship_icon = "👨‍👩" if member['relationship'] == 'parent' else "👶"
+                    st.write(f"{relationship_icon} {member['name']} ({member['age']} yrs, {member['gender']}) - {member['relationship'].title()}")
+            
+            with st.expander("👶 Add Child", expanded=True):
+                with st.form("child_registration"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        child_name = st.text_input("Child's Name *")
+                        child_age = st.number_input("Age", min_value=0, max_value=17, value=None, key="child_age")
+                        child_gender = st.selectbox("Gender", ["", "Male", "Female"], key="child_gender")
+                    
+                    with col2:
+                        relationship = st.selectbox("Relationship", ["child", "stepchild", "adopted child", "other"])
+                    
+                    child_submitted = st.form_submit_button("Add Child to Family", type="secondary")
+                    
+                    if child_submitted and child_name.strip():
+                        child_data = {
+                            'name': child_name.strip(),
+                            'age': child_age,
+                            'gender': child_gender if child_gender else None,
+                            'relationship': relationship
+                        }
+                        
+                        location_code = st.session_state.clinic_location['country_code']
+                        child_id = db.add_family_member(
+                            parent_id=st.session_state.family_parent_id,
+                            location_code=location_code,
+                            **child_data
+                        )
+                        
+                        st.success(f"✅ Child {child_name.strip()} added with ID: **{child_id}**")
+                        st.rerun()
+            
+            # Create visits for family members
+            st.markdown("#### Create Visits")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Create Visit for Parent", type="primary"):
+                    visit_id = db.create_visit(st.session_state.family_parent_id)
+                    st.session_state.pending_vitals = visit_id
+                    st.session_state.patient_name = st.session_state.family_parent_name
+                    st.success("Visit created for parent")
+                    st.rerun()
+            
+            with col2:
+                if st.button("Finish Family Registration", type="secondary"):
+                    if 'family_parent_id' in st.session_state:
+                        del st.session_state.family_parent_id
+                    if 'family_parent_name' in st.session_state:
+                        del st.session_state.family_parent_name
+                    st.success("Family registration completed!")
+                    st.rerun()
+            
+            # Show family members for visit creation
+            if family_members and len(family_members) > 1:
+                st.markdown("**Create visits for children:**")
+                for member in family_members:
+                    if member['relationship'] != 'parent':
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"👶 {member['name']} ({member['age']} yrs)")
+                        with col2:
+                            if st.button(f"Create Visit", key=f"visit_{member['patient_id']}"):
+                                visit_id = db.create_visit(member['patient_id'])
+                                st.session_state.pending_vitals = visit_id
+                                st.session_state.patient_name = member['name']
+                                st.success(f"Visit created for {member['name']}")
+                                st.rerun()
     
     # Show vital signs form outside the main form if there's a pending visit
     if 'pending_vitals' in st.session_state:
