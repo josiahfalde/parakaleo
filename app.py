@@ -1304,8 +1304,104 @@ def main():
     
     /* Sidebar styling */
     .css-1d391kg {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
-        border-right: 1px solid #e9ecef !important;
+        background: #f9fafb !important;
+        border-right: 1px solid #e5e7eb !important;
+    }
+    
+    /* Settings and reports specific styling */
+    .stSelectbox > div > div {
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+    }
+    
+    .stCheckbox > label {
+        color: #374151 !important;
+        font-weight: 500 !important;
+    }
+    
+    .stToggle > label {
+        color: #374151 !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Metrics styling for reports */
+    [data-testid="metric-container"] {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        padding: 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+    }
+    
+    [data-testid="metric-container"] > div > div:first-child {
+        color: #6b7280 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+    }
+    
+    [data-testid="metric-container"] > div > div:last-child {
+        color: #111827 !important;
+        font-size: 24px !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background: #f9fafb !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        color: #374151 !important;
+        font-weight: 500 !important;
+    }
+    
+    .streamlit-expanderContent {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+    
+    /* Download button specific styling */
+    .stDownloadButton > button {
+        background: #10b981 !important;
+        color: white !important;
+        border: 1px solid #10b981 !important;
+        font-weight: 600 !important;
+    }
+    
+    .stDownloadButton > button:hover {
+        background: #059669 !important;
+        border-color: #059669 !important;
+    }
+    
+    /* Info boxes styling */
+    .stInfo {
+        background: #eff6ff !important;
+        border: 1px solid #bfdbfe !important;
+        border-radius: 8px !important;
+        color: #1e40af !important;
+    }
+    
+    .stSuccess {
+        background: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+        border-radius: 8px !important;
+        color: #166534 !important;
+    }
+    
+    .stWarning {
+        background: #fffbeb !important;
+        border: 1px solid #fed7aa !important;
+        border-radius: 8px !important;
+        color: #9a3412 !important;
+    }
+    
+    .stError {
+        background: #fef2f2 !important;
+        border: 1px solid #fecaca !important;
+        border-radius: 8px !important;
+        color: #991b1b !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -4111,16 +4207,34 @@ def patient_management():
                         confirm_col, cancel_col = st.columns(2)
                         with confirm_col:
                             if st.button("✓", key=f"confirm_{patient['patient_id']}", help="Confirm delete"):
-                                # Perform the actual deletion here
-                                db = get_db_manager()
-                                if db.delete_patient(patient['patient_id']):
+                                # Perform the actual deletion using direct database operations
+                                try:
+                                    conn = sqlite3.connect("clinic_database.db")
+                                    cursor = conn.cursor()
+                                    cursor.execute('PRAGMA foreign_keys = OFF')
+                                    
+                                    patient_id = patient['patient_id']
+                                    
+                                    # Delete all related data
+                                    cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                                    cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                                    cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                                    cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                                    cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+                                    cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+                                    
+                                    conn.commit()
+                                    conn.close()
+                                    
                                     st.success(f"Patient {patient['name']} deleted successfully.")
                                     # Clear the deleting state
                                     if delete_key in st.session_state:
                                         del st.session_state[delete_key]
                                     st.rerun()
-                                else:
-                                    st.error("Failed to delete patient.")
+                                except Exception as e:
+                                    st.error(f"Failed to delete patient: {str(e)}")
+                                    if 'conn' in locals():
+                                        conn.close()
                         with cancel_col:
                             if st.button("✕", key=f"cancel_{patient['patient_id']}", help="Cancel delete"):
                                 # Clear the deleting state
