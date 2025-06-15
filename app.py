@@ -2944,42 +2944,21 @@ def consultation_history():
 def show_patient_history_detail(patient_id: str, patient_name: str):
     """Display detailed patient history in a new view"""
     
-    # Modal overlay styling for patient history
+    # Modal overlay styling for patient history (no JavaScript)
     st.markdown("""
     <style>
     .history-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
         background-color: rgba(0, 0, 0, 0.7);
-        z-index: 9998;
-        cursor: pointer;
-    }
-    .history-modal-content {
-        background: white;
-        margin: 20px;
-        padding: 20px;
         border-radius: 10px;
-        max-height: 90vh;
-        overflow-y: auto;
-        cursor: default;
-        position: relative;
+        padding: 20px;
+        margin: 10px 0;
+        animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     </style>
-    <div class="history-modal-overlay" onclick="closeHistoryModal()">
-        <div class="history-modal-content" onclick="event.stopPropagation()">
-        </div>
-    </div>
-    <script>
-    function closeHistoryModal() {
-        const backBtn = document.querySelector('button');
-        if (backBtn && backBtn.textContent.includes('Back')) {
-            backBtn.click();
-        }
-    }
-    </script>
     """, unsafe_allow_html=True)
     
     st.markdown(f"### 📋 Complete Patient History: {patient_name} (ID: {patient_id})")
@@ -3615,178 +3594,132 @@ def patient_management():
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create visual modal overlay with X button and click-outside-to-close
+        # Create visual modal overlay styling only (no JavaScript)
         st.markdown(f"""
         <style>
-        .modal-overlay {{
+        .deletion-modal {{
+            background-color: rgba(0, 0, 0, 0.8);
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.8);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            z-index: 999;
         }}
-        .modal-content {{
+        .deletion-content {{
             background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             border: 3px solid #dc3545;
-            max-width: 500px;
-            width: 90%;
-            text-align: center;
-            animation: modalFadeIn 0.3s ease-out;
-            cursor: default;
-            position: relative;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s ease-out;
         }}
-        .modal-close {{
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #dc3545;
-            cursor: pointer;
-            background: none;
-            border: none;
-            padding: 5px;
-            line-height: 1;
-        }}
-        .modal-close:hover {{
-            color: #a02622;
-            background-color: #f8f9fa;
-            border-radius: 50%;
-        }}
-        @keyframes modalFadeIn {{
-            from {{ opacity: 0; transform: scale(0.7); }}
-            to {{ opacity: 1; transform: scale(1); }}
-        }}
-        .modal-header {{
-            color: #dc3545;
-            font-size: 1.8rem;
-            font-weight: bold;
-            margin-bottom: 20px;
-            margin-top: 10px;
-        }}
-        .modal-warning {{
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateY(-20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
         }}
         </style>
-        <div class="modal-overlay" onclick="closeModal()">
-            <div class="modal-content" onclick="event.stopPropagation()">
-                <button class="modal-close" onclick="closeModal()">×</button>
-                <div class="modal-header">⚠️ CONFIRM PATIENT DELETION</div>
-                <p><strong>Patient:</strong> {patient_to_delete['patient_name']}</p>
-                <p><strong>ID:</strong> {patient_to_delete['patient_id']}</p>
-                <div class="modal-warning">
-                    <strong>This will permanently delete:</strong><br>
-                    • Patient information<br>
-                    • All visits and consultations<br>
-                    • All prescriptions<br>
-                    • All lab results<br><br>
-                    <strong style="color: #dc3545;">⚠️ This action CANNOT be undone!</strong>
-                </div>
-            </div>
-        </div>
-        <script>
-        function closeModal() {{
-            // Trigger the cancel button click to close modal
-            const cancelBtn = document.querySelector('[data-testid="baseButton-secondary"]:contains("CANCEL")');
-            if (cancelBtn) {{
-                cancelBtn.click();
-            }} else {{
-                // Fallback: try to find cancel button by different selector
-                const buttons = document.querySelectorAll('button');
-                for (let btn of buttons) {{
-                    if (btn.textContent.includes('CANCEL')) {{
-                        btn.click();
-                        break;
-                    }}
-                }}
-            }}
-        }}
-        </script>
         """, unsafe_allow_html=True)
         
-        # Create modal dialog using Streamlit modal approach
+        # Create prominent modal dialog
+        st.markdown('<div class="deletion-modal"></div>', unsafe_allow_html=True)
+        
         with st.container():
-            st.markdown("---")
-            st.markdown("### 🚨 PATIENT DELETION CONFIRMATION")
+            st.markdown('<div class="deletion-content">', unsafe_allow_html=True)
             
-            # Close button in top right
-            close_col1, close_col2, close_col3 = st.columns([4, 1, 1])
-            with close_col3:
-                if st.button("✕", key="close_delete_modal", help="Close", use_container_width=True):
+            # Header with close button
+            header_col1, header_col2, header_col3 = st.columns([1, 6, 1])
+            with header_col1:
+                st.markdown("")  # spacer
+            with header_col2:
+                st.markdown("## 🚨 CONFIRM PATIENT DELETION")
+            with header_col3:
+                if st.button("✕", key="close_delete_modal", help="Close"):
                     del st.session_state.confirm_delete
                     st.rerun()
             
-            # Center the modal content
-            col1, col2, col3 = st.columns([1, 3, 1])
-            with col2:
-                st.error(f"⚠️ **DELETE PATIENT: {patient_to_delete['patient_name']}**")
-                st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
-                
-                st.markdown("""
-                <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 8px; margin: 15px 0; color: #721c24;">
-                    <strong>⚠️ WARNING: This will permanently delete:</strong><br>
-                    • All patient information<br>
-                    • All visits and consultations<br>
-                    • All prescriptions and lab results<br>
-                    • All medical history and photos<br><br>
-                    <strong style="color: #dc3545;">This action CANNOT be undone!</strong>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.markdown("---")
-                
-                # Confirmation buttons
-                col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-                with col_btn1:
-                    if st.button("🗑️ DELETE FOREVER", type="primary", key="confirm_delete_btn", use_container_width=True):
-                        if db.delete_patient(patient_to_delete['patient_id']):
-                            st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
-                            del st.session_state.confirm_delete
-                            st.rerun()
-                        else:
-                            st.error("❌ Failed to delete patient.")
-                
-                with col_btn2:
-                    if st.button("❌ CANCEL", key="cancel_delete_btn", use_container_width=True):
-                        del st.session_state.confirm_delete
-                        st.rerun()
-                
-                with col_btn3:
-                    # Click outside to close functionality
-                    st.markdown("""
-                    <div style="font-size: 12px; color: #666; text-align: center; margin-top: 10px;">
-                        Tap outside to close
-                    </div>
-                    """, unsafe_allow_html=True)
+            st.markdown("---")
+            
+            # Patient information
+            st.error(f"**Patient to Delete: {patient_to_delete['patient_name']}**")
+            st.markdown(f"**Patient ID:** {patient_to_delete['patient_id']}")
+            
+            # Warning message
+            st.markdown("""
+            <div style="background-color: #f8d7da; border: 2px solid #dc3545; padding: 20px; border-radius: 10px; margin: 20px 0; color: #721c24;">
+                <h4 style="color: #dc3545; margin-top: 0;">⚠️ WARNING: This will permanently delete:</h4>
+                <ul style="margin: 10px 0;">
+                    <li>All patient information and demographics</li>
+                    <li>All visits and consultations</li>
+                    <li>All prescriptions and lab results</li>
+                    <li>All medical history and photos</li>
+                    <li>All family member relationships</li>
+                </ul>
+                <h4 style="color: #dc3545; text-align: center; margin-bottom: 0;">THIS ACTION CANNOT BE UNDONE!</h4>
+            </div>
+            """, unsafe_allow_html=True)
             
             st.markdown("---")
+            
+            # Action buttons - prominently displayed
+            st.markdown("### Choose an action:")
+            
+            button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
+            
+            with button_col1:
+                if st.button("🗑️ DELETE FOREVER", 
+                           type="primary", 
+                           key="confirm_delete_btn", 
+                           use_container_width=True,
+                           help="This will permanently delete the patient"):
+                    if db.delete_patient(patient_to_delete['patient_id']):
+                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
+                        del st.session_state.confirm_delete
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to delete patient.")
+            
+            with button_col2:
+                if st.button("❌ CANCEL", 
+                           key="cancel_delete_btn", 
+                           use_container_width=True,
+                           help="Cancel deletion and return"):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            with button_col3:
+                st.markdown("")  # spacer
+            
+            st.markdown("---")
+            
+            # Add a prominent "click anywhere outside" area
+            st.markdown("### Click outside this box to cancel:")
+            
+            # Create an invisible clickable area that closes the modal
+            outside_col1, outside_col2, outside_col3 = st.columns([1, 2, 1])
+            
+            with outside_col1:
+                if st.button("Cancel (Click Here)", key="outside_cancel_left", use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            with outside_col3:
+                if st.button("Cancel (Click Here)", key="outside_cancel_right", use_container_width=True):
+                    del st.session_state.confirm_delete
+                    st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        # Add script to auto-scroll to modal
+        # Auto-scroll to modal without JavaScript
         st.markdown("""
-        <script>
-        setTimeout(function() {
-            // Scroll to the modal section
-            const modalSection = document.querySelector('h3').parentElement;
-            if (modalSection) {
-                modalSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 100);
-        </script>
+        <style>
+        .deletion-modal {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        </style>
         """, unsafe_allow_html=True)
         
         return  # Don't show rest of page when modal is active
