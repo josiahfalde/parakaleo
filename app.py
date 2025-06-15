@@ -1646,7 +1646,11 @@ def new_patient_form():
     elif 'family_vital_signs_queue' in st.session_state and st.session_state.family_vital_signs_queue:
         current_index = st.session_state.get('current_family_vital_index', 0)
         
-
+        # Debug information
+        st.write(f"DEBUG: Family vital signs queue - {len(st.session_state.family_vital_signs_queue)} members")
+        st.write(f"DEBUG: Current index: {current_index}")
+        for i, member in enumerate(st.session_state.family_vital_signs_queue):
+            st.write(f"DEBUG: Member {i}: {member['patient_name']} ({member['relationship']})")
         
         if current_index < len(st.session_state.family_vital_signs_queue):
             current_member = st.session_state.family_vital_signs_queue[current_index]
@@ -3487,75 +3491,7 @@ def patient_management():
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create overlay and centered modal
-        st.markdown("""
-        <style>
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 1000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .delete-modal {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 50px rgba(0,0,0,0.8);
-            border: 3px solid #dc3545;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            position: relative;
-            z-index: 1001;
-        }
-        .modal-header {
-            text-align: center;
-            color: #dc3545;
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .modal-content {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .modal-warning {
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }
-        </style>
-        <div class="modal-overlay">
-            <div class="delete-modal">
-                <div class="modal-header">⚠️ CONFIRM PATIENT DELETION</div>
-                <div class="modal-content">
-                    <p><strong>Patient:</strong> {patient_name}</p>
-                    <p><strong>ID:</strong> {patient_id}</p>
-                </div>
-                <div class="modal-warning">
-                    <strong>This will permanently delete:</strong><br>
-                    • Patient information<br>
-                    • All visits and consultations<br>
-                    • All prescriptions<br>
-                    • All lab results<br><br>
-                    <strong>This action CANNOT be undone!</strong>
-                </div>
-            </div>
-        </div>
-        """.format(
-            patient_name=patient_to_delete['patient_name'],
-            patient_id=patient_to_delete['patient_id']
-        ), unsafe_allow_html=True)
+
         
         # Create the buttons in Streamlit
         st.markdown("### ")  # Add spacing
