@@ -1886,6 +1886,114 @@ def daily_reports():
         st.metric("Prescriptions", prescriptions_written)
     with col4:
         st.metric("Lab Tests", lab_tests_ordered)
+    
+    st.markdown("---")
+    
+    # Export functionality
+    st.markdown("### Export Today's Data")
+    
+    if st.button("Export Today's Data", type="primary"):
+        export_data = generate_daily_export()
+        
+        # Create downloadable CSV
+        csv_data = export_data.to_csv(index=False)
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        filename = f"parakaleo_clinic_data_{today_date}.csv"
+        
+        st.download_button(
+            label="Download CSV File",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv"
+        )
+        
+        st.success("Data exported successfully!")
+    
+    # OneDrive backup instructions
+    with st.expander("OneDrive Backup Instructions"):
+        st.markdown("""
+        **To backup your clinic data to OneDrive:**
+        
+        1. **Download the CSV file** using the "Export Today's Data" button above
+        
+        2. **Open OneDrive app** on your iPad:
+           - Look for the blue OneDrive icon on your home screen
+           - Sign in with your Microsoft account if needed
+        
+        3. **Upload the file**:
+           - Tap the "+" button in OneDrive
+           - Select "Upload files"
+           - Choose the downloaded CSV file from your Downloads folder
+        
+        4. **Organize in folders**:
+           - Create a folder called "ParakaleoMed Backups"
+           - Create subfolders by date (e.g., "2025-06-15")
+           - Move your daily export files into the appropriate date folder
+        
+        5. **Automatic sync**:
+           - OneDrive will automatically sync to the cloud
+           - Access your data from any device by logging into OneDrive
+        
+        **Important**: Export and backup data daily to ensure no patient information is lost.
+        """)
+
+def generate_daily_export():
+    """Generate comprehensive daily data export"""
+    import pandas as pd
+    
+    conn = sqlite3.connect(db.db_name)
+    
+    # Get today's data
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Export patients visited today
+    patients_query = '''
+        SELECT p.patient_id, p.name, p.age, p.gender, v.visit_date, v.status
+        FROM patients p
+        JOIN visits v ON p.patient_id = v.patient_id
+        WHERE DATE(v.visit_date) = ?
+    '''
+    
+    patients_df = pd.read_sql_query(patients_query, conn, params=[today])
+    
+    # Export prescriptions from today
+    prescriptions_query = '''
+        SELECT pr.medication_name, pr.dosage, pr.frequency, pr.duration, 
+               pr.awaiting_lab, p.name as patient_name, p.patient_id
+        FROM prescriptions pr
+        JOIN visits v ON pr.visit_id = v.visit_id
+        JOIN patients p ON v.patient_id = p.patient_id
+        WHERE DATE(pr.prescribed_time) = ?
+    '''
+    
+    prescriptions_df = pd.read_sql_query(prescriptions_query, conn, params=[today])
+    
+    # Export lab tests from today
+    lab_tests_query = '''
+        SELECT lt.test_type, lt.status, lt.results, p.name as patient_name, p.patient_id
+        FROM lab_tests lt
+        JOIN visits v ON lt.visit_id = v.visit_id
+        JOIN patients p ON v.patient_id = p.patient_id
+        WHERE DATE(lt.ordered_time) = ?
+    '''
+    
+    lab_tests_df = pd.read_sql_query(lab_tests_query, conn, params=[today])
+    
+    conn.close()
+    
+    # Combine all data into one export
+    export_data = pd.DataFrame()
+    
+    if not patients_df.empty:
+        export_data = pd.concat([export_data, patients_df.add_prefix('patient_')], ignore_index=True)
+    
+    if not prescriptions_df.empty:
+        export_data = pd.concat([export_data, prescriptions_df.add_prefix('prescription_')], ignore_index=True)
+    
+    if not lab_tests_df.empty:
+        export_data = pd.concat([export_data, lab_tests_df.add_prefix('lab_')], ignore_index=True)
+    
+    return export_data
 
 def clinic_settings():
     st.markdown("### Clinic Settings")
