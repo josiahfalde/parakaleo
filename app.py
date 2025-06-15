@@ -1648,10 +1648,8 @@ def main():
         st.session_state.user_role = None
     
     if st.session_state.user_role is None:
-        # Center the ParakaleoMed logo
-        st.markdown('<div style="display: flex; justify-content: center; margin-bottom: 30px;">', unsafe_allow_html=True)
-        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Display ParakaleoMed logo without extra spacing
+        st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=400)
         
         st.markdown("### Select Your Role")
         
