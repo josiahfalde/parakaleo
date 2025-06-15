@@ -2090,10 +2090,212 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             needs_ophthalmology = st.checkbox("Patient needs to see ophthalmologist after receiving medications", key=f"ophth_{visit_id}")
             
             if st.form_submit_button("Complete Consultation", type="primary"):
-                lab_tests.append("Urinalysis")
-        with col2:
-            if st.checkbox("Blood Glucose"):
-                lab_tests.append("Blood Glucose")
+                if doctor_name and chief_complaint:
+                    try:
+                        # Use the database manager methods instead of direct connection
+                        # Save consultation
+                        db_conn = sqlite3.connect(db_manager.db_name, timeout=10.0)
+                        db_conn.execute('BEGIN IMMEDIATE')
+                        cursor = db_conn.cursor()
+                        
+                        cursor.execute('''
+                            INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
+                                                     symptoms, diagnosis, treatment_plan, notes, 
+                                                     needs_ophthalmology, consultation_time)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (visit_id, doctor_name, chief_complaint, symptoms, diagnosis, 
+                              treatment_plan, notes, needs_ophthalmology, datetime.now().isoformat()))
+                        
+                        # Update visit status first
+                        if needs_ophthalmology:
+                            new_status = 'needs_ophthalmology'
+                        elif selected_medications:
+                            new_status = 'prescribed'
+                        elif lab_tests:
+                            new_status = 'waiting_lab'
+                        else:
+                            new_status = 'completed'
+                        
+                        cursor.execute('''
+                            UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
+                        ''', (datetime.now().isoformat(), new_status, visit_id))
+                        
+                        db_conn.commit()
+                        db_conn.close()
+                        
+                        # Now handle lab tests and prescriptions using separate connections
+                        for test_type in lab_tests:
+                            db_manager.order_lab_test(visit_id, test_type, doctor_name)
+                        
+                        for med in selected_medications:
+                            if med['name']:
+                                # Add prescription with indication
+                                conn_med = sqlite3.connect(db_manager.db_name)
+                                cursor_med = conn_med.cursor()
+                                cursor_med.execute('''
+                                    INSERT INTO prescriptions (visit_id, medication_name, 
+                                                             dosage, frequency, duration, instructions, 
+                                                             indication, awaiting_lab, prescribed_time)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                ''', (visit_id, med['name'], med['dosage'], 
+                                      med['frequency'], med['duration'], med['instructions'],
+                                      med.get('indication', ''), med['awaiting_lab'], 
+                                      datetime.now().isoformat()))
+                                conn_med.commit()
+                                conn_med.close()
+                        
+                        st.success("Consultation completed successfully!")
+                        
+                        if lab_tests:
+                            st.info(f"Lab tests ordered: {', '.join(lab_tests)}")
+                        
+                        if selected_medications:
+                            awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                            ready_count = len(selected_medications) - awaiting_count
+                            
+                            if ready_count > 0:
+                                st.info(f"{ready_count} prescriptions sent to pharmacy.")
+                            if awaiting_count > 0:
+                                st.info(f"{awaiting_count} prescriptions awaiting lab results.")
+                        
+                        # Update doctor status back to available
+                        db_manager.update_doctor_status(st.session_state.doctor_name, "available")
+                        
+                        # Clear current consultation and return to doctor interface
+                        if 'current_consultation' in st.session_state:
+                            del st.session_state.current_consultation
+                        if 'active_consultation' in st.session_state:
+                            del st.session_state.active_consultation
+                        
+                        # Save patient history to database
+                        history_conn = sqlite3.connect(db_manager.db_name)
+                        history_cursor = history_conn.cursor()
+                        history_cursor.execute('''
+                            UPDATE patients 
+                            SET medical_history = ?, allergies = ?
+                            WHERE patient_id = ?
+                        ''', (f"Surgical: {surgical_history}\nMedical: {medical_history}", 
+                              f"Allergies: {allergies}\nCurrent Meds: {current_medications}", 
+                              patient_id))
+                        history_conn.commit()
+                        history_conn.close()
+                        
+                        # Save any photos that were captured during this consultation
+                        if f"symptom_photos_{visit_id}" in st.session_state:
+                            # Get photo count before clearing
+                            photo_count = len(st.session_state[f"symptom_photos_{visit_id}"])
+                            
+                            for photo in st.session_state[f"symptom_photos_{visit_id}"]:
+                                db_manager.save_patient_photo(
+                                    visit_id=visit_id,
+                                    patient_id=patient_id,
+                                    photo_data=photo['data'],
+                                    description=photo['description']
+                                )
+                            
+                            # Clear photos from session state after saving
+                            del st.session_state[f"symptom_photos_{visit_id}"]
+                            
+                            if photo_count > 0:
+                                st.info(f"Saved {photo_count} photos to patient record.")
+                        
+                        # If this is a family consultation, show children consultations below
+                        if is_family_consultation:
+                            st.session_state.show_family_children = True
+                        else:
+                            st.session_state.page = 'doctor'
+                            st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"Error completing consultation: {str(e)}")
+                        # No need to handle db_conn here since it's handled in the try block
+                else:
+                    st.error("Please fill in required fields: Doctor Name and Chief Complaint")
+
+    # Show family children consultations if this is a family consultation and parent is complete
+    if is_family_consultation and st.session_state.get('show_family_children', False):
+        st.markdown("---")
+        st.markdown("### 👶 Children Consultations")
+        
+        family_data = st.session_state.family_consultation
+        children_visits = [visit for visit in family_data['family_visits'] if visit['relationship'] != 'parent']
+        
+        for i, child_visit in enumerate(children_visits):
+            with st.expander(f"👶 {child_visit['patient_name']} (ID: {child_visit['patient_id']})", expanded=i == 0):
+                st.markdown(f"**Visit ID:** {child_visit['visit_id']}")
+                
+                # Child consultation form
+                with st.form(f"child_consultation_{child_visit['visit_id']}"):
+                    st.markdown("#### Child Consultation")
+                    
+                    child_chief_complaint = st.text_area("Chief Complaint", placeholder="What brought this child in?", key=f"child_cc_{child_visit['visit_id']}")
+                    child_symptoms = st.text_area("Symptoms", placeholder="Symptoms observed/reported", key=f"child_symptoms_{child_visit['visit_id']}")
+                    child_diagnosis = st.text_area("Diagnosis", key=f"child_diagnosis_{child_visit['visit_id']}")
+                    child_treatment = st.text_area("Treatment Plan", key=f"child_treatment_{child_visit['visit_id']}")
+                    child_notes = st.text_area("Notes", key=f"child_notes_{child_visit['visit_id']}")
+                    
+                    # Simple medication selection for children
+                    st.markdown("#### Child Medications")
+                    child_meds = []
+                    common_child_meds = ["Acetaminophen", "Ibuprofen", "Amoxicillin", "Multivitamin"]
+                    
+                    for med_name in common_child_meds:
+                        if st.checkbox(med_name, key=f"child_med_{med_name}_{child_visit['visit_id']}"):
+                            dosage = st.text_input(f"{med_name} Dosage", placeholder="Child-appropriate dosage", key=f"child_dose_{med_name}_{child_visit['visit_id']}")
+                            if dosage:
+                                child_meds.append({'name': med_name, 'dosage': dosage})
+                    
+                    if st.form_submit_button(f"Complete {child_visit['patient_name']} Consultation", type="primary"):
+                        if child_chief_complaint:
+                            # Save child consultation
+                            child_conn = sqlite3.connect(db_manager.db_name)
+                            child_cursor = child_conn.cursor()
+                            
+                            child_cursor.execute('''
+                                INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
+                                                         symptoms, diagnosis, treatment_plan, notes, 
+                                                         consultation_time)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (child_visit['visit_id'], doctor_name, child_chief_complaint, 
+                                  child_symptoms, child_diagnosis, child_treatment, child_notes, 
+                                  datetime.now().isoformat()))
+                            
+                            # Update child visit status
+                            child_cursor.execute('''
+                                UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
+                            ''', (datetime.now().isoformat(), 'prescribed' if child_meds else 'completed', child_visit['visit_id']))
+                            
+                            child_conn.commit()
+                            child_conn.close()
+                            
+                            # Save child medications
+                            for med in child_meds:
+                                child_med_conn = sqlite3.connect(db_manager.db_name)
+                                child_med_cursor = child_med_conn.cursor()
+                                child_med_cursor.execute('''
+                                    INSERT INTO prescriptions (visit_id, medication_name, dosage, 
+                                                             frequency, duration, prescribed_time)
+                                    VALUES (?, ?, ?, ?, ?, ?)
+                                ''', (child_visit['visit_id'], med['name'], med['dosage'], 
+                                      "As directed", "As needed", datetime.now().isoformat()))
+                                child_med_conn.commit()
+                                child_med_conn.close()
+                            
+                            st.success(f"✅ {child_visit['patient_name']} consultation completed!")
+                            st.rerun()
+                        else:
+                            st.error("Please enter chief complaint for the child.")
+        
+        # Complete family consultation button
+        if st.button("Complete Family Consultation", type="primary", use_container_width=True):
+            # Clear family consultation data
+            if 'family_consultation' in st.session_state:
+                del st.session_state.family_consultation
+            if 'show_family_children' in st.session_state:
+                del st.session_state.show_family_children
+            
+            st.session_state.page = 'doctor'
+            st.rerun()
         with col3:
             if st.checkbox("Pregnancy Test"):
                 lab_tests.append("Pregnancy Test")
