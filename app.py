@@ -1507,6 +1507,7 @@ def triage_interface():
         patient_queue_view()
 
 def new_patient_form():
+    add_to_history('new_patient_form')
     st.markdown("### Register New Patient")
     
     # Registration type selection
@@ -1948,6 +1949,7 @@ def new_patient_form():
 
 
 def existing_patient_search():
+    add_to_history('existing_patient_search')
     st.markdown("### Find Existing Patient")
     
     search_query = st.text_input("Search by Name or Patient ID", placeholder="Enter name or ID (e.g., 00001)")
@@ -2097,6 +2099,7 @@ def vital_signs_form(visit_id: str):
             st.rerun()
 
 def patient_queue_view():
+    add_to_history('patient_queue')
     st.markdown("### Current Patient Queue")
     
     conn = sqlite3.connect(db.db_name)
@@ -2181,6 +2184,7 @@ def doctor_interface():
         consultation_history()
 
 def consultation_interface():
+    add_to_history('consultation_interface')
     st.markdown("### Select Patient for Consultation")
     
     # Get patients waiting for consultation
@@ -3723,6 +3727,8 @@ def completed_lab_tests():
         st.info("No lab tests completed today.")
 
 def patient_management():
+    add_to_history('patient_management')
+    show_back_button()
     st.markdown("### Patient Management")
     
     # Get all patients first
@@ -3906,6 +3912,8 @@ def admin_interface():
 
 def doctor_management():
     """Admin interface for managing doctors"""
+    add_to_history('doctor_management')
+    show_back_button()
     st.markdown("### Doctor Management")
     
     db = get_db_manager()
