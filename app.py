@@ -1604,7 +1604,7 @@ def main():
         st.image("attached_assets/ChatGPT Image Jun 15, 2025, 05_27_41 PM_1750022867924.png", width=300)
     
     # Navigation buttons in a cleaner horizontal layout
-    nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 2, 6])
+    nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([2, 2, 4, 4])
     
     with nav_col1:
         if st.button("← Back", key="back_button", help="Previous page", use_container_width=True):
