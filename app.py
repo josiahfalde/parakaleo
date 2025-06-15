@@ -4718,36 +4718,34 @@ def onedrive_integration():
         st.markdown("**Step 1: Authentication**")
         st.write("Click the button below to authenticate with your Microsoft OneDrive account.")
         
-        if st.form_submit_button("Authenticate with OneDrive", type="primary"):
+        # Form inputs
+        backup_frequency = st.selectbox("Backup Frequency", 
+                                      ["Manual", "Daily", "Weekly"])
+        
+        folder_name = st.text_input("OneDrive Folder Name", 
+                                  value="ParakaleoMed Backups")
+        
+        if st.form_submit_button("Setup OneDrive Backup", type="primary"):
             # In a real implementation, this would redirect to Microsoft OAuth
-            st.success("Connected to OneDrive successfully!")
+            st.success("OneDrive backup configured successfully!")
             st.session_state.onedrive_connected = True
             
-            # Show backup options
-            st.markdown("**Step 2: Configure Backup**")
-            backup_frequency = st.selectbox("Backup Frequency", 
-                                          ["Manual", "Daily", "Weekly"])
+            st.success(f"Backup configured: {backup_frequency} to folder '{folder_name}'")
             
-            folder_name = st.text_input("OneDrive Folder Name", 
-                                      value="ParakaleoMed Backups")
+            # Generate and prepare data for upload
+            export_data = generate_daily_export()
+            csv_data = export_data.to_csv(index=False)
+            today_date = datetime.now().strftime("%Y-%m-%d")
+            filename = f"parakaleo_clinic_data_{today_date}.csv"
             
-            if st.button("Setup Automatic Backup"):
-                st.success(f"Backup configured: {backup_frequency} to folder '{folder_name}'")
-                
-                # Generate and prepare data for upload
-                export_data = generate_daily_export()
-                csv_data = export_data.to_csv(index=False)
-                today_date = datetime.now().strftime("%Y-%m-%d")
-                filename = f"parakaleo_clinic_data_{today_date}.csv"
-                
-                st.download_button(
-                    label="Download for Manual Upload to OneDrive",
-                    data=csv_data,
-                    file_name=filename,
-                    mime="text/csv"
-                )
-                
-                st.info("File prepared for OneDrive backup. Use the download button above to get the file, then upload it to your OneDrive folder.")
+            st.download_button(
+                label="Download for Manual Upload to OneDrive",
+                data=csv_data,
+                file_name=filename,
+                mime="text/csv"
+            )
+            
+            st.info("File prepared for OneDrive backup. Use the download button above to get the file, then upload it to your OneDrive folder.")
     
     # Manual backup section
     st.markdown("---")
