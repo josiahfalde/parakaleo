@@ -160,6 +160,7 @@ class DatabaseManager:
                 diagnosis TEXT,
                 treatment_plan TEXT,
                 notes TEXT,
+                needs_ophthalmology INTEGER DEFAULT 0,
                 consultation_time TEXT,
                 FOREIGN KEY (visit_id) REFERENCES visits (visit_id)
             )
@@ -176,6 +177,7 @@ class DatabaseManager:
                 frequency TEXT,
                 duration TEXT,
                 instructions TEXT,
+                indication TEXT,
                 status TEXT DEFAULT 'pending',
                 awaiting_lab TEXT DEFAULT 'no',
                 prescribed_time TEXT,
@@ -194,6 +196,18 @@ class DatabaseManager:
         # Add oxygen saturation column if it doesn't exist
         try:
             cursor.execute('ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Add needs_ophthalmology column if it doesn't exist
+        try:
+            cursor.execute('ALTER TABLE consultations ADD COLUMN needs_ophthalmology INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Add indication column if it doesn't exist
+        try:
+            cursor.execute('ALTER TABLE prescriptions ADD COLUMN indication TEXT')
         except sqlite3.OperationalError:
             pass  # Column already exists
         
@@ -824,30 +838,16 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Display header with correct Parakaleo logo
+    # Display header with hospital emoji that navigates home
     col1, col2 = st.columns([1, 8])
     with col1:
-        # Correct Parakaleo logo based on user's image - interlocking colorful rings
-        st.markdown('''
-        <div style="display: flex; align-items: center; justify-content: center; height: 60px;">
-        <svg width="45" height="45" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <g transform="translate(50, 50)">
-            <!-- Orange ring -->
-            <circle cx="-15" cy="-15" r="20" fill="none" stroke="#FF8C00" stroke-width="4" opacity="0.8"/>
-            <!-- Blue ring -->
-            <circle cx="15" cy="-15" r="20" fill="none" stroke="#4A90E2" stroke-width="4" opacity="0.8"/>
-            <!-- Green ring -->
-            <circle cx="15" cy="15" r="20" fill="none" stroke="#50C878" stroke-width="4" opacity="0.8"/>
-            <!-- Purple ring -->
-            <circle cx="-15" cy="15" r="20" fill="none" stroke="#9B59B6" stroke-width="4" opacity="0.8"/>
-            <!-- Yellow center ring -->
-            <circle cx="0" cy="0" r="18" fill="none" stroke="#F1C40F" stroke-width="4" opacity="0.8"/>
-            <!-- Red inner ring -->
-            <circle cx="0" cy="0" r="12" fill="none" stroke="#E74C3C" stroke-width="3" opacity="0.8"/>
-          </g>
-        </svg>
-        </div>
-        ''', unsafe_allow_html=True)
+        if st.button("🏥", key="home_button", help="Return to main menu"):
+            # Clear all session states to return to home
+            keys_to_keep = ['clinic_location']
+            keys_to_clear = [k for k in st.session_state.keys() if k not in keys_to_keep]
+            for key in keys_to_clear:
+                del st.session_state[key]
+            st.rerun()
     with col2:
         st.markdown('<h1 style="margin-top: 15px; margin-bottom: 0;">ParakaleoMed</h1>', unsafe_allow_html=True)
         st.markdown("*Mission Trip Patient Management*")
@@ -898,6 +898,8 @@ def main():
             if st.button("Admin", key="admin", type="primary", use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
+        with col4:
+            pass  # Empty column for proper spacing
         
         st.markdown("---")
         st.info("This system works offline and stores all patient data locally for mission trips in remote areas.")
@@ -2337,17 +2339,101 @@ def patient_management():
         st.warning("⚠️ Deleting a patient will permanently remove all their data including visits, prescriptions, and lab results.")
         
         for patient in filtered_patients:
-            with st.container():
-                st.markdown(f"""
-                <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 5px;">
-                    <h4>{patient['name']}</h4>
-                    <p><strong>ID:</strong> {patient['patient_id']}</p>
-                    <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
-                    <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
-                    <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
-                </div>
-                """, unsafe_allow_html=True)
+            with st.expander(f"{patient['name']} (ID: {patient['patient_id']})", expanded=False):
+                # Basic patient info
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Age:** {patient['age'] or 'Not specified'}")
+                    st.write(f"**Gender:** {patient['gender'] or 'Not specified'}")
+                    st.write(f"**Phone:** {patient['phone'] or 'Not provided'}")
                 
+                with col2:
+                    st.write(f"**Emergency Contact:** {patient['emergency_contact'] or 'Not provided'}")
+                    st.write(f"**Last Visit:** {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}")
+                
+                # Medical history
+                if patient['medical_history']:
+                    st.markdown("**Medical History:**")
+                    st.text(patient['medical_history'])
+                
+                if patient['allergies']:
+                    st.markdown("**Allergies:**")
+                    st.text(patient['allergies'])
+                
+                # Get visit history
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT v.visit_id, v.visit_date, v.status, c.chief_complaint, c.diagnosis, c.doctor_name
+                    FROM visits v
+                    LEFT JOIN consultations c ON v.visit_id = c.visit_id
+                    WHERE v.patient_id = ?
+                    ORDER BY v.visit_date DESC
+                ''', (patient['patient_id'],))
+                
+                visits = cursor.fetchall()
+                
+                # Get prescriptions for this patient
+                cursor.execute('''
+                    SELECT p.medication_name, p.dosage, p.frequency, p.duration, p.indication, p.prescription_time
+                    FROM prescriptions p
+                    JOIN visits v ON p.visit_id = v.visit_id
+                    WHERE v.patient_id = ?
+                    ORDER BY p.prescription_time DESC
+                ''', (patient['patient_id'],))
+                
+                prescriptions = cursor.fetchall()
+                
+                # Get lab tests for this patient
+                cursor.execute('''
+                    SELECT test_type, status, results, test_time
+                    FROM lab_tests
+                    WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)
+                    ORDER BY test_time DESC
+                ''', (patient['patient_id'],))
+                
+                lab_tests = cursor.fetchall()
+                conn.close()
+                
+                # Display visit history
+                if visits:
+                    st.markdown("**Visit History:**")
+                    for visit in visits:
+                        visit_id, visit_date, status, chief_complaint, diagnosis, doctor_name = visit
+                        with st.container():
+                            st.markdown(f"""
+                            <div style="border: 1px solid #eee; padding: 10px; margin: 5px 0; border-radius: 5px; background-color: #f9f9f9;">
+                                <strong>Date:</strong> {visit_date[:10]}<br>
+                                <strong>Status:</strong> {status.replace('_', ' ').title()}<br>
+                                {f'<strong>Doctor:</strong> {doctor_name}<br>' if doctor_name else ''}
+                                {f'<strong>Chief Complaint:</strong> {chief_complaint}<br>' if chief_complaint else ''}
+                                {f'<strong>Diagnosis:</strong> {diagnosis}' if diagnosis else ''}
+                            </div>
+                            """, unsafe_allow_html=True)
+                
+                # Display prescriptions
+                if prescriptions:
+                    st.markdown("**Prescription History:**")
+                    for prescription in prescriptions:
+                        med_name, dosage, frequency, duration, indication, prescription_time = prescription
+                        st.markdown(f"• **{med_name}** - {dosage} {frequency} for {duration}")
+                        if indication:
+                            st.markdown(f"  *Indication: {indication}*")
+                        st.caption(f"Prescribed: {prescription_time[:10]}")
+                
+                # Display lab tests
+                if lab_tests:
+                    st.markdown("**Lab Test History:**")
+                    for lab_test in lab_tests:
+                        test_type, status, results, test_time = lab_test
+                        st.markdown(f"• **{test_type}** - {status.title()}")
+                        if results:
+                            st.markdown(f"  *Results: {results}*")
+                        st.caption(f"Ordered: {test_time[:10]}")
+                
+                # Delete button
+                st.markdown("---")
                 if st.button(f"Delete Patient", key=f"delete_{patient['patient_id']}", type="secondary"):
                     # Store the patient to delete in session state
                     st.session_state.confirm_delete = {
