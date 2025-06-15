@@ -3610,163 +3610,66 @@ def patient_management():
                 
                 st.markdown("---")
         
-    # Show deletion confirmation dialog as overlay popup
+    # Show deletion confirmation dialog
     if 'confirm_delete' in st.session_state:
         patient_to_delete = st.session_state.confirm_delete
         
-        # Create full-screen overlay with centered modal
-        st.markdown("""
-        <style>
-        .modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            pointer-events: auto;
-        }
-        .deletion-modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            border: 4px solid #dc3545;
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            z-index: 1001;
-            animation: modalAppear 0.3s ease-out;
-        }
-        @keyframes modalAppear {
-            from { 
-                opacity: 0; 
-                transform: translate(-50%, -50%) scale(0.9); 
-            }
-            to { 
-                opacity: 1; 
-                transform: translate(-50%, -50%) scale(1); 
-            }
-        }
-        </style>
-        <div class="modal-backdrop"></div>
-        """, unsafe_allow_html=True)
+        st.markdown("---")
+        st.error("# 🚨 CONFIRM PATIENT DELETION")
+        st.markdown("---")
         
-        with st.container():
-            st.markdown('<div class="deletion-modal">', unsafe_allow_html=True)
-            
-            # Header with close button
-            header_col1, header_col2, header_col3 = st.columns([1, 4, 1])
-            with header_col1:
-                st.markdown("")
-            with header_col2:
-                st.markdown("## 🚨 CONFIRM PATIENT DELETION")
-            with header_col3:
-                if st.button("✕", key="close_modal", help="Close", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            st.markdown("---")
-            
-            # Patient info
-            st.error(f"**Patient: {patient_to_delete['patient_name']}**")
-            st.markdown(f"**Patient ID: {patient_to_delete['patient_id']}**")
-            
-            st.markdown("---")
-            
-            # Main action buttons
-            button_col1, button_col2, button_col3 = st.columns([1, 1, 1])
-            
-            with button_col1:
-                if st.button("🗑️ DELETE FOREVER", 
-                           type="primary", 
-                           key="confirm_delete_btn", 
-                           use_container_width=True):
-                    try:
-                        # Force delete with detailed error checking
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        
-                        # Manual deletion process with detailed logging
-                        patient_id = patient_to_delete['patient_id']
-                        
-                        # Delete in specific order to avoid foreign key issues
-                        cursor.execute('PRAGMA foreign_keys = OFF')
-                        
-                        # Delete vital signs first
-                        cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                        
-                        # Delete prescriptions
-                        cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                        
-                        # Delete lab tests and results
-                        cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                        
-                        # Delete consultations
-                        cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
-                        
-                        # Delete visits
-                        cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
-                        
-                        # Delete family relationships
-                        cursor.execute('DELETE FROM family_members WHERE patient_id = ? OR parent_id = ?', (patient_id, patient_id))
-                        
-                        # Finally delete patient
-                        cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        st.success(f"✅ Patient {patient_to_delete['patient_name']} deleted successfully.")
-                        del st.session_state.confirm_delete
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"❌ Error deleting patient: {str(e)}")
-                        # Try alternative deletion method
-                        try:
-                            success = db.delete_patient(patient_to_delete['patient_id'])
-                            if success:
-                                st.success(f"✅ Patient deleted using backup method.")
-                                del st.session_state.confirm_delete
-                                st.rerun()
-                        except:
-                            pass
-            
-            with button_col2:
-                if st.button("❌ CANCEL", 
-                           key="cancel_delete_btn", 
-                           use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            with button_col3:
-                # Alternative close button for mobile
-                if st.button("Close", key="close_alt", use_container_width=True):
-                    del st.session_state.confirm_delete
-                    st.rerun()
-            
-            st.markdown("---")
-            
-            # Warning
-            st.warning("""
-**⚠️ WARNING: This will permanently delete:**
-- All patient information and demographics
-- All visits and consultations  
-- All prescriptions and lab results
-- All medical history and photos
-- All family member relationships
-
-**THIS ACTION CANNOT BE UNDONE!**
-            """)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+        # Patient info
+        st.markdown(f"**Patient: {patient_to_delete['patient_name']}**")
+        st.markdown(f"**Patient ID: {patient_to_delete['patient_id']}**")
+        
+        st.markdown("---")
+        
+        # Action buttons
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            if st.button("🗑️ DELETE FOREVER", 
+                       type="primary", 
+                       key="confirm_delete_btn", 
+                       use_container_width=True):
+                # Simple deletion - disable foreign keys and delete everything
+                conn = sqlite3.connect(db.db_name)
+                cursor = conn.cursor()
+                cursor.execute('PRAGMA foreign_keys = OFF')
+                
+                patient_id = patient_to_delete['patient_id']
+                
+                # Delete all related data
+                cursor.execute('DELETE FROM vital_signs WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                cursor.execute('DELETE FROM prescriptions WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                cursor.execute('DELETE FROM lab_tests WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                cursor.execute('DELETE FROM consultations WHERE visit_id IN (SELECT visit_id FROM visits WHERE patient_id = ?)', (patient_id,))
+                cursor.execute('DELETE FROM visits WHERE patient_id = ?', (patient_id,))
+                cursor.execute('DELETE FROM family_members WHERE patient_id = ? OR parent_id = ?', (patient_id, patient_id))
+                cursor.execute('DELETE FROM patients WHERE patient_id = ?', (patient_id,))
+                
+                conn.commit()
+                conn.close()
+                
+                st.success(f"Patient {patient_to_delete['patient_name']} deleted successfully.")
+                del st.session_state.confirm_delete
+                st.rerun()
+        
+        with col2:
+            if st.button("❌ CANCEL", 
+                       key="cancel_delete_btn", 
+                       use_container_width=True):
+                del st.session_state.confirm_delete
+                st.rerun()
+        
+        with col3:
+            if st.button("✕ Close", key="close_modal", use_container_width=True):
+                del st.session_state.confirm_delete
+                st.rerun()
+        
+        st.markdown("---")
+        st.warning("**⚠️ WARNING: This will permanently delete all patient data. THIS ACTION CANNOT BE UNDONE!**")
+        st.markdown("---")
         
         return  # Don't show rest of page when modal is active
     
