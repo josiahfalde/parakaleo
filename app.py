@@ -328,44 +328,35 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
         
-        # Drop and recreate counters table to ensure correct schema
-        try:
-            cursor.execute('DROP TABLE IF EXISTS counters')
-            cursor.execute('''
-                CREATE TABLE counters (
-                    location_code TEXT PRIMARY KEY,
-                    value INTEGER DEFAULT 0
-                )
-            ''')
-        except Exception:
-            # If drop fails, just create the table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS counters (
-                    location_code TEXT PRIMARY KEY,
-                    value INTEGER DEFAULT 0
-                )
-            ''')
+        # Find the highest existing patient ID for this location
+        cursor.execute('''
+            SELECT patient_id FROM patients 
+            WHERE patient_id LIKE ? 
+            ORDER BY patient_id DESC 
+            LIMIT 1
+        ''', (f"{location_code}%",))
         
-        # Get current counter for this location
-        cursor.execute('SELECT value FROM counters WHERE location_code = ?', (location_code,))
         result = cursor.fetchone()
         
         if result:
-            current_value = result[0]
-            new_value = current_value + 1
+            # Extract the number from the last patient ID
+            last_id = result[0]
+            last_number = int(last_id[len(location_code):])
+            new_number = last_number + 1
         else:
             # First patient for this location
-            new_value = 1
-            cursor.execute('INSERT INTO counters (location_code, value) VALUES (?, ?)', 
-                          (location_code, 0))
+            new_number = 1
         
-        cursor.execute('UPDATE counters SET value = ? WHERE location_code = ?', 
-                      (new_value, location_code))
+        # Ensure we don't have conflicts by checking if ID exists
+        while True:
+            new_id = f"{location_code}{new_number:05d}"
+            cursor.execute('SELECT COUNT(*) FROM patients WHERE patient_id = ?', (new_id,))
+            if cursor.fetchone()[0] == 0:
+                break
+            new_number += 1
         
-        conn.commit()
         conn.close()
-        
-        return f"{location_code}{new_value:05d}"
+        return new_id
     
     def add_patient(self, location_code: str, **kwargs) -> str:
         """Add a new patient and return their ID"""
