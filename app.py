@@ -1337,76 +1337,14 @@ def go_back():
 
 
 def show_back_button():
-    """Display universal back button on all pages - truly fixed position"""
+    """Display universal back button on all pages"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create a simple fixed back button positioned properly
-        st.markdown("""
-        <div id="fixed-back-button" style="
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            width: 50px;
-            height: 50px;
-            z-index: 999999;
-            background: #3b82f6;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
-            user-select: none;
-        ">
-            ←
-        </div>
-        
-        <script>
-        // Clean event handling without inline handlers
-        document.addEventListener('DOMContentLoaded', function() {
-            const backBtn = document.getElementById('fixed-back-button');
-            if (backBtn) {
-                backBtn.addEventListener('click', function() {
-                    // Trigger back navigation by setting session storage flag
-                    sessionStorage.setItem('back_nav_requested', Date.now().toString());
-                    window.location.reload();
-                });
-                
-                backBtn.addEventListener('mouseenter', function() {
-                    this.style.background = '#2563eb';
-                    this.style.transform = 'translateY(-2px)';
-                    this.style.boxShadow = '0 6px 16px rgba(0,0,0,0.4)';
-                });
-                
-                backBtn.addEventListener('mouseleave', function() {
-                    this.style.background = '#3b82f6';
-                    this.style.transform = 'translateY(0px)';
-                    this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-                });
-            }
-        });
-        
-        // Check for back navigation request on load
-        if (sessionStorage.getItem('back_nav_requested')) {
-            sessionStorage.removeItem('back_nav_requested');
-            setTimeout(function() {
-                const hiddenBtn = document.querySelector('[data-testid="baseButton-secondary"]');
-                if (hiddenBtn && hiddenBtn.textContent.includes('↩')) {
-                    hiddenBtn.click();
-                }
-            }, 100);
-        }
-        </script>
-        """, unsafe_allow_html=True)
-        
-        # Hidden button to handle navigation - completely hidden
-        st.markdown('<div style="position: fixed; top: -100px; left: -100px; opacity: 0; pointer-events: none;">', unsafe_allow_html=True)
-        if st.button("↩", key=f"back_nav_{len(st.session_state.nav_history)}", type="secondary", help="Back navigation"):
-            go_back()
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Simple container-based back button that works on all pages
+        col1, col2 = st.columns([1, 8])
+        with col1:
+            if st.button("← Back", key=f"back_btn_{len(st.session_state.nav_history)}", help="Go to previous page"):
+                go_back()
+                st.rerun()
 
 
 def main():
@@ -3965,73 +3903,14 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 f"Parent consultation completed. {len(family_children)} children are waiting for consultation."
                             )
 
-                            col1, col2 = st.columns([1, 1])
-                            with col1:
-                                if st.button("🔄 Continue to Children",
-                                             type="primary",
-                                             use_container_width=True):
-                                    # Clear current consultation first
-                                    if 'active_consultation' in st.session_state:
-                                        del st.session_state.active_consultation
-
-                                    # Start with first child
-                                    first_child = family_children[0]
-                                    child_id, child_name = first_child
-
-                                    # Get child's visit info
-                                    child_conn = sqlite3.connect(
-                                        db_manager.db_name)
-                                    child_cursor = child_conn.cursor()
-
-                                    child_cursor.execute(
-                                        '''
-                                        SELECT visit_id FROM visits 
-                                        WHERE patient_id = ? AND status = 'waiting_consultation' 
-                                        AND DATE(visit_date) = DATE('now')
-                                        ORDER BY visit_date DESC LIMIT 1
-                                    ''', (child_id, ))
-
-                                    child_visit = child_cursor.fetchone()
-                                    child_conn.close()
-
-                                    if child_visit:
-                                        child_visit_id = child_visit[0]
-                                        # Start consultation for this child
-                                        st.session_state.active_consultation = {
-                                            'visit_id': child_visit_id,
-                                            'patient_id': child_id,
-                                            'patient_name': child_name
-                                        }
-                                        # Store remaining children for sequential consultation
-                                        remaining_children = family_children[
-                                            1:] if len(
-                                                family_children) > 1 else []
-                                        if remaining_children:
-                                            st.session_state.remaining_family_children = remaining_children
-
-                                        # Mark this as a family consultation continuation
-                                        st.session_state.family_consultation_mode = True
-
-                                        # Update doctor status
-                                        db_manager.update_doctor_status(
-                                            st.session_state.doctor_name,
-                                            "with_patient", child_id,
-                                            child_name)
-                                        st.rerun()
-                                    else:
-                                        st.error(
-                                            f"No active visit found for {child_name}"
-                                        )
-
-                            with col2:
-                                if st.button("🏠 Return to Queue",
-                                             type="secondary",
-                                             use_container_width=True):
-                                    st.session_state.page = 'doctor'
-                                    st.rerun()
-
-                            # Don't proceed further, wait for user choice
-                            return
+                        # Store family continuation data in session state
+                        st.session_state.family_consultation_complete = {
+                            'children': family_children,
+                            'parent_name': patient_name
+                        }
+                        
+                        # Don't proceed further, wait for user choice
+                        return
 
                         # Check if we're in family consultation mode and have remaining children
                         if st.session_state.get(
