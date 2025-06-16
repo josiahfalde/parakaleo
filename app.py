@@ -2229,9 +2229,31 @@ def doctor_login():
     if selected_doctor and st.button("Login as Doctor", type="primary"):
         try:
             st.session_state.doctor_name = selected_doctor
-            # Update doctor status to available
-            db.update_doctor_status(selected_doctor, "available")
-            st.success(f"Logged in as {selected_doctor}")
+            
+            # Check if doctor was in middle of consultation
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT current_patient_id, current_patient_name, status
+                FROM doctor_status 
+                WHERE doctor_name = ?
+            ''', (selected_doctor,))
+            doctor_status = cursor.fetchone()
+            conn.close()
+            
+            if doctor_status and doctor_status[0] and doctor_status[2] == 'with_patient':
+                # Doctor was with a patient - restore consultation
+                st.session_state.current_consultation = {
+                    'patient_id': doctor_status[0],
+                    'patient_name': doctor_status[1]
+                }
+                st.session_state.active_consultation = True
+                st.success(f"Logged in as {selected_doctor} - Returning to consultation with {doctor_status[1]}")
+            else:
+                # Update doctor status to available
+                db.update_doctor_status(selected_doctor, "available")
+                st.success(f"Logged in as {selected_doctor}")
+            
             st.rerun()
         except Exception as e:
             st.error(f"Login error: {str(e)}")
@@ -4082,26 +4104,20 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             notes = st.text_area("Additional Notes",
                                  placeholder="Any additional observations")
 
-            # Submit button for consultation tab
-            consultation_submitted = st.form_submit_button(
-                "Save Consultation Details", type="secondary")
-            
-            if consultation_submitted:
-                # Save consultation data to session state for cross-tab access
-                consultation_key = f"consultation_data_{visit_id}"
-                st.session_state[consultation_key] = {
-                    'doctor_name': doctor_name,
-                    'chief_complaint': chief_complaint,
-                    'symptoms': symptoms,
-                    'diagnosis': diagnosis,
-                    'treatment_plan': treatment_plan,
-                    'notes': notes,
-                    'surgical_history': surgical_history,
-                    'medical_history': medical_history,
-                    'allergies': allergies,
-                    'current_medications': current_medications
-                }
-                st.success("Consultation details saved!")
+            # Auto-save consultation data to session state (no button needed)
+            consultation_key = f"consultation_data_{visit_id}"
+            st.session_state[consultation_key] = {
+                'doctor_name': doctor_name,
+                'chief_complaint': chief_complaint,
+                'symptoms': symptoms,
+                'diagnosis': diagnosis,
+                'treatment_plan': treatment_plan,
+                'notes': notes,
+                'surgical_history': surgical_history,
+                'medical_history': medical_history,
+                'allergies': allergies,
+                'current_medications': current_medications
+            }
 
     with tab2:
         # Photo documentation section (now in its own tab)
@@ -5141,7 +5157,8 @@ def awaiting_lab_prescriptions():
                     
                     else:
                         # Generic lab result display
-                        with st.expander(f"View {lab['test_type']} Results", expanded=False):
+                        st.markdown(f"**{lab['test_type']} Results:**")
+                        with st.container():
                             st.text(lab['results'])
                 
                 # Return to provider checkbox - simple and smooth
