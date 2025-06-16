@@ -4006,9 +4006,6 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
 
 
-
-
-
 def consultation_history():
     st.markdown("### Today's Consultations")
 
