@@ -2078,39 +2078,22 @@ def main():
         show_lan_status_page()
         return
 
-# Page routing using navigation state
-    page = st.session_state.get("current_page", "home")
-
-    if page == "home":
-        home_page()
-    elif page == "new_visit":
-        new_visit_page()
-    elif page == "patient_list":
-        patient_list_page()
-    elif page == "patient_profile":
-        patient_profile_page()
-    elif page == "visit_form":
-        visit_form_page()
-    elif page == "visit_summary":
-        visit_summary_page()
-    elif page == "edit_patient":
-        edit_patient_page()
-    elif page == "edit_visit":
-        edit_visit_page()
-    elif page == "edit_medications":
-        edit_medications_page()
-    elif page == "medications":
-        medications_page()
-    elif page == "pharmacy":
-        pharmacy_page()
-    elif page == "export":
-        export_page()
-    elif page == "lab_tests":
-        lab_tests_page()
-    elif page == "trip_data":
-        trip_data_page()
-    else:
-        st.error(f"Unknown page: {page}")
+# Role-based interface routing
+    if st.session_state.user_role == "triage":
+        triage_interface()
+    elif st.session_state.user_role == "doctor":
+        if 'doctor_name' not in st.session_state:
+            doctor_login()
+        else:
+            doctor_interface()
+    elif st.session_state.user_role == "pharmacy":
+        pharmacy_interface()
+    elif st.session_state.user_role == "lab":
+        lab_interface()
+    elif st.session_state.user_role == "ophthalmologist":
+        ophthalmologist_interface()
+    elif st.session_state.user_role == "admin":
+        admin_interface()
 
     # Sidebar header with location info
     if 'clinic_location' in st.session_state and st.session_state.clinic_location:
