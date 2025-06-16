@@ -4195,176 +4195,179 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         st.rerun()
 
     with tab3:
-        with st.form(f"lab_prescriptions_{visit_id}"):
-            st.markdown("#### Lab Tests")
-            lab_tests = []
-
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.checkbox("Urinalysis"):
-                    lab_tests.append(("Urinalysis", st.selectbox("Urinalysis Disposition", 
+        st.markdown("#### Lab Tests")
+        
+        # Lab tests section - outside form for immediate updates
+        lab_tests = []
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.checkbox("Urinalysis", key=f"ua_check_{visit_id}"):
+                lab_tests.append(("Urinalysis", st.selectbox("Urinalysis Disposition", 
+                                                            ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                                            key=f"ua_disp_{visit_id}")))
+        with col2:
+            if st.checkbox("Blood Glucose", key=f"gluc_check_{visit_id}"):
+                lab_tests.append(("Blood Glucose", st.selectbox("Glucose Disposition", 
                                                                 ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                                key=f"ua_disp_{visit_id}")))
-            with col2:
-                if st.checkbox("Blood Glucose"):
-                    lab_tests.append(("Blood Glucose", st.selectbox("Glucose Disposition", 
-                                                                    ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                                    key=f"gluc_disp_{visit_id}")))
-            with col3:
-                if st.checkbox("Pregnancy Test"):
-                    lab_tests.append(("Pregnancy Test", st.selectbox("Pregnancy Test Disposition", 
-                                                                     ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                                     key=f"preg_disp_{visit_id}")))
+                                                                key=f"gluc_disp_{visit_id}")))
+        with col3:
+            if st.checkbox("Pregnancy Test", key=f"preg_check_{visit_id}"):
+                lab_tests.append(("Pregnancy Test", st.selectbox("Pregnancy Test Disposition", 
+                                                                 ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                                                 key=f"preg_disp_{visit_id}")))
 
-            st.markdown("#### Prescriptions")
+        # Prescriptions section - outside form for immediate checkbox updates
+        st.markdown("#### Prescriptions")
 
-            # Get preset medications and deduplicate by name
-            db_manager = get_db_manager()
-            preset_meds = db_manager.get_preset_medications()
+        # Get preset medications and deduplicate by name
+        db_manager = get_db_manager()
+        preset_meds = db_manager.get_preset_medications()
 
-            # Deduplicate medications by name (keep first occurrence)
-            unique_meds = {}
-            for med in preset_meds:
-                med_name = med['medication_name']
-                if med_name not in unique_meds:
-                    unique_meds[med_name] = med
+        # Deduplicate medications by name (keep first occurrence)
+        unique_meds = {}
+        for med in preset_meds:
+            med_name = med['medication_name']
+            if med_name not in unique_meds:
+                unique_meds[med_name] = med
 
-            deduplicated_meds = list(unique_meds.values())
-            med_categories = list(
-                set(med['category'] for med in deduplicated_meds))
+        deduplicated_meds = list(unique_meds.values())
+        med_categories = list(
+            set(med['category'] for med in deduplicated_meds))
 
-            selected_medications = []
+        selected_medications = []
 
-            for category in sorted(med_categories):
-                with st.expander(f"{category} Medications"):
-                    category_meds = [
-                        med for med in deduplicated_meds
-                        if med['category'] == category
-                    ]
+        for category in sorted(med_categories):
+            with st.expander(f"{category} Medications"):
+                category_meds = [
+                    med for med in deduplicated_meds
+                    if med['category'] == category
+                ]
 
-                    for med in category_meds:
-                        # Medication checkbox
-                        selected = st.checkbox(f"{med['medication_name']}",
-                                               key=f"med_{med['id']}_{visit_id}")
+                for med in category_meds:
+                    # Medication checkbox
+                    selected = st.checkbox(f"{med['medication_name']}",
+                                           key=f"med_{med['id']}_{visit_id}")
 
-                        # Show additional fields immediately when medication is checked
-                        if selected:
-                            with st.container():
-                                st.markdown("---")
-                                
-                                # Dosage and frequency options
-                                col1, col2, col3 = st.columns(3)
-                                with col1:
-                                    dosages = med['common_dosages'].split(', ')
-                                    selected_dosage = st.selectbox(
-                                        "Dosage", dosages, key=f"dosage_{med['id']}_{visit_id}")
-                                with col2:
-                                    frequency = st.selectbox("Frequency", [
-                                        "Once daily", "Twice daily",
-                                        "Three times daily", "Four times daily",
-                                        "As needed"
-                                    ], key=f"freq_{med['id']}_{visit_id}")
-                                with col3:
-                                    duration = st.selectbox("Duration", [
-                                        "3 days", "5 days", "7 days", "10 days",
-                                        "14 days", "30 days"
-                                    ], key=f"dur_{med['id']}_{visit_id}")
+                    # Show additional fields immediately when medication is checked
+                    if selected:
+                        with st.container():
+                            st.markdown("---")
+                            
+                            # Dosage and frequency options
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                dosages = med['common_dosages'].split(', ')
+                                selected_dosage = st.selectbox(
+                                    "Dosage", dosages, key=f"dosage_{med['id']}_{visit_id}")
+                            with col2:
+                                frequency = st.selectbox("Frequency", [
+                                    "Once daily", "Twice daily",
+                                    "Three times daily", "Four times daily",
+                                    "As needed"
+                                ], key=f"freq_{med['id']}_{visit_id}")
+                            with col3:
+                                duration = st.selectbox("Duration", [
+                                    "3 days", "5 days", "7 days", "10 days",
+                                    "14 days", "30 days"
+                                ], key=f"dur_{med['id']}_{visit_id}")
 
-                                # Additional fields
-                                col4, col5 = st.columns(2)
-                                with col4:
-                                    pharmacy_dosage = st.text_input(
-                                        "Dosage for Pharmacy",
-                                        placeholder="e.g., 500mg twice daily for 7 days",
-                                        key=f"pharma_dose_{med['id']}_{visit_id}")
-                                with col5:
-                                    indication = st.text_input(
-                                        "Indication",
-                                        placeholder="e.g., UTI, hypertension",
-                                        key=f"indication_{med['id']}_{visit_id}")
+                            # Additional fields
+                            col4, col5 = st.columns(2)
+                            with col4:
+                                pharmacy_dosage = st.text_input(
+                                    "Dosage for Pharmacy",
+                                    placeholder="e.g., 500mg twice daily for 7 days",
+                                    key=f"pharma_dose_{med['id']}_{visit_id}")
+                            with col5:
+                                indication = st.text_input(
+                                    "Indication",
+                                    placeholder="e.g., UTI, hypertension",
+                                    key=f"indication_{med['id']}_{visit_id}")
 
-                                instructions = st.text_input("Special Instructions",
-                                                             key=f"inst_{med['id']}_{visit_id}")
+                            instructions = st.text_input("Special Instructions",
+                                                         key=f"inst_{med['id']}_{visit_id}")
 
-                                # Lab results options
-                                awaiting_lab = "yes" if st.checkbox(
-                                    "Awaiting Lab Results",
-                                    key=f"await_{med['id']}_{visit_id}",
+                            # Lab results options
+                            awaiting_lab = "yes" if st.checkbox(
+                                "Awaiting Lab Results",
+                                key=f"await_{med['id']}_{visit_id}",
+                                value=False) else "no"
+                            
+                            return_to_provider = "no"
+                            if awaiting_lab == "yes":
+                                return_to_provider = "yes" if st.checkbox(
+                                    "Return to provider after lab results",
+                                    key=f"return_{med['id']}_{visit_id}",
                                     value=False) else "no"
-                                
-                                return_to_provider = "no"
-                                if awaiting_lab == "yes":
-                                    return_to_provider = "yes" if st.checkbox(
-                                        "Return to provider after lab results",
-                                        key=f"return_{med['id']}_{visit_id}",
-                                        value=False) else "no"
 
-                                selected_medications.append({
-                                    'id': med['id'],
-                                    'name': med['medication_name'],
-                                    'dosage': selected_dosage,
-                                    'frequency': frequency,
-                                    'duration': duration,
-                                    'instructions': instructions,
-                                    'awaiting_lab': awaiting_lab,
-                                    'return_to_provider': return_to_provider,
-                                    'pharmacy_notes': pharmacy_dosage,
-                                    'indication': indication
-                                })
+                            selected_medications.append({
+                                'id': med['id'],
+                                'name': med['medication_name'],
+                                'dosage': selected_dosage,
+                                'frequency': frequency,
+                                'duration': duration,
+                                'instructions': instructions,
+                                'awaiting_lab': awaiting_lab,
+                                'return_to_provider': return_to_provider,
+                                'pharmacy_notes': pharmacy_dosage,
+                                'indication': indication
+                            })
 
-            # Custom medication section
-            with st.expander("Add Custom Medication"):
-                custom_med_name = st.text_input("Custom Medication Name",
-                                                key=f"custom_name_{visit_id}")
-                if custom_med_name:
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        custom_dosage = st.text_input(
-                            "Dosage", key=f"custom_dosage_{visit_id}")
-                    with col2:
-                        custom_frequency = st.text_input(
-                            "Frequency", key=f"custom_frequency_{visit_id}")
-                    with col3:
-                        custom_duration = st.text_input(
-                            "Duration", key=f"custom_duration_{visit_id}")
+        # Custom medication section
+        with st.expander("Add Custom Medication"):
+            custom_med_name = st.text_input("Custom Medication Name",
+                                            key=f"custom_name_{visit_id}")
+            if custom_med_name:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    custom_dosage = st.text_input(
+                        "Dosage", key=f"custom_dosage_{visit_id}")
+                with col2:
+                    custom_frequency = st.text_input(
+                        "Frequency", key=f"custom_frequency_{visit_id}")
+                with col3:
+                    custom_duration = st.text_input(
+                        "Duration", key=f"custom_duration_{visit_id}")
 
-                    custom_instructions = st.text_input(
-                        "Instructions", key=f"custom_instructions_{visit_id}")
-                    custom_awaiting = st.checkbox(
-                        "Pending Lab", key=f"custom_awaiting_{visit_id}")
-                    custom_return_to_provider = st.checkbox(
-                        "Return to provider after lab results", key=f"custom_return_{visit_id}")
-                    custom_indication = st.text_input(
-                        "Indication", key=f"custom_indication_{visit_id}")
+                custom_instructions = st.text_input(
+                    "Instructions", key=f"custom_instructions_{visit_id}")
+                custom_awaiting = st.checkbox(
+                    "Pending Lab", key=f"custom_awaiting_{visit_id}")
+                custom_return_to_provider = st.checkbox(
+                    "Return to provider after lab results", key=f"custom_return_{visit_id}")
+                custom_indication = st.text_input(
+                    "Indication", key=f"custom_indication_{visit_id}")
 
-                    selected_medications.append({
-                        'id':
-                        None,
-                        'name':
-                        custom_med_name,
-                        'dosage':
-                        custom_dosage,
-                        'frequency':
-                        custom_frequency,
-                        'duration':
-                        custom_duration,
-                        'instructions':
-                        custom_instructions,
-                        'awaiting_lab':
-                        "yes" if custom_awaiting else "no",
-                        'return_to_provider':
-                        "yes" if custom_return_to_provider else "no",
-                        'pharmacy_notes':
-                        "",
-                        'indication':
-                        custom_indication
-                    })
+                selected_medications.append({
+                    'id':
+                    None,
+                    'name':
+                    custom_med_name,
+                    'dosage':
+                    custom_dosage,
+                    'frequency':
+                    custom_frequency,
+                    'duration':
+                    custom_duration,
+                    'instructions':
+                    custom_instructions,
+                    'awaiting_lab':
+                    "yes" if custom_awaiting else "no",
+                    'return_to_provider':
+                    "yes" if custom_return_to_provider else "no",
+                    'pharmacy_notes':
+                    "",
+                    'indication':
+                    custom_indication
+                })
 
-            st.markdown("#### Ophthalmology Referral")
-            needs_ophthalmology = st.checkbox(
-                "Patient needs to see ophthalmologist after receiving medications",
-                key=f"ophth_{visit_id}")
+        # Ophthalmology and submission - now in a form for final submission
+        st.markdown("#### Ophthalmology Referral")
+        needs_ophthalmology = st.checkbox(
+            "Patient needs to see ophthalmologist after receiving medications",
+            key=f"ophth_{visit_id}")
 
+        with st.form(f"consultation_submit_{visit_id}"):
             if st.form_submit_button("Complete Consultation", type="primary"):
                 # Get doctor name and chief complaint from session state or form data
                 current_doctor_name = st.session_state.get('doctor_name', '')
