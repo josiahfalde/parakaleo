@@ -2087,9 +2087,18 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
 
-        # Admin button in bottom row with better spacing
+        # Additional workflow monitoring and admin roles
         st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📊 Patient Queue Monitor",
+                         key="queue_monitor",
+                         type="secondary",
+                         use_container_width=True):
+                st.session_state.user_role = "queue_monitor"
+                st.rerun()
+        
         with col2:
             if st.button("Admin",
                          key="admin",
@@ -2097,6 +2106,10 @@ def main():
                          use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
+        
+        with col3:
+            # Empty column for balanced layout
+            st.write("")
 
         st.markdown("---")
         st.info(
@@ -2135,6 +2148,8 @@ def main():
         lab_interface()
     elif st.session_state.user_role == "ophthalmologist":
         ophthalmologist_interface()
+    elif st.session_state.user_role == "queue_monitor":
+        patient_queue_monitor_interface()
     elif st.session_state.user_role == "admin":
         admin_interface()
 
@@ -2845,8 +2860,8 @@ def triage_interface():
         vital_signs_form(st.session_state.pending_vitals)
         return
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Pre-Registered Queue", "New Patient", "Existing Patient", "Patient Queue"])
+    tab1, tab2, tab3 = st.tabs(
+        ["Pre-Registered Queue", "New Patient", "Existing Patient"])
 
     with tab1:
         preregistered_queue_view()
@@ -2856,9 +2871,6 @@ def triage_interface():
 
     with tab3:
         existing_patient_search()
-
-    with tab4:
-        patient_queue_view()
 
 
 def preregistered_queue_view():
@@ -3596,6 +3608,14 @@ def vital_signs_form(visit_id: str):
                 del st.session_state.patient_name
 
             st.rerun()
+
+
+def patient_queue_monitor_interface():
+    add_to_history('patient_queue_monitor')
+    st.markdown("## 📊 Patient Queue Monitor")
+    st.info("Real-time view of all patients in the clinic workflow system.")
+    
+    patient_queue_view()
 
 
 def patient_queue_view():

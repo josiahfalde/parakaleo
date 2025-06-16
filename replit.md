@@ -125,6 +125,8 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Enhanced medication validation to require dosage, frequency, and indication before pharmacy submission
   - Reordered role selection buttons to match clinic workflow: Name Registration → Triage → Doctor → Pharmacy/Lab → Ophthalmologist → Admin
   - Added numbered workflow indicators (1-5) to role buttons for clear process guidance
+  - Separated patient queue from triage station into dedicated "Patient Queue Monitor" role
+  - Streamlined triage interface to focus on patient registration and vital signs collection
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
