@@ -128,6 +128,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Separated patient queue from triage station into dedicated "Patient Queue Monitor" role
   - Streamlined triage interface to focus on patient registration and vital signs collection
   - Improved home screen layout with uniform 2x3 button arrangement and centered admin button
+  - Fixed medication checkbox popup system by moving prescriptions outside form structure for immediate updates
+  - Enhanced lab options indentation with visual grouping for clearer provider interface
+  - Corrected consultation completion error by properly handling lab test tuple data structure
+  - Ensured patients returned from pharmacy/lab appear as priority cases at top of consultation queue
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

@@ -4287,18 +4287,21 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             instructions = st.text_input("Special Instructions",
                                                          key=f"inst_{med['id']}_{visit_id}")
 
-                            # Lab results options
-                            awaiting_lab = "yes" if st.checkbox(
-                                "Awaiting Lab Results",
-                                key=f"await_{med['id']}_{visit_id}",
-                                value=False) else "no"
-                            
-                            return_to_provider = "no"
-                            if awaiting_lab == "yes":
-                                return_to_provider = "yes" if st.checkbox(
-                                    "Return to provider after lab results",
-                                    key=f"return_{med['id']}_{visit_id}",
+                            # Lab results options with indentation
+                            st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
+                            col_indent, col_lab = st.columns([0.1, 0.9])
+                            with col_lab:
+                                awaiting_lab = "yes" if st.checkbox(
+                                    "Awaiting Lab Results",
+                                    key=f"await_{med['id']}_{visit_id}",
                                     value=False) else "no"
+                                
+                                return_to_provider = "no"
+                                if awaiting_lab == "yes":
+                                    return_to_provider = "yes" if st.checkbox(
+                                        "Return to provider after lab results",
+                                        key=f"return_{med['id']}_{visit_id}",
+                                        value=False) else "no"
 
                             selected_medications.append({
                                 'id': med['id'],
@@ -4431,9 +4434,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         db_conn.close()
 
                         # Now handle lab tests and prescriptions using separate connections
-                        for test_type in lab_tests:
+                        for test_info in lab_tests:
+                            test_type, disposition = test_info
                             db_manager.order_lab_test(visit_id, test_type,
-                                                      doctor_name)
+                                                      current_doctor_name)
 
                         for med in selected_medications:
                             if med['name']:
@@ -4459,8 +4463,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         st.success("Consultation completed successfully!")
 
                         if lab_tests:
+                            test_names = [test_info[0] for test_info in lab_tests]
                             st.info(
-                                f"Lab tests ordered: {', '.join(lab_tests)}")
+                                f"Lab tests ordered: {', '.join(test_names)}")
 
                         if selected_medications:
                             awaiting_count = sum(
