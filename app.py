@@ -2087,9 +2087,9 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
 
-            if st.button("📊 Patient Queue Monitor",
+            if st.button("Patient Queue Monitor",
                          key="queue_monitor",
-                         type="secondary",
+                         type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "queue_monitor"
                 st.rerun()
