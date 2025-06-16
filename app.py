@@ -3675,52 +3675,52 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     ]
 
                     for med in category_meds:
-                        selected = st.checkbox(
-                            f"{med['medication_name']}",
-                            key=f"med_{med['id']}_{visit_id}")
+                        col1, col2 = st.columns([1, 2])
 
-                        if selected:
-                            # Show detailed medication fields immediately after selection
+                        with col1:
+                            selected = st.checkbox(f"{med['medication_name']}",
+                                                   key=f"med_{med['id']}_{visit_id}")
+
+                        with col2:
+                            # Show dosage field for pharmacy clarity
                             col2a, col2b = st.columns(2)
                             with col2a:
                                 pharmacy_dosage = st.text_input(
                                     "Dosage for Pharmacy",
-                                    placeholder="e.g., 500mg twice daily for 7 days",
+                                    placeholder=
+                                    "e.g., 500mg twice daily for 7 days",
                                     key=f"pharma_dose_{med['id']}_{visit_id}")
                             with col2b:
                                 indication = st.text_input(
                                     "Indication",
                                     placeholder="e.g., UTI, hypertension",
                                     key=f"indication_{med['id']}_{visit_id}")
+
+                        if selected:
                             col3, col4, col5 = st.columns([1, 1, 1])
 
                             with col3:
                                 dosages = med['common_dosages'].split(', ')
                                 selected_dosage = st.selectbox(
-                                    "Dosage",
-                                    dosages,
-                                    key=f"dosage_{med['id']}_{visit_id}")
+                                    "Dosage", dosages, key=f"dosage_{med['id']}_{visit_id}")
 
                             with col4:
-                                frequency = st.selectbox(
-                                    "Frequency", [
-                                        "Once daily", "Twice daily",
-                                        "Three times daily",
-                                        "Four times daily", "As needed"
-                                    ],
-                                    key=f"freq_{med['id']}_{visit_id}")
+                                frequency = st.selectbox("Frequency", [
+                                    "Once daily", "Twice daily",
+                                    "Three times daily", "Four times daily",
+                                    "As needed"
+                                ],
+                                                         key=f"freq_{med['id']}_{visit_id}")
 
                             with col5:
-                                duration = st.selectbox(
-                                    "Duration", [
-                                        "3 days", "5 days", "7 days",
-                                        "10 days", "14 days", "30 days"
-                                    ],
-                                    key=f"dur_{med['id']}_{visit_id}")
+                                duration = st.selectbox("Duration", [
+                                    "3 days", "5 days", "7 days", "10 days",
+                                    "14 days", "30 days"
+                                ],
+                                                        key=f"dur_{med['id']}_{visit_id}")
 
-                            instructions = st.text_input(
-                                "Special Instructions",
-                                key=f"inst_{med['id']}_{visit_id}")
+                            instructions = st.text_input("Special Instructions",
+                                                         key=f"inst_{med['id']}_{visit_id}")
 
                             # Flexible "awaiting lab results" checkbox - doctor can decide for any medication
                             awaiting_lab = "yes" if st.checkbox(
@@ -3966,6 +3966,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 next_member = family_data['family_members'][next_index]
                                 family_data['current_member_index'] = next_index
                                 
+                                # Ensure active_consultation is properly set
                                 st.session_state.active_consultation = {
                                     'visit_id': next_member['visit_id'],
                                     'patient_id': next_member['patient_id'],
@@ -3974,6 +3975,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 
                                 st.success(f"✅ Consultation completed for {patient_name}")
                                 st.info(f"🔄 Continuing with {next_member['name']} ({next_index + 1}/{family_data['total_members']})")
+                                
+                                # Auto-navigate back to consultation tab for smoother family workflow
+                                st.session_state.consultation_tab_active = True
                                 time.sleep(1)
                                 st.rerun()
                             else:
@@ -3983,8 +3987,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 
                                 # Set family pharmacy workflow
                                 st.session_state.family_pharmacy_workflow = family_data['completed_consultations']
-                                del st.session_state.family_consultation
-                                del st.session_state.active_consultation
+                                
+                                # Clean up session state
+                                if 'family_consultation' in st.session_state:
+                                    del st.session_state.family_consultation
+                                if 'active_consultation' in st.session_state:
+                                    del st.session_state.active_consultation
                                 
                                 # Update doctor status back to available
                                 db_manager.update_doctor_status(st.session_state.doctor_name, "available")
@@ -3996,6 +4004,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         # Individual consultation completed outside family workflow
                         else:
                             st.success("✅ Consultation completed successfully!")
+                            # Clean up session state
+                            if 'active_consultation' in st.session_state:
+                                del st.session_state.active_consultation
                             # Update doctor status back to available
                             db_manager.update_doctor_status(st.session_state.doctor_name, "available")
                             st.session_state.page = 'doctor_interface'
@@ -4015,7 +4026,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             )
 
                     except Exception as e:
-                        st.error(f"Error completing consultation: {str(e)}")
+                        # More user-friendly error messages
+                        error_msg = str(e)
+                        if "active_consultation" in error_msg:
+                            st.error("Session error: Please restart the consultation. The patient data is safe.")
+                        else:
+                            st.error(f"Error completing consultation: {error_msg}")
                 else:
                     st.error(
                         "Please fill in required fields: Doctor Name and Chief Complaint"
@@ -4607,13 +4623,14 @@ def filled_prescriptions():
         for prescription in filled:
             st.markdown(f"""
             <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <h5 style="color: #047857; margin: 0 0 12px 0; font-size: 16px;">✅ {prescription[6]} (ID: {prescription[7]})</h5>
+                <h5 style="color: #047857; margin: 0 0 12px 0; font-size: 16px;">✅ {prescription[6]}</h5>
+                <p style="margin: 0 0 8px 0; color: #065f46; font-size: 12px; background: #f0fdf4; padding: 3px 8px; border-radius: 4px; display: inline-block;"><strong>Patient ID:</strong> {prescription[7]}</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                     <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Medication:</strong> {prescription[0]}</p>
                     <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Dosage:</strong> {prescription[1]}</p>
                 </div>
                 {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[4]}</p>' if prescription[4] else ''}
-                <p style="margin: 0; color: #047857; font-size: 13px;"><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
+                <p style="margin: 0; color: #065f46; font-size: 14px; background: #ecfdf5; padding: 6px 12px; border-radius: 6px; border-left: 3px solid #10b981;"><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
             </div>
             """,
                         unsafe_allow_html=True)
