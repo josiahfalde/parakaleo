@@ -4147,42 +4147,6 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     'indication':
                     custom_indication
                 })
-
-        st.markdown("#### Ophthalmology Referral")
-        needs_ophthalmology = st.checkbox(
-            "Patient needs to see ophthalmologist after receiving medications")
-
-        if st.form_submit_button("Complete Consultation", type="primary"):
-            if doctor_name and chief_complaint:
-                try:
-                    # Use the database manager methods instead of direct connection
-                    # Save consultation
-                    db_conn = sqlite3.connect(db_manager.db_name, timeout=10.0)
-                    db_conn.execute('BEGIN IMMEDIATE')
-                    cursor = db_conn.cursor()
-
-                    cursor.execute(
-                        '''
-                        INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
-                                                 symptoms, diagnosis, treatment_plan, notes, 
-                                                 needs_ophthalmology, consultation_time)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''',
-                        (visit_id, doctor_name, chief_complaint, symptoms,
-                         diagnosis, treatment_plan, notes, needs_ophthalmology,
-                         datetime.now().isoformat()))
-
-                    # Update visit status first
-                    if needs_ophthalmology:
-                        new_status = 'needs_ophthalmology'
-                    elif selected_medications:
-                        new_status = 'prescribed'
-                    elif lab_tests:
-                        new_status = 'waiting_lab'
-                    else:
-                        new_status = 'completed'
-
-                    cursor.execute(
                         '''
                         UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
                     ''', (datetime.now().isoformat(), new_status, visit_id))
