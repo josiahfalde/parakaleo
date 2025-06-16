@@ -404,6 +404,24 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add consultation columns to visits table
+        consultation_columns = [
+            'chief_complaint TEXT',
+            'symptoms TEXT',
+            'diagnosis TEXT',
+            'treatment_plan TEXT',
+            'surgical_history TEXT',
+            'medical_history TEXT',
+            'allergies TEXT',
+            'current_medications TEXT'
+        ]
+        
+        for column in consultation_columns:
+            try:
+                cursor.execute(f'ALTER TABLE visits ADD COLUMN {column}')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
         # Create counter table for location-based patient numbering
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS counters (
