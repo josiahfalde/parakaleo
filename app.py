@@ -1213,43 +1213,54 @@ def show_back_button():
         current_page = st.session_state.get('current_page', 'unknown')
         back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
         
-        # Use CSS to position the back button fixed - BackpackEMR style
+        # Fixed back arrow button with improved styling
         st.markdown("""
         <style>
-        /* Fixed back button - clean BackpackEMR style */
+        /* Fixed back button - blue arrow style */
         div[data-testid="stButton"]:has(button[title="Go to previous page"]) {
             position: fixed !important;
             top: 20px !important;
             left: 20px !important;
-            z-index: 9999 !important;
+            z-index: 10000 !important;
             margin: 0 !important;
+            width: 50px !important;
+            height: 50px !important;
         }
         
         button[title="Go to previous page"] {
-            background: #ffffff !important;
-            color: #374151 !important;
-            border: 1px solid #d1d5db !important;
+            background: #3b82f6 !important;
+            color: white !important;
+            border: none !important;
             border-radius: 50% !important;
-            width: 44px !important;
-            height: 44px !important;
-            font-size: 16px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 20px !important;
+            font-weight: bold !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
             transition: all 0.2s ease !important;
             padding: 0 !important;
+            margin: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         
         button[title="Go to previous page"]:hover {
-            background: #f3f4f6 !important;
-            border-color: #9ca3af !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+            background: #2563eb !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.4) !important;
+        }
+        
+        button[title="Go to previous page"]:active {
+            transform: translateY(0px) !important;
         }
         </style>
         """, unsafe_allow_html=True)
         
-        # Create a container at the top for the fixed button
-        with st.container():
-            if st.button("←", key=back_key, help="Go to previous page"):
-                go_back()
+        # Create the back button
+        if st.button("←", key=back_key, help="Go to previous page"):
+            go_back()
+            st.rerun()
 
 def main():
     # Initialize navigation
@@ -1258,53 +1269,8 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Fixed back arrow button using CSS and streamlit components
-    if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create a container for the fixed back button
-        back_button_container = st.container()
-        with back_button_container:
-            # Use columns to position the back button
-            cols = st.columns([1, 20])  # Small column for back button, rest for content
-            with cols[0]:
-                # Style the back button to be fixed position
-                st.markdown("""
-                <style>
-                .back-button-container {
-                    position: fixed !important;
-                    top: 20px !important;
-                    left: 20px !important;
-                    z-index: 99999 !important;
-                    width: 50px !important;
-                    height: 50px !important;
-                }
-                .back-button-container button {
-                    width: 50px !important;
-                    height: 50px !important;
-                    border-radius: 50% !important;
-                    background: #3b82f6 !important;
-                    border: none !important;
-                    color: white !important;
-                    font-size: 20px !important;
-                    font-weight: bold !important;
-                    cursor: pointer !important;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
-                    transition: all 0.2s ease !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-                .back-button-container button:hover {
-                    background: #2563eb !important;
-                    transform: translateY(-2px) !important;
-                }
-                </style>
-                <div class="back-button-container">
-                """, unsafe_allow_html=True)
-                
-                if st.button("←", key="fixed_back_btn", help="Go back"):
-                    go_back()
-                    st.rerun()
-                
-                st.markdown("</div>", unsafe_allow_html=True)
+    # Show the back button using the dedicated function
+    show_back_button()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
