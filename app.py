@@ -3679,6 +3679,14 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 "Awaiting Lab Results",
                                 key=f"await_{med['id']}_{visit_id}",
                                 value=False) else "no"
+                            
+                            # Return to provider checkbox for lab-dependent medications
+                            return_to_provider = "no"
+                            if awaiting_lab == "yes":
+                                return_to_provider = "yes" if st.checkbox(
+                                    "Return to provider after lab results",
+                                    key=f"return_{med['id']}_{visit_id}",
+                                    value=False) else "no"
 
                             selected_medications.append({
                                 'id':
@@ -3695,6 +3703,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 instructions,
                                 'awaiting_lab':
                                 awaiting_lab,
+                                'return_to_provider':
+                                return_to_provider,
                                 'pharmacy_notes':
                                 pharmacy_dosage,
                                 'indication':
@@ -3721,6 +3731,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         "Instructions", key=f"custom_instructions_{visit_id}")
                     custom_awaiting = st.checkbox(
                         "Pending Lab", key=f"custom_awaiting_{visit_id}")
+                    custom_return_to_provider = st.checkbox(
+                        "Return to provider after lab results", key=f"custom_return_{visit_id}")
                     custom_indication = st.text_input(
                         "Indication", key=f"custom_indication_{visit_id}")
 
@@ -3739,6 +3751,8 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         custom_instructions,
                         'awaiting_lab':
                         "yes" if custom_awaiting else "no",
+                        'return_to_provider':
+                        "yes" if custom_return_to_provider else "no",
                         'pharmacy_notes':
                         "",
                         'indication':
@@ -3803,13 +3817,14 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                     '''
                                     INSERT INTO prescriptions (visit_id, medication_name, 
                                                              dosage, frequency, duration, instructions, 
-                                                             indication, awaiting_lab, prescribed_time)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                             indication, awaiting_lab, return_to_provider, prescribed_time)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (visit_id, med['name'], med['dosage'],
                                       med['frequency'], med['duration'],
                                       med['instructions'],
-                                      med.get('indication',
-                                              ''), med['awaiting_lab'],
+                                      med.get('indication', ''), 
+                                      med['awaiting_lab'],
+                                      med.get('return_to_provider', 'no'),
                                       datetime.now().isoformat()))
                                 conn_med.commit()
                                 conn_med.close()
@@ -4013,6 +4028,71 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     st.error(
                         "Please fill in required fields: Doctor Name and Chief Complaint"
                     )
+
+    # Family consultation continuation buttons - outside the form
+    if st.session_state.get('family_consultation_complete'):
+        family_data = st.session_state.family_consultation_complete
+        st.markdown("---")
+        st.info(f"Parent consultation completed. {len(family_data['children'])} children are waiting for consultation.")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Continue to Children", type="primary", use_container_width=True):
+                # Clear current consultation first
+                if 'active_consultation' in st.session_state:
+                    del st.session_state.active_consultation
+
+                # Start with first child
+                first_child = family_data['children'][0]
+                child_id, child_name = first_child
+
+                # Get child's visit info
+                db_manager = get_db_manager()
+                child_conn = sqlite3.connect(db_manager.db_name)
+                child_cursor = child_conn.cursor()
+
+                child_cursor.execute('''
+                    SELECT visit_id FROM visits 
+                    WHERE patient_id = ? AND status = 'waiting_consultation' 
+                    AND DATE(visit_date) = DATE('now')
+                    ORDER BY visit_date DESC LIMIT 1
+                ''', (child_id,))
+
+                child_visit = child_cursor.fetchone()
+                child_conn.close()
+
+                if child_visit:
+                    child_visit_id = child_visit[0]
+                    # Start consultation for this child
+                    st.session_state.active_consultation = {
+                        'visit_id': child_visit_id,
+                        'patient_id': child_id,
+                        'patient_name': child_name
+                    }
+                    # Store remaining children for sequential consultation
+                    remaining_children = family_data['children'][1:] if len(family_data['children']) > 1 else []
+                    if remaining_children:
+                        st.session_state.remaining_family_children = remaining_children
+
+                    # Mark this as a family consultation continuation
+                    st.session_state.family_consultation_mode = True
+
+                    # Clear the completion flag
+                    del st.session_state.family_consultation_complete
+                    
+                    # Update doctor status
+                    db_manager.update_doctor_status(
+                        st.session_state.doctor_name,
+                        "with_patient", child_id, child_name)
+                    st.rerun()
+                else:
+                    st.error(f"No active visit found for {child_name}")
+
+        with col2:
+            if st.button("Return to Queue", type="secondary", use_container_width=True):
+                del st.session_state.family_consultation_complete
+                st.session_state.page = 'doctor'
+                st.rerun()
 
     # Show family children consultations if this is a family consultation and parent is complete
     if is_family_consultation and st.session_state.get('show_family_children',
