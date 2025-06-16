@@ -3374,12 +3374,14 @@ def consultation_interface():
                         if st.button(
                                 f"Start Family Consultation",
                                 key=f"family_consult_{parent['patient_id']}"):
-                            # Store family consultation details
+                            # Store family consultation details for entire family workflow
+                            family_members = [parent] + children
                             st.session_state.family_consultation = {
-                                'parent_id': parent['patient_id'],
-                                'parent_name': parent['name'],
-                                'parent_visit_id': parent['visit_id'],
-                                'children': children
+                                'family_id': family_id,
+                                'family_members': family_members,
+                                'current_member_index': 0,
+                                'completed_consultations': [],
+                                'total_members': len(family_members)
                             }
                             st.session_state.active_consultation = {
                                 'visit_id': parent['visit_id'],
@@ -3397,8 +3399,9 @@ def consultation_interface():
 
                     st.markdown("**👶 Children:**")
                     for child in children:
+                        age_display = f"({child.get('age', 'N/A')} yrs, " if child.get('age') else "(age N/A, "
                         st.write(
-                            f"• {child['name']} ({child['age']} yrs, {child['relationship']})"
+                            f"• {child['name']} {age_display}{child.get('relationship', 'child')})"
                         )
 
     # Display individual patients
@@ -3653,29 +3656,23 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     ]
 
                     for med in category_meds:
-                        col1, col2 = st.columns([1, 2])
+                        selected = st.checkbox(
+                            f"{med['medication_name']}",
+                            key=f"med_{med['id']}_{visit_id}")
 
-                        with col1:
-                            selected = st.checkbox(
-                                f"{med['medication_name']}",
-                                key=f"med_{med['id']}_{visit_id}")
-
-                        with col2:
-                            # Show dosage field for pharmacy clarity
+                        if selected:
+                            # Show detailed medication fields immediately after selection
                             col2a, col2b = st.columns(2)
                             with col2a:
                                 pharmacy_dosage = st.text_input(
                                     "Dosage for Pharmacy",
-                                    placeholder=
-                                    "e.g., 500mg twice daily for 7 days",
+                                    placeholder="e.g., 500mg twice daily for 7 days",
                                     key=f"pharma_dose_{med['id']}_{visit_id}")
                             with col2b:
                                 indication = st.text_input(
                                     "Indication",
                                     placeholder="e.g., UTI, hypertension",
                                     key=f"indication_{med['id']}_{visit_id}")
-
-                        if selected:
                             col3, col4, col5 = st.columns([1, 1, 1])
 
                             with col3:
@@ -3930,25 +3927,52 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                     f"Saved {photo_count} photos to patient record."
                                 )
 
-                        # Check if this patient has children (family consultation)
-                        family_conn = sqlite3.connect(db_manager.db_name)
-                        family_cursor = family_conn.cursor()
-                        family_cursor.execute(
-                            '''
-                            SELECT patient_id, name FROM patients 
-                            WHERE parent_id = ? AND patient_id != ?
-                        ''', (patient_id, patient_id))
-                        family_children = family_cursor.fetchall()
-                        family_conn.close()
-
-                        # If there are family children, show continue button
-                        if family_children:
-                            st.markdown("---")
-                            st.info(
-                                "👨‍👩‍👧‍👦 **Family Consultation Available**")
-                            st.markdown(
-                                f"Parent consultation completed. {len(family_children)} children are waiting for consultation."
-                            )
+                        # Check if this is part of a family consultation workflow
+                        if 'family_consultation' in st.session_state:
+                            family_data = st.session_state.family_consultation
+                            current_index = family_data['current_member_index']
+                            
+                            # Add current consultation to completed list
+                            family_data['completed_consultations'].append({
+                                'patient_id': patient_id,
+                                'patient_name': patient_name,
+                                'visit_id': visit_id
+                            })
+                            
+                            # Move to next family member
+                            next_index = current_index + 1
+                            
+                            if next_index < family_data['total_members']:
+                                # Continue with next family member
+                                next_member = family_data['family_members'][next_index]
+                                family_data['current_member_index'] = next_index
+                                
+                                st.session_state.active_consultation = {
+                                    'visit_id': next_member['visit_id'],
+                                    'patient_id': next_member['patient_id'],
+                                    'patient_name': next_member['name']
+                                }
+                                
+                                st.success(f"✅ Consultation completed for {patient_name}")
+                                st.info(f"🔄 Continuing with {next_member['name']} ({next_index + 1}/{family_data['total_members']})")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                # All family members completed - go to pharmacy workflow
+                                st.success(f"✅ All family consultations completed!")
+                                st.info("🏥 Sending entire family to pharmacy...")
+                                
+                                # Set family pharmacy workflow
+                                st.session_state.family_pharmacy_workflow = family_data['completed_consultations']
+                                del st.session_state.family_consultation
+                                del st.session_state.active_consultation
+                                
+                                # Update doctor status back to available
+                                db_manager.update_doctor_status(st.session_state.doctor_name, "available")
+                                
+                                time.sleep(2)
+                                st.session_state.page = 'doctor_interface'
+                                st.rerun()
 
                         # Store family continuation data in session state
                         st.session_state.family_consultation_complete = {
@@ -5573,7 +5597,7 @@ def patient_management():
         return  # Don't show rest of page when modal is active
 
     # Check if we should show patient history detail page
-    if 'show_patient_history' in st.session_state:
+    if 'show_patient_history' in st.session_state and isinstance(st.session_state.show_patient_history, dict):
         show_patient_history_detail(
             st.session_state.show_patient_history['patient_id'],
             st.session_state.show_patient_history['patient_name'])
