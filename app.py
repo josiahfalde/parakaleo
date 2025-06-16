@@ -3912,7 +3912,22 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 consultation_data = st.session_state.get(consultation_key, {})
                 current_chief_complaint = consultation_data.get('chief_complaint', '')
                 
-                if current_doctor_name and (current_chief_complaint or len(selected_medications) > 0 or len(lab_tests) > 0):
+                # Validate all medications have required fields
+                validation_errors = []
+                
+                for med in selected_medications:
+                    if not med.get('dosage') or med.get('dosage').strip() == '':
+                        validation_errors.append(f"Missing dosage for {med['name']}")
+                    if not med.get('frequency') or med.get('frequency').strip() == '':
+                        validation_errors.append(f"Missing frequency for {med['name']}")
+                    if not med.get('indication') or med.get('indication').strip() == '':
+                        validation_errors.append(f"Missing indication for {med['name']}")
+                
+                if validation_errors:
+                    st.error("Please complete all required medication fields:")
+                    for error in validation_errors:
+                        st.error(f"• {error}")
+                elif current_doctor_name and (current_chief_complaint or len(selected_medications) > 0 or len(lab_tests) > 0):
                     try:
                         # Use the database manager methods instead of direct connection
                         # Save consultation
@@ -4631,8 +4646,9 @@ def awaiting_lab_prescriptions():
                             - pH
                             """)
                         
-                        with st.expander("Full UA Results", expanded=False):
-                            st.text(results)
+                        with st.container():
+                            if st.button("View Full UA Results", key=f"ua_results_{prescription['id']}"):
+                                st.text(results)
                     
                     elif lab['test_type'].lower() == 'glucose':
                         st.markdown("**Blood Glucose Test:**")
