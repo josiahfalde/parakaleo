@@ -515,7 +515,7 @@ class DatabaseManager:
         
         # Determine if this person should be independent (18+ years old)
         age = kwargs.get('age', 0)
-        is_independent = 1 if age >= 18 else 0
+        is_independent = 1 if age and age >= 18 else 0
         
         cursor.execute('''
             INSERT INTO patients (
@@ -1311,6 +1311,16 @@ def main():
         background-color: #f1f5f9 !important;
         border-color: #cbd5e1 !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Remove purple outline on input focus */
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stNumberInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus {
+        outline: none !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
     }
     
     /* BackpackEMR-inspired button styling - clean and professional */
@@ -2422,13 +2432,8 @@ def new_patient_form():
             st.markdown("**Family Information**")
             
             # Family details
-            col1, col2 = st.columns(2)
-            with col1:
-                family_name = st.text_input("Family Name *", placeholder="e.g., The Rodriguez Family")
-                family_address = st.text_input("Address", placeholder="Street, neighborhood, city")
-            with col2:
-                family_phone = st.text_input("Family Phone Number")
-                emergency_contact = st.text_input("Emergency Contact")
+            family_name = st.text_input("Family Name *", placeholder="e.g., The Rodriguez Family")
+            emergency_contact = st.text_input("Emergency Contact")
             
             st.markdown("---")
             st.markdown("**Parent/Guardian Information**")
@@ -2486,8 +2491,6 @@ def new_patient_form():
                             location_code=location_code,
                             family_name=family_name.strip(),
                             head_of_household=parent_name.strip(),
-                            address=family_address.strip() if family_address else "",
-                            phone=family_phone.strip() if family_phone else "",
                             emergency_contact=emergency_contact.strip() if emergency_contact else ""
                         )
                         
@@ -2501,8 +2504,7 @@ def new_patient_form():
                             gender=parent_gender if parent_gender else None,
                             phone=parent_phone.strip() if parent_phone else "",
                             medical_history=parent_medical_history.strip() if parent_medical_history else "",
-                            allergies=parent_allergies.strip() if parent_allergies else "",
-                            address=family_address.strip() if family_address else ""
+                            allergies=parent_allergies.strip() if parent_allergies else ""
                         )
                         
                         # Add children to family
@@ -2518,8 +2520,7 @@ def new_patient_form():
                                 age=child['age'],
                                 gender=child['gender'] if child['gender'] else None,
                                 medical_history=child['medical_history'].strip() if child['medical_history'] else "",
-                                allergies=child['allergies'].strip() if child['allergies'] else "",
-                                address=family_address.strip() if family_address else ""
+                                allergies=child['allergies'].strip() if child['allergies'] else ""
                             )
                             
                             family_members.append({
