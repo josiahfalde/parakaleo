@@ -1251,13 +1251,14 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Universal back button positioned in top-left area next to menu
+    # Universal back button - always visible next to menu
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create a container for the back button in top-left
-        back_col1, back_col2, back_col3 = st.columns([1, 1, 8])
+        # Create columns at the very top for back button
+        back_col1, back_col2, back_col3 = st.columns([1, 9, 1])
         with back_col1:
-            if st.button("← Back", key="universal_back_btn", help="Go back", use_container_width=True):
+            if st.button("← Back", key="universal_back_btn", help="Go back"):
                 go_back()
+                st.rerun()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -1290,7 +1291,7 @@ def main():
         display: block !important;
     }
     
-    /* Back button styling - positioned next to menu */
+    /* Back button styling - always visible */
     button[title="Go back"] {
         background-color: #f8fafc !important;
         border: 1px solid #e2e8f0 !important;
@@ -1299,18 +1300,22 @@ def main():
         padding: 8px 12px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
-        position: fixed !important;
-        top: 15px !important;
-        left: 10px !important;
-        z-index: 999 !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
         transition: all 0.2s ease !important;
+        width: 100% !important;
     }
     
     button[title="Go back"]:hover {
         background-color: #f1f5f9 !important;
         border-color: #cbd5e1 !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Ensure back button container stays at top */
+    .stButton:has(button[title="Go back"]) {
+        position: sticky !important;
+        top: 10px !important;
+        z-index: 999 !important;
     }
     
     /* Remove purple outline on input focus */
@@ -2498,15 +2503,8 @@ def new_patient_form():
             
             if family_submitted:
                 if family_name.strip() and parent_name.strip():
-                    # Debug: Show what children data was collected
-                    st.write(f"DEBUG: Total children forms: {num_children}")
-                    st.write(f"DEBUG: Children data collected: {len(children_data)}")
-                    for i, child in enumerate(children_data):
-                        st.write(f"DEBUG: Child {i+1}: {child}")
-                    
                     # Validate children data
                     valid_children = [child for child in children_data if child['name'].strip()]
-                    st.write(f"DEBUG: Valid children (with names): {len(valid_children)}")
                     
                     if len(valid_children) > 0 or num_children == 0:
                         location_code = st.session_state.clinic_location['country_code']
