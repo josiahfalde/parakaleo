@@ -1337,62 +1337,86 @@ def go_back():
 
 
 def show_back_button():
-    """Display universal back button on all pages - fixed position"""
-    if 'nav_history' in st.session_state and len(
-            st.session_state.nav_history) > 1:
-        # Create unique key based on current page
-        current_page = st.session_state.get('current_page', 'unknown')
-        back_key = f"back_btn_{current_page}_{hash(str(st.session_state.nav_history))}"
-
-        # Fixed back arrow button with improved styling
-        st.markdown("""
-        <style>
-        /* Fixed back button - blue arrow style */
-        div[data-testid="stButton"]:has(button[title="Go to previous page"]) {
-            position: fixed !important;
-            top: 20px !important;
-            left: 20px !important;
-            z-index: 10000 !important;
-            margin: 0 !important;
-            width: 50px !important;
-            height: 50px !important;
-        }
-        
-        button[title="Go to previous page"] {
-            background: #3b82f6 !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 50% !important;
-            width: 50px !important;
-            height: 50px !important;
-            font-size: 20px !important;
-            font-weight: bold !important;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
-            transition: all 0.2s ease !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        
-        button[title="Go to previous page"]:hover {
-            background: #2563eb !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.4) !important;
-        }
-        
-        button[title="Go to previous page"]:active {
-            transform: translateY(0px) !important;
-        }
-        </style>
-        """,
-                    unsafe_allow_html=True)
-
-        # Create the back button
-        if st.button("←", key=back_key, help="Go to previous page"):
+    """Display universal back button on all pages - truly fixed position"""
+    if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
+        # Use session state to handle back button clicks
+        if 'back_button_clicked' not in st.session_state:
+            st.session_state.back_button_clicked = False
+            
+        # Check if back button was clicked and handle navigation
+        if st.session_state.back_button_clicked:
+            st.session_state.back_button_clicked = False
             go_back()
             st.rerun()
+        
+        # Create truly fixed back button with JavaScript interaction
+        st.markdown(f"""
+        <div id="back-button-overlay" style="
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            z-index: 999999;
+            pointer-events: all;
+        ">
+            <button id="back-arrow-btn" onclick="handleBackClick()" style="
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: #3b82f6;
+                border: none;
+                color: white;
+                font-size: 20px;
+                font-weight: bold;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
+                padding: 0;
+            " onmouseover="this.style.background='#2563eb'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0,0,0,0.4)'"
+               onmouseout="this.style.background='#3b82f6'; this.style.transform='translateY(0px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'">
+                ←
+            </button>
+        </div>
+        
+        <script>
+        function handleBackClick() {{
+            // Find the hidden back button and click it
+            const hiddenBtn = document.querySelector('button[data-testid*="hidden-back"]');
+            if (hiddenBtn) {{
+                hiddenBtn.click();
+            }} else {{
+                // Fallback: reload page with back flag
+                sessionStorage.setItem('streamlit_back_clicked', 'true');
+                window.location.reload();
+            }}
+        }}
+        
+        // Check for back flag on page load
+        if (sessionStorage.getItem('streamlit_back_clicked') === 'true') {{
+            sessionStorage.removeItem('streamlit_back_clicked');
+            setTimeout(() => {{
+                const hiddenBtn = document.querySelector('button[data-testid*="hidden-back"]');
+                if (hiddenBtn) {{
+                    hiddenBtn.click();
+                }}
+            }}, 100);
+        }}
+        </script>
+        """, unsafe_allow_html=True)
+        
+        # Hidden button to trigger actual navigation
+        col1, col2 = st.columns([1, 20])
+        with col1:
+            st.markdown('<div style="position: absolute; left: -9999px; top: -9999px;">', unsafe_allow_html=True)
+            if st.button("↩", key="hidden-back-btn", help="Back"):
+                st.session_state.back_button_clicked = True
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
 def main():
