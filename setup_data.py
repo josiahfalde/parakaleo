@@ -111,8 +111,8 @@ def setup_clinic_data():
     
     for doctor in doctors:
         cursor.execute('''
-            INSERT OR IGNORE INTO doctors (name, status, active, last_updated)
-            VALUES (?, 'available', TRUE, ?)
+            INSERT OR IGNORE INTO doctors (name, is_active, created_at)
+            VALUES (?, TRUE, ?)
         ''', (doctor, datetime.now().isoformat()))
     
     conn.commit()
