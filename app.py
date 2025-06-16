@@ -3474,9 +3474,26 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     )
 
     if is_family_consultation:
+        family_data = st.session_state.family_consultation
+        current_index = family_data['current_member_index']
+        total_members = family_data['total_members']
+        
         st.info(
-            "👨‍👩‍👧‍👦 Family Consultation - Complete parent consultation first, then children will appear below"
+            f"👨‍👩‍👧‍👦 Family Consultation - Member {current_index + 1} of {total_members}: {patient_name}"
         )
+        
+        # Show family progress
+        st.progress((current_index + 1) / total_members)
+        
+        # Show family members list
+        with st.expander("Family Members"):
+            for i, member in enumerate(family_data['family_members']):
+                status = "✅ Completed" if i < current_index else "⏳ Current" if i == current_index else "⏸️ Waiting"
+                st.write(f"{status} {member['name']} ({member.get('relationship', 'family member')})")
+    
+    # Display current patient information
+    st.markdown(f"**Current Patient:** {patient_name}")
+    st.markdown(f"**Relationship:** {'Parent/Guardian' if not is_family_consultation or (is_family_consultation and st.session_state.family_consultation['current_member_index'] == 0) else 'Child'}")
 
     # Use tabs for consultation sections including optional photo documentation
     tab1, tab2, tab3 = st.tabs(
@@ -5085,8 +5102,10 @@ def patient_management():
 
         return  # Don't show rest of page when modal is active
 
-    # Check if we should show patient history detail page
+    # Check if we should show patient history detail page - extend outside container
     if 'show_patient_history' in st.session_state and isinstance(st.session_state.show_patient_history, dict):
+        # Display patient history in full width layout extending outside the patient management section
+        st.markdown("---")
         show_patient_history_detail(
             st.session_state.show_patient_history['patient_id'],
             st.session_state.show_patient_history['patient_name'])
