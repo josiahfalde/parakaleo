@@ -2498,8 +2498,15 @@ def new_patient_form():
             
             if family_submitted:
                 if family_name.strip() and parent_name.strip():
+                    # Debug: Show what children data was collected
+                    st.write(f"DEBUG: Total children forms: {num_children}")
+                    st.write(f"DEBUG: Children data collected: {len(children_data)}")
+                    for i, child in enumerate(children_data):
+                        st.write(f"DEBUG: Child {i+1}: {child}")
+                    
                     # Validate children data
                     valid_children = [child for child in children_data if child['name'].strip()]
+                    st.write(f"DEBUG: Valid children (with names): {len(valid_children)}")
                     
                     if len(valid_children) > 0 or num_children == 0:
                         location_code = st.session_state.clinic_location['country_code']
