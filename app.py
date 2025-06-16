@@ -1251,12 +1251,11 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Universal back button - always visible next to menu
+    # Universal back button using sidebar for always-visible positioning
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create columns at the very top for back button
-        back_col1, back_col2, back_col3 = st.columns([1, 9, 1])
-        with back_col1:
-            if st.button("← Back", key="universal_back_btn", help="Go back"):
+        with st.sidebar:
+            st.markdown("### Navigation")
+            if st.button("← Back", key="sidebar_back_btn", use_container_width=True):
                 go_back()
                 st.rerun()
     
@@ -1291,8 +1290,17 @@ def main():
         display: block !important;
     }
     
-    /* Back button styling - always visible */
-    button[title="Go back"] {
+    /* Fixed back button positioning */
+    div[data-testid="column"]:has(button[data-testid="baseButton-secondary"]) {
+        position: fixed !important;
+        top: 15px !important;
+        left: 15px !important;
+        z-index: 1000 !important;
+        width: 100px !important;
+    }
+    
+    /* Back button styling */
+    button[data-testid="baseButton-secondary"] {
         background-color: #f8fafc !important;
         border: 1px solid #e2e8f0 !important;
         color: #475569 !important;
@@ -1305,17 +1313,10 @@ def main():
         width: 100% !important;
     }
     
-    button[title="Go back"]:hover {
+    button[data-testid="baseButton-secondary"]:hover {
         background-color: #f1f5f9 !important;
         border-color: #cbd5e1 !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
-    }
-    
-    /* Ensure back button container stays at top */
-    .stButton:has(button[title="Go back"]) {
-        position: sticky !important;
-        top: 10px !important;
-        z-index: 999 !important;
     }
     
     /* Remove purple outline on input focus */
