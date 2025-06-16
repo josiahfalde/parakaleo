@@ -1181,6 +1181,15 @@ def go_back():
         previous_page = st.session_state.nav_history[-1]
         st.session_state.current_page = previous_page
         
+        # Clear any workflow states that might interfere
+        workflow_keys_to_clear = [
+            'family_vital_signs_queue', 'current_family_vital_index', 'family_workflow_active',
+            'pending_vitals', 'patient_name', 'family_parent_id', 'family_parent_name'
+        ]
+        for key in workflow_keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
+        
         # Handle navigation based on previous page
         if previous_page == 'home':
             st.session_state.user_role = None
@@ -1196,8 +1205,6 @@ def go_back():
             st.session_state.user_role = 'lab'
         elif previous_page.startswith('admin'):
             st.session_state.user_role = 'admin'
-        
-        st.rerun()
 
 def show_back_button():
     """Display universal back button on all pages - fixed position"""
@@ -1251,13 +1258,16 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Universal back button using sidebar for always-visible positioning
+    # Always visible back button - floating action button style
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        with st.sidebar:
-            st.markdown("### Navigation")
-            if st.button("← Back", key="sidebar_back_btn", use_container_width=True):
-                go_back()
-                st.rerun()
+        # Create container at the top for back navigation
+        back_container = st.container()
+        with back_container:
+            col1, col2 = st.columns([1, 10])
+            with col1:
+                if st.button("🔙 Back", key="floating_back_btn", type="secondary", use_container_width=True):
+                    go_back()
+                    st.rerun()
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -1290,33 +1300,36 @@ def main():
         display: block !important;
     }
     
-    /* Fixed back button positioning */
-    div[data-testid="column"]:has(button[data-testid="baseButton-secondary"]) {
-        position: fixed !important;
-        top: 15px !important;
-        left: 15px !important;
-        z-index: 1000 !important;
-        width: 100px !important;
+    /* Sticky back button container */
+    .stContainer:first-child {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 999 !important;
+        background: white !important;
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+        border-bottom: 1px solid #e5e7eb !important;
+        margin-bottom: 20px !important;
     }
     
     /* Back button styling */
     button[data-testid="baseButton-secondary"] {
-        background-color: #f8fafc !important;
-        border: 1px solid #e2e8f0 !important;
-        color: #475569 !important;
+        background-color: #3b82f6 !important;
+        border: 1px solid #3b82f6 !important;
+        color: white !important;
         border-radius: 8px !important;
-        padding: 8px 12px !important;
+        padding: 8px 16px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3) !important;
         transition: all 0.2s ease !important;
-        width: 100% !important;
     }
     
     button[data-testid="baseButton-secondary"]:hover {
-        background-color: #f1f5f9 !important;
-        border-color: #cbd5e1 !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+        background-color: #2563eb !important;
+        border-color: #2563eb !important;
+        box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4) !important;
+        transform: translateY(-1px) !important;
     }
     
     /* Remove purple outline on input focus */
