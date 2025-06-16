@@ -5616,7 +5616,9 @@ def urinalysis_form(test_id: int):
 
             results_text = "\n".join(
                 [f"{k}: {v}" for k, v in results.items() if v])
-            db.complete_lab_test(test_id, results_text)
+            
+            db_manager = get_db_manager()
+            db_manager.complete_lab_test(test_id, results_text)
 
             st.success("Urinalysis completed!")
             st.rerun()
@@ -5639,7 +5641,8 @@ def glucose_form(test_id: int):
             if notes:
                 results += f"\nNotes: {notes}"
 
-            db.complete_lab_test(test_id, results)
+            db_manager = get_db_manager()
+            db_manager.complete_lab_test(test_id, results)
             st.success("Glucose test completed!")
             st.rerun()
 
@@ -5656,7 +5659,8 @@ def pregnancy_form(test_id: int):
             if notes:
                 results += f"\nNotes: {notes}"
 
-            db.complete_lab_test(test_id, results)
+            db_manager = get_db_manager()
+            db_manager.complete_lab_test(test_id, results)
             st.success("Pregnancy test completed!")
             st.rerun()
 
