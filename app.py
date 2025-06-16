@@ -4001,10 +4001,6 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     st.error(
                         "Please fill in required fields: Doctor Name and Chief Complaint"
                     )
-            st.rerun()
-        with col3:
-            if st.checkbox("Pregnancy Test"):
-                lab_tests.append("Pregnancy Test")
 
         st.markdown("#### Prescriptions")
 
