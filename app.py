@@ -339,6 +339,27 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Create notifications table for doctor alerts
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doctor_name TEXT,
+                patient_id TEXT,
+                patient_name TEXT,
+                visit_id TEXT,
+                message TEXT,
+                notification_type TEXT,
+                created_time TEXT,
+                read_status INTEGER DEFAULT 0
+            )
+        ''')
+
+        # Add disposition column to lab_tests table if it doesn't exist
+        try:
+            cursor.execute('ALTER TABLE lab_tests ADD COLUMN disposition TEXT DEFAULT "return_to_provider"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         try:
             cursor.execute('ALTER TABLE patients ADD COLUMN created_date TEXT')
         except sqlite3.OperationalError:
@@ -3746,13 +3767,19 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.checkbox("Urinalysis"):
-                    lab_tests.append("Urinalysis")
+                    lab_tests.append(("Urinalysis", st.selectbox("Urinalysis Disposition", 
+                                                                ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                                                key=f"ua_disp_{visit_id}")))
             with col2:
                 if st.checkbox("Blood Glucose"):
-                    lab_tests.append("Blood Glucose")
+                    lab_tests.append(("Blood Glucose", st.selectbox("Glucose Disposition", 
+                                                                    ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                                                    key=f"gluc_disp_{visit_id}")))
             with col3:
                 if st.checkbox("Pregnancy Test"):
-                    lab_tests.append("Pregnancy Test")
+                    lab_tests.append(("Pregnancy Test", st.selectbox("Pregnancy Test Disposition", 
+                                                                     ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                                                     key=f"preg_disp_{visit_id}")))
 
             st.markdown("#### Prescriptions")
 
@@ -4774,15 +4801,39 @@ Chemical Parameters:
                             # Save results to database
                             conn = sqlite3.connect(db.db_name)
                             cursor = conn.cursor()
+                            
+                            # Update lab test with results
                             cursor.execute('''
                                 UPDATE lab_tests 
                                 SET results = ?, completed_time = ?, status = 'completed'
                                 WHERE id = ?
                             ''', (results, datetime.now().isoformat(), test_id))
+                            
+                            # Get patient and doctor info for notification
+                            cursor.execute('''
+                                SELECT pt.name, pt.patient_id, lt.ordered_by, v.visit_id
+                                FROM lab_tests lt
+                                JOIN visits v ON lt.visit_id = v.visit_id
+                                JOIN patients pt ON v.patient_id = pt.patient_id
+                                WHERE lt.id = ?
+                            ''', (test_id,))
+                            
+                            patient_info = cursor.fetchone()
+                            if patient_info:
+                                patient_name, patient_id, doctor_name, visit_id = patient_info
+                                
+                                # Create notification for doctor
+                                cursor.execute('''
+                                    INSERT INTO notifications (doctor_name, patient_id, patient_name, visit_id, message, notification_type, created_time)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ''', (doctor_name, patient_id, patient_name, visit_id, 
+                                     f"Urinalysis results available for {patient_name} (ID: {patient_id})", 
+                                     "lab_results", datetime.now().isoformat()))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success("Urinalysis results saved successfully!")
+                            st.success(f"Urinalysis results saved successfully! Notification sent to Dr. {doctor_name}")
                             st.rerun()
 
                 elif test_type.lower() == 'blood glucose' or test_type.lower() == 'glucose':
@@ -4820,15 +4871,39 @@ Chemical Parameters:
                             # Save results to database
                             conn = sqlite3.connect(db.db_name)
                             cursor = conn.cursor()
+                            
+                            # Update lab test with results
                             cursor.execute('''
                                 UPDATE lab_tests 
                                 SET results = ?, completed_time = ?, status = 'completed'
                                 WHERE id = ?
                             ''', (results, datetime.now().isoformat(), test_id))
+                            
+                            # Get patient and doctor info for notification
+                            cursor.execute('''
+                                SELECT pt.name, pt.patient_id, lt.ordered_by, v.visit_id
+                                FROM lab_tests lt
+                                JOIN visits v ON lt.visit_id = v.visit_id
+                                JOIN patients pt ON v.patient_id = pt.patient_id
+                                WHERE lt.id = ?
+                            ''', (test_id,))
+                            
+                            patient_info = cursor.fetchone()
+                            if patient_info:
+                                patient_name, patient_id, doctor_name, visit_id = patient_info
+                                
+                                # Create notification for doctor
+                                cursor.execute('''
+                                    INSERT INTO notifications (doctor_name, patient_id, patient_name, visit_id, message, notification_type, created_time)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ''', (doctor_name, patient_id, patient_name, visit_id, 
+                                     f"Blood glucose results available for {patient_name} (ID: {patient_id}): {results}", 
+                                     "lab_results", datetime.now().isoformat()))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success("Glucose test results saved successfully!")
+                            st.success(f"Glucose test results saved successfully! Notification sent to Dr. {doctor_name if patient_info else 'Unknown'}")
                             st.rerun()
 
                 elif test_type.lower() == 'pregnancy test' or test_type.lower() == 'pregnancy':
@@ -4855,15 +4930,39 @@ Chemical Parameters:
                             # Save results to database
                             conn = sqlite3.connect(db.db_name)
                             cursor = conn.cursor()
+                            
+                            # Update lab test with results
                             cursor.execute('''
                                 UPDATE lab_tests 
                                 SET results = ?, completed_time = ?, status = 'completed'
                                 WHERE id = ?
                             ''', (results, datetime.now().isoformat(), test_id))
+                            
+                            # Get patient and doctor info for notification
+                            cursor.execute('''
+                                SELECT pt.name, pt.patient_id, lt.ordered_by, v.visit_id
+                                FROM lab_tests lt
+                                JOIN visits v ON lt.visit_id = v.visit_id
+                                JOIN patients pt ON v.patient_id = pt.patient_id
+                                WHERE lt.id = ?
+                            ''', (test_id,))
+                            
+                            patient_info = cursor.fetchone()
+                            if patient_info:
+                                patient_name, patient_id, doctor_name, visit_id = patient_info
+                                
+                                # Create notification for doctor
+                                cursor.execute('''
+                                    INSERT INTO notifications (doctor_name, patient_id, patient_name, visit_id, message, notification_type, created_time)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ''', (doctor_name, patient_id, patient_name, visit_id, 
+                                     f"Pregnancy test results available for {patient_name} (ID: {patient_id}): {results}", 
+                                     "lab_results", datetime.now().isoformat()))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success("Pregnancy test results saved successfully!")
+                            st.success(f"Pregnancy test results saved successfully! Notification sent to Dr. {doctor_name if patient_info else 'Unknown'}")
                             st.rerun()
 
                 else:
