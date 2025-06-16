@@ -278,6 +278,38 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add return_to_provider column if it doesn't exist
+        try:
+            cursor.execute(
+                'ALTER TABLE prescriptions ADD COLUMN return_to_provider TEXT DEFAULT "no"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add pharmacy workflow columns if they don't exist
+        try:
+            cursor.execute(
+                'ALTER TABLE prescriptions ADD COLUMN pharmacy_approved_time TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute(
+                'ALTER TABLE prescriptions ADD COLUMN pharmacy_denied_time TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute(
+                'ALTER TABLE prescriptions ADD COLUMN pharmacy_return_time TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute(
+                'ALTER TABLE visits ADD COLUMN return_reason TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Add family columns to patients table if they don't exist
         try:
             cursor.execute('ALTER TABLE patients ADD COLUMN family_id TEXT')
@@ -3064,11 +3096,11 @@ def vital_signs_form(visit_id: str):
                 # Check for children
                 patient_cursor.execute(
                     '''
-                    SELECT p.patient_id, p.name, p.age 
+                    SELECT p.patient_id, p.name, COALESCE(p.age, 0) as age 
                     FROM patients p
                     JOIN visits v ON p.patient_id = v.patient_id
                     WHERE p.parent_id = ? AND DATE(v.visit_date) = DATE('now')
-                    ORDER BY p.age DESC
+                    ORDER BY COALESCE(p.age, 0) DESC
                 ''', (current_patient_id, ))
 
                 children = patient_cursor.fetchall()
@@ -4950,45 +4982,71 @@ def awaiting_lab_prescriptions():
                                     unsafe_allow_html=True)
 
                     with col2:
-                        if patient_data[
-                                'lab_results']:  # Only show options if lab results are available
-                            approve = st.button(
-                                f"✅ Approve", key=f"approve_{prescription[0]}")
-                            deny = st.button(f"❌ Deny",
-                                             key=f"deny_{prescription[0]}")
+                        # Check if this prescription requires return to provider
+                        return_to_provider = len(prescription) > 9 and prescription[9] == 'yes'
+                        
+                        if patient_data['lab_results']:  # Only show options if lab results are available
+                            st.markdown("**Lab Results Available**")
+                            
+                            col_approve, col_deny = st.columns(2)
+                            with col_approve:
+                                approve = st.button(f"✅ Approve", key=f"approve_{prescription[0]}", use_container_width=True)
+                            with col_deny:
+                                deny = st.button(f"❌ Deny", key=f"deny_{prescription[0]}", use_container_width=True)
+                            
+                            # Show return to provider option if specified by doctor
+                            return_patient = False
+                            if return_to_provider:
+                                return_patient = st.button(f"🔄 Return to Provider", 
+                                                          key=f"return_{prescription[0]}", 
+                                                          use_container_width=True,
+                                                          help="Send patient back to doctor as requested")
 
                             if approve:
                                 # Move prescription to ready status
                                 conn = sqlite3.connect(db.db_name)
                                 cursor = conn.cursor()
-                                cursor.execute(
-                                    '''
+                                cursor.execute('''
                                     UPDATE prescriptions 
-                                    SET awaiting_lab = 'no' 
+                                    SET awaiting_lab = 'no', pharmacy_approved_time = ?
                                     WHERE id = ?
-                                ''', (prescription[0], ))
+                                ''', (datetime.now().isoformat(), prescription[0]))
                                 conn.commit()
                                 conn.close()
-                                st.success(
-                                    f"Prescription approved and moved to fill queue!"
-                                )
+                                st.success("Prescription approved and moved to fill queue!")
                                 st.rerun()
 
                             if deny:
-                                # Remove prescription
+                                # Mark prescription as denied
                                 conn = sqlite3.connect(db.db_name)
                                 cursor = conn.cursor()
-                                cursor.execute(
-                                    '''
+                                cursor.execute('''
                                     UPDATE prescriptions 
-                                    SET status = 'denied' 
+                                    SET status = 'denied', pharmacy_denied_time = ?
                                     WHERE id = ?
-                                ''', (prescription[0], ))
+                                ''', (datetime.now().isoformat(), prescription[0]))
                                 conn.commit()
                                 conn.close()
-                                st.warning(
-                                    f"Prescription denied based on lab results."
-                                )
+                                st.warning("Prescription denied based on lab results.")
+                                st.rerun()
+                                
+                            if return_to_provider and return_patient:
+                                # Send patient back to doctor queue
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE visits 
+                                    SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                                    WHERE patient_id = ? AND DATE(visit_date) = DATE('now')
+                                ''', (patient_data['patient_id'],))
+                                cursor.execute('''
+                                    UPDATE prescriptions 
+                                    SET status = 'returned_to_provider', pharmacy_return_time = ?
+                                    WHERE id = ?
+                                ''', (datetime.now().isoformat(), prescription[0]))
+                                conn.commit()
+                                conn.close()
+                                st.info("Patient returned to doctor for lab result review.")
                                 st.rerun()
                         else:
                             st.info("Waiting for lab results...")
