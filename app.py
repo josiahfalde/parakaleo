@@ -1258,40 +1258,53 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Fixed back arrow button - floating action button
+    # Fixed back arrow button using CSS and streamlit components
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Use session state to track back button clicks
-        if 'back_clicked' not in st.session_state:
-            st.session_state.back_clicked = False
-        
-        # Add the fixed back button HTML
-        st.markdown("""
-        <div id="back-arrow-button" style="
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 99999;
-            width: 50px;
-            height: 50px;
-            background: #3b82f6;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: all 0.2s ease;
-        " onclick="document.getElementById('hidden-back-btn').click();">
-            <span style="color: white; font-size: 20px; font-weight: bold; margin-left: -2px;">←</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Hidden Streamlit button to handle the actual navigation
-        st.markdown('<div style="position: absolute; left: -9999px;">', unsafe_allow_html=True)
-        if st.button("Back", key="hidden-back-btn"):
-            go_back()
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Create a container for the fixed back button
+        back_button_container = st.container()
+        with back_button_container:
+            # Use columns to position the back button
+            cols = st.columns([1, 20])  # Small column for back button, rest for content
+            with cols[0]:
+                # Style the back button to be fixed position
+                st.markdown("""
+                <style>
+                .back-button-container {
+                    position: fixed !important;
+                    top: 20px !important;
+                    left: 20px !important;
+                    z-index: 99999 !important;
+                    width: 50px !important;
+                    height: 50px !important;
+                }
+                .back-button-container button {
+                    width: 50px !important;
+                    height: 50px !important;
+                    border-radius: 50% !important;
+                    background: #3b82f6 !important;
+                    border: none !important;
+                    color: white !important;
+                    font-size: 20px !important;
+                    font-weight: bold !important;
+                    cursor: pointer !important;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+                    transition: all 0.2s ease !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                .back-button-container button:hover {
+                    background: #2563eb !important;
+                    transform: translateY(-2px) !important;
+                }
+                </style>
+                <div class="back-button-container">
+                """, unsafe_allow_html=True)
+                
+                if st.button("←", key="fixed_back_btn", help="Go back"):
+                    go_back()
+                    st.rerun()
+                
+                st.markdown("</div>", unsafe_allow_html=True)
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -2610,31 +2623,41 @@ def new_patient_form():
                         for visit in family_visits:
                             st.write(f"• {visit['patient_name']} ({visit['relationship']}): {visit['patient_id']}")
                         
-                        # Show continue button instead of auto-redirecting
-                        st.markdown("---")
-                        st.markdown("**Next Steps:**")
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            if st.button("📊 Continue to Vital Signs", type="primary", use_container_width=True):
-                                # Store family visits for vital signs processing
-                                st.session_state.family_vital_signs_queue = family_visits.copy()
-                                st.session_state.current_family_vital_index = 0
-                                st.session_state.family_workflow_active = True
-                                st.rerun()
-                        
-                        with col2:
-                            if st.button("📋 Register Another Family", type="secondary", use_container_width=True):
-                                # Clear any family workflow states
-                                for key in ['family_vital_signs_queue', 'current_family_vital_index', 'family_workflow_active']:
-                                    if key in st.session_state:
-                                        del st.session_state[key]
-                                st.rerun()
+                        # Store family data for continuation outside form
+                        st.session_state.created_family_visits = family_visits.copy()
+                        st.session_state.family_creation_complete = True
                     
                     else:
                         st.error("Please provide at least one child's name, or set number of children to 0.")
                 else:
                     st.error("Please provide family name and parent/guardian name.")
+        
+        # Show continuation buttons outside the form after family creation
+        if st.session_state.get('family_creation_complete', False):
+            family_visits = st.session_state.get('created_family_visits', [])
+            
+            st.markdown("---")
+            st.markdown("**Next Steps:**")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📊 Continue to Vital Signs", type="primary", use_container_width=True):
+                    # Store family visits for vital signs processing
+                    st.session_state.family_vital_signs_queue = family_visits.copy()
+                    st.session_state.current_family_vital_index = 0
+                    st.session_state.family_workflow_active = True
+                    # Clear completion flags
+                    del st.session_state.family_creation_complete
+                    del st.session_state.created_family_visits
+                    st.rerun()
+            
+            with col2:
+                if st.button("📋 Register Another Family", type="secondary", use_container_width=True):
+                    # Clear family creation states
+                    for key in ['family_creation_complete', 'created_family_visits', 'family_vital_signs_queue', 'current_family_vital_index', 'family_workflow_active']:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.rerun()
     
     # Show vital signs form outside the main form if there's a pending visit
     if 'pending_vitals' in st.session_state:
