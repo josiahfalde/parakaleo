@@ -2087,18 +2087,16 @@ def main():
                 st.session_state.user_role = "pharmacy"
                 st.rerun()
 
-        # Additional workflow monitoring and admin roles
-        st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
             if st.button("📊 Patient Queue Monitor",
                          key="queue_monitor",
                          type="secondary",
                          use_container_width=True):
                 st.session_state.user_role = "queue_monitor"
                 st.rerun()
-        
+
+        # Admin button centered below
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("Admin",
                          key="admin",
@@ -2106,10 +2104,6 @@ def main():
                          use_container_width=True):
                 st.session_state.user_role = "admin"
                 st.rerun()
-        
-        with col3:
-            # Empty column for balanced layout
-            st.write("")
 
         st.markdown("---")
         st.info(
