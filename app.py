@@ -4147,47 +4147,6 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     'indication':
                     custom_indication
                 })
-                        '''
-                        UPDATE visits SET consultation_time = ?, status = ? WHERE visit_id = ?
-                    ''', (datetime.now().isoformat(), new_status, visit_id))
-
-                    db_conn.commit()
-                    db_conn.close()
-
-                    # Now handle lab tests and prescriptions using separate connections
-                    for test_type in lab_tests:
-                        db_manager.order_lab_test(visit_id, test_type,
-                                                  doctor_name)
-
-                    for med in selected_medications:
-                        if med['name']:
-                            # Add prescription with indication
-                            conn_med = sqlite3.connect(db_manager.db_name)
-                            cursor_med = conn_med.cursor()
-                            cursor_med.execute(
-                                '''
-                                INSERT INTO prescriptions (visit_id, medication_name, 
-                                                         dosage, frequency, duration, instructions, 
-                                                         indication, awaiting_lab, prescribed_time)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            ''', (visit_id, med['name'], med['dosage'],
-                                  med['frequency'], med['duration'],
-                                  med['instructions'], med.get(
-                                      'indication', ''), med['awaiting_lab'],
-                                  datetime.now().isoformat()))
-                            conn_med.commit()
-                            conn_med.close()
-
-                    st.success("Consultation completed successfully!")
-
-                    if lab_tests:
-                        st.info(f"Lab tests ordered: {', '.join(lab_tests)}")
-
-                    if selected_medications:
-                        awaiting_count = sum(1 for med in selected_medications
-                                             if med['awaiting_lab'] == 'yes')
-                        ready_count = len(
-                            selected_medications) - awaiting_count
 
                         if ready_count > 0:
                             st.info(
