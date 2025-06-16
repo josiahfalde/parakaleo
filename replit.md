@@ -137,6 +137,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Fixed nested expander error in pharmacy lab results display
   - Corrected database manager references in lab test forms (urinalysis, glucose, pregnancy)
   - Enhanced doctor login to check for existing consultations and restore session automatically
+  - Implemented re-consultation workflow to restore previous consultation data when patients return from lab
+  - Added submit button to consultation form with proper database updating for re-consultations
+  - Enhanced lab review workflow to send patients back to pharmacy after doctor reviews lab results
+  - Improved consultation data persistence by checking both session state and database for existing information
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

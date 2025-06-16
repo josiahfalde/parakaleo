@@ -4068,6 +4068,36 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
     with tab1:
         with st.form(f"consultation_{visit_id}"):
+            # Check for existing consultation data from previous visit
+            consultation_key = f"consultation_data_{visit_id}"
+            existing_data = st.session_state.get(consultation_key, {})
+            
+            # If no session data, check database for previous consultation
+            if not existing_data:
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                           surgical_history, medical_history, allergies, current_medications
+                    FROM visits 
+                    WHERE visit_id = ?
+                ''', (visit_id,))
+                db_data = cursor.fetchone()
+                conn.close()
+                
+                if db_data:
+                    existing_data = {
+                        'chief_complaint': db_data[0] or '',
+                        'symptoms': db_data[1] or '',
+                        'diagnosis': db_data[2] or '',
+                        'treatment_plan': db_data[3] or '',
+                        'notes': db_data[4] or '',
+                        'surgical_history': db_data[5] or '',
+                        'medical_history': db_data[6] or '',
+                        'allergies': db_data[7] or '',
+                        'current_medications': db_data[8] or ''
+                    }
+            
             # History Section (above chief complaint)
             st.markdown("#### Patient History")
             col1, col2 = st.columns(2)
@@ -4075,17 +4105,21 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             with col1:
                 surgical_history = st.text_area(
                     "Surgical History",
+                    value=existing_data.get('surgical_history', ''),
                     placeholder="Previous surgeries, procedures...")
                 medical_history = st.text_area(
                     "Medical History",
+                    value=existing_data.get('medical_history', ''),
                     placeholder="Chronic conditions, past illnesses...")
 
             with col2:
                 allergies = st.text_area(
                     "Allergies",
+                    value=existing_data.get('allergies', ''),
                     placeholder="Drug allergies, food allergies...")
                 current_medications = st.text_area(
                     "Current Medications",
+                    value=existing_data.get('current_medications', ''),
                     placeholder="Current medications and dosages...")
 
             st.markdown("---")
@@ -4095,29 +4129,55 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
             chief_complaint = st.text_area(
                 "Chief Complaint",
+                value=existing_data.get('chief_complaint', ''),
                 placeholder="What brought the patient in today?")
             symptoms = st.text_area(
-                "Symptoms", placeholder="Describe symptoms observed/reported")
-            diagnosis = st.text_area("Diagnosis", placeholder="Your diagnosis")
+                "Symptoms", 
+                value=existing_data.get('symptoms', ''),
+                placeholder="Describe symptoms observed/reported")
+            diagnosis = st.text_area("Diagnosis", 
+                                   value=existing_data.get('diagnosis', ''),
+                                   placeholder="Your diagnosis")
             treatment_plan = st.text_area("Treatment Plan",
+                                          value=existing_data.get('treatment_plan', ''),
                                           placeholder="Recommended treatment")
             notes = st.text_area("Additional Notes",
+                                 value=existing_data.get('notes', ''),
                                  placeholder="Any additional observations")
 
-            # Auto-save consultation data to session state (no button needed)
-            consultation_key = f"consultation_data_{visit_id}"
-            st.session_state[consultation_key] = {
-                'doctor_name': doctor_name,
-                'chief_complaint': chief_complaint,
-                'symptoms': symptoms,
-                'diagnosis': diagnosis,
-                'treatment_plan': treatment_plan,
-                'notes': notes,
-                'surgical_history': surgical_history,
-                'medical_history': medical_history,
-                'allergies': allergies,
-                'current_medications': current_medications
-            }
+            # Submit button for consultation updates
+            if st.form_submit_button("Update Consultation", type="primary"):
+                # Save consultation data to session state and database
+                consultation_key = f"consultation_data_{visit_id}"
+                st.session_state[consultation_key] = {
+                    'doctor_name': doctor_name,
+                    'chief_complaint': chief_complaint,
+                    'symptoms': symptoms,
+                    'diagnosis': diagnosis,
+                    'treatment_plan': treatment_plan,
+                    'notes': notes,
+                    'surgical_history': surgical_history,
+                    'medical_history': medical_history,
+                    'allergies': allergies,
+                    'current_medications': current_medications
+                }
+                
+                # Update database with consultation details
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE visits 
+                    SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
+                        treatment_plan = ?, notes = ?, surgical_history = ?,
+                        medical_history = ?, allergies = ?, current_medications = ?
+                    WHERE visit_id = ?
+                ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                      surgical_history, medical_history, allergies, current_medications, visit_id))
+                conn.commit()
+                conn.close()
+                
+                st.success("Consultation updated successfully!")
+                st.info("Continue to Lab & Prescriptions tab to complete the re-consultation.")
 
     with tab2:
         # Photo documentation section (now in its own tab)
@@ -4430,11 +4490,21 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                               diagnosis, treatment_plan, notes,
                               needs_ophthalmology, datetime.now().isoformat()))
 
+                        # Check if this is a re-consultation (patient returning from lab)
+                        cursor.execute('''
+                            SELECT COUNT(*) FROM lab_tests 
+                            WHERE visit_id = ? AND status = 'completed'
+                        ''', (visit_id,))
+                        completed_labs = cursor.fetchone()[0]
+                        
                         # Update visit status first
                         if needs_ophthalmology:
                             new_status = 'needs_ophthalmology'
                         elif selected_medications:
                             new_status = 'prescribed'
+                            # If this is a re-consultation with completed labs, notify
+                            if completed_labs > 0:
+                                st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
                         elif lab_tests:
                             new_status = 'waiting_lab'
                         else:
