@@ -3974,51 +3974,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 st.session_state.page = 'doctor_interface'
                                 st.rerun()
 
-                        # Store family continuation data in session state
-                        st.session_state.family_consultation_complete = {
-                            'children': family_children,
-                            'parent_name': patient_name
-                        }
-                        
-                        # Don't proceed further, wait for user choice
-                        return
-
-                        # Check if we're in family consultation mode and have remaining children
-                        if st.session_state.get(
-                                'family_consultation_mode', False
-                        ) and 'remaining_family_children' in st.session_state and st.session_state.remaining_family_children:
-                            # Show next child consultation
-                            st.markdown("---")
-                            st.info("👶 **Next Family Member Ready**")
-
-                            next_child = st.session_state.remaining_family_children[
-                                0]
-                            child_id, child_name = next_child
-
-                            col1, col2 = st.columns([1, 1])
-                            with col1:
-                                if st.button(f"🔄 Continue to {child_name}",
-                                             type="primary",
-                                             use_container_width=True):
-                                    # Get next child's visit info
-                                    child_conn = sqlite3.connect(
-                                        db_manager.db_name)
-                                    child_cursor = child_conn.cursor()
-
-                                    child_cursor.execute(
-                                        '''
-                                        SELECT visit_id FROM visits 
-                                        WHERE patient_id = ? AND status = 'waiting_consultation' 
-                                        AND DATE(visit_date) = DATE('now')
-                                        ORDER BY visit_date DESC LIMIT 1
-                                    ''', (child_id, ))
-
-                                    child_visit = child_cursor.fetchone()
-                                    child_conn.close()
-
-                                    if child_visit:
-                                        child_visit_id = child_visit[0]
-                                        # Start consultation for next child
+                        # Individual consultation completed outside family workflow
+                        else:
+                            st.success("✅ Consultation completed successfully!")
+                            # Update doctor status back to available
+                            db_manager.update_doctor_status(st.session_state.doctor_name, "available")
+                            st.session_state.page = 'doctor_interface'
+                            st.rerun()
                                         st.session_state.active_consultation = {
                                             'visit_id': child_visit_id,
                                             'patient_id': child_id,
@@ -4802,6 +4764,65 @@ def pharmacy_interface():
 
 def pending_prescriptions():
     st.markdown("### Prescriptions to Fill")
+    
+    # Check if there's a family pharmacy workflow
+    if 'family_pharmacy_workflow' in st.session_state:
+        st.info("👨‍👩‍👧‍👦 **Family Consultation Complete** - Processing entire family prescriptions")
+        family_data = st.session_state.family_pharmacy_workflow
+        
+        # Process all family members' prescriptions together
+        for member in family_data:
+            st.markdown(f"**{member['patient_name']} (ID: {member['patient_id']})**")
+            
+            # Get prescriptions for this family member
+            conn = sqlite3.connect(db.db_name)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
+                       p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+                FROM prescriptions p
+                JOIN visits v ON p.visit_id = v.visit_id
+                JOIN patients pt ON v.patient_id = pt.patient_id
+                WHERE p.visit_id = ? AND p.status = 'pending' AND p.awaiting_lab = 'no'
+            ''', (member['visit_id'],))
+            
+            member_prescriptions = cursor.fetchall()
+            conn.close()
+            
+            if member_prescriptions:
+                for prescription in member_prescriptions:
+                    st.markdown(f"• {prescription[2]} - {prescription[3]} {prescription[4]} for {prescription[5]}")
+            else:
+                st.markdown("• No prescriptions for this family member")
+        
+        if st.button("Complete All Family Prescriptions", key="complete_family_pharmacy"):
+            # Mark all family prescriptions as filled
+            conn = sqlite3.connect(db.db_name)
+            cursor = conn.cursor()
+            
+            for member in family_data:
+                cursor.execute('''
+                    UPDATE prescriptions 
+                    SET status = 'filled', filled_time = ? 
+                    WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
+                ''', (datetime.now().isoformat(), member['visit_id']))
+                
+                cursor.execute('''
+                    UPDATE visits 
+                    SET pharmacy_time = ?, status = 'completed' 
+                    WHERE visit_id = ?
+                ''', (datetime.now().isoformat(), member['visit_id']))
+            
+            conn.commit()
+            conn.close()
+            
+            # Clear family workflow
+            del st.session_state.family_pharmacy_workflow
+            
+            st.success("✅ All family prescriptions completed!")
+            st.rerun()
+        
+        return
 
     conn = sqlite3.connect(db.db_name)
     cursor = conn.cursor()
