@@ -2086,13 +2086,16 @@ def main():
                 st.session_state.user_role = "ophthalmologist"
                 st.rerun()
 
-        # Admin button spans full width
-        if st.button("Admin",
-                     key="admin",
-                     type="primary",
-                     use_container_width=True):
-            st.session_state.user_role = "admin"
-            st.rerun()
+        # Admin button in bottom row with better spacing
+        st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("Admin",
+                         key="admin",
+                         type="secondary",
+                         use_container_width=True):
+                st.session_state.user_role = "admin"
+                st.rerun()
 
         st.markdown("---")
         st.info(
@@ -2841,17 +2844,152 @@ def triage_interface():
         vital_signs_form(st.session_state.pending_vitals)
         return
 
-    tab1, tab2, tab3 = st.tabs(
-        ["New Patient", "Existing Patient", "Patient Queue"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Pre-Registered Queue", "New Patient", "Existing Patient", "Patient Queue"])
 
     with tab1:
-        new_patient_form()
+        preregistered_queue_view()
 
     with tab2:
-        existing_patient_search()
+        new_patient_form()
 
     with tab3:
+        existing_patient_search()
+
+    with tab4:
         patient_queue_view()
+
+
+def preregistered_queue_view():
+    st.markdown("### 📝 Pre-Registered Patients")
+    st.info("Patients registered through Name Registration station are ready for vital signs collection.")
+    
+    # Get current location
+    location_code = st.session_state.clinic_location['country_code']
+    
+    # Get pre-registered patients waiting for vitals
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, name, age, gender, relationship, family_group_id, created_time, notes
+        FROM patient_names_queue 
+        WHERE status = 'pending_vitals' AND location_code = ?
+        ORDER BY family_group_id, CASE WHEN relationship = 'parent' THEN 0 ELSE 1 END, created_time
+    ''', (location_code,))
+    
+    pending_patients = cursor.fetchall()
+    conn.close()
+    
+    if pending_patients:
+        # Group by family if applicable
+        families = {}
+        individuals = []
+        
+        for row in pending_patients:
+            name_id, name, age, gender, relationship, family_group_id, created_time, notes = row
+            if family_group_id:
+                if family_group_id not in families:
+                    families[family_group_id] = []
+                families[family_group_id].append({
+                    'id': name_id, 'name': name, 'age': age, 'gender': gender,
+                    'relationship': relationship, 'created_time': created_time, 'notes': notes
+                })
+            else:
+                individuals.append({
+                    'id': name_id, 'name': name, 'age': age, 'gender': gender,
+                    'relationship': relationship, 'created_time': created_time, 'notes': notes
+                })
+        
+        # Display families
+        for family_id, members in families.items():
+            with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
+                for member in members:
+                    col1, col2 = st.columns([4, 1])
+                    with col1:
+                        icon = "👨" if member['relationship'] == 'parent' else "👶"
+                        st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                        if member['age']:
+                            st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                        if member['notes']:
+                            st.caption(f"Notes: {member['notes']}")
+                    with col2:
+                        if st.button("Start Vitals", key=f"start_vitals_{member['id']}", type="primary"):
+                            # Create patient record and start vital signs workflow
+                            patient_data = {
+                                'name': member['name'],
+                                'age': member['age'],
+                                'gender': member['gender'],
+                                'phone': None,
+                                'emergency_contact': None,
+                                'medical_history': member['notes'],
+                                'allergies': None
+                            }
+                            
+                            # Register patient in the main system
+                            patient_id = db.add_patient(location_code, **patient_data)
+                            visit_id = db.create_visit(patient_id)
+                            
+                            # Mark as processing in queue
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                UPDATE patient_names_queue 
+                                SET status = 'completed'
+                                WHERE id = ?
+                            ''', (member['id'],))
+                            conn.commit()
+                            conn.close()
+                            
+                            # Set up vital signs workflow
+                            st.session_state.pending_vitals = visit_id
+                            st.session_state.patient_name = member['name']
+                            st.success(f"Patient {member['name']} registered! Patient ID: {patient_id}")
+                            st.rerun()
+        
+        # Display individuals
+        for individual in individuals:
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"👤 **{individual['name']}**")
+                if individual['age']:
+                    st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                if individual['notes']:
+                    st.caption(f"Notes: {individual['notes']}")
+            with col2:
+                if st.button("Start Vitals", key=f"start_vitals_{individual['id']}", type="primary"):
+                    # Create patient record and start vital signs workflow
+                    patient_data = {
+                        'name': individual['name'],
+                        'age': individual['age'],
+                        'gender': individual['gender'],
+                        'phone': None,
+                        'emergency_contact': None,
+                        'medical_history': individual['notes'],
+                        'allergies': None
+                    }
+                    
+                    # Register patient in the main system
+                    patient_id = db.add_patient(location_code, **patient_data)
+                    visit_id = db.create_visit(patient_id)
+                    
+                    # Mark as processing in queue
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE patient_names_queue 
+                        SET status = 'completed'
+                        WHERE id = ?
+                    ''', (individual['id'],))
+                    conn.commit()
+                    conn.close()
+                    
+                    # Set up vital signs workflow
+                    st.session_state.pending_vitals = visit_id
+                    st.session_state.patient_name = individual['name']
+                    st.success(f"Patient {individual['name']} registered! Patient ID: {patient_id}")
+                    st.rerun()
+    else:
+        st.info("No pre-registered patients waiting for vital signs. Check the Name Registration station.")
 
 
 def new_patient_form():
@@ -4956,7 +5094,7 @@ def awaiting_lab_prescriptions():
                             """)
                         
                         with st.container():
-                            if st.button("View Full UA Results", key=f"ua_results_{prescription['id']}"):
+                            if st.button("View Full UA Results", key=f"ua_results_{patient_id}_{lab['id']}"):
                                 st.text(results)
                     
                     elif lab['test_type'].lower() == 'glucose':
