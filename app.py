@@ -3629,6 +3629,23 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             # Submit button for consultation tab
             consultation_submitted = st.form_submit_button(
                 "Save Consultation Details", type="secondary")
+            
+            if consultation_submitted:
+                # Save consultation data to session state for cross-tab access
+                consultation_key = f"consultation_data_{visit_id}"
+                st.session_state[consultation_key] = {
+                    'doctor_name': doctor_name,
+                    'chief_complaint': chief_complaint,
+                    'symptoms': symptoms,
+                    'diagnosis': diagnosis,
+                    'treatment_plan': treatment_plan,
+                    'notes': notes,
+                    'surgical_history': surgical_history,
+                    'medical_history': medical_history,
+                    'allergies': allergies,
+                    'current_medications': current_medications
+                }
+                st.success("Consultation details saved!")
 
     with tab2:
         # Photo documentation section (now in its own tab)
@@ -3887,7 +3904,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 key=f"ophth_{visit_id}")
 
             if st.form_submit_button("Complete Consultation", type="primary"):
-                if doctor_name and chief_complaint:
+                # Get doctor name and chief complaint from session state or form data
+                current_doctor_name = st.session_state.get('doctor_name', '')
+                
+                # Check if consultation data was saved in the first tab
+                consultation_key = f"consultation_data_{visit_id}"
+                consultation_data = st.session_state.get(consultation_key, {})
+                current_chief_complaint = consultation_data.get('chief_complaint', '')
+                
+                if current_doctor_name and (current_chief_complaint or len(selected_medications) > 0 or len(lab_tests) > 0):
                     try:
                         # Use the database manager methods instead of direct connection
                         # Save consultation
