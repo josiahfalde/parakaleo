@@ -354,11 +354,45 @@ class DatabaseManager:
             )
         ''')
 
+        # Create patient_names_queue table for pre-registration
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patient_names_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                age INTEGER,
+                gender TEXT,
+                location_code TEXT,
+                relationship TEXT DEFAULT 'individual',
+                family_group_id TEXT,
+                created_time TEXT,
+                status TEXT DEFAULT 'pending_vitals',
+                processed_by TEXT,
+                notes TEXT
+            )
+        ''')
+
         # Add disposition column to lab_tests table if it doesn't exist
         try:
             cursor.execute('ALTER TABLE lab_tests ADD COLUMN disposition TEXT DEFAULT "return_to_provider"')
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        # Create patient_names_queue table for pre-registration
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS patient_names_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                age INTEGER,
+                gender TEXT,
+                location_code TEXT,
+                relationship TEXT DEFAULT 'individual',
+                family_group_id TEXT,
+                created_time TEXT,
+                status TEXT DEFAULT 'pending_vitals',
+                processed_by TEXT,
+                notes TEXT
+            )
+        ''')
 
         try:
             cursor.execute('ALTER TABLE patients ADD COLUMN created_date TEXT')
@@ -2016,6 +2050,13 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
+            if st.button("Name Registration",
+                         key="name_registration",
+                         type="primary",
+                         use_container_width=True):
+                st.session_state.user_role = "name_registration"
+                st.rerun()
+
             if st.button("Triage Nurse",
                          key="triage",
                          type="primary",
@@ -2075,7 +2116,9 @@ def main():
         return
 
 # Role-based interface routing
-    if st.session_state.user_role == "triage":
+    if st.session_state.user_role == "name_registration":
+        name_registration_interface()
+    elif st.session_state.user_role == "triage":
         triage_interface()
     elif st.session_state.user_role == "doctor":
         if 'doctor_name' not in st.session_state:
@@ -2535,6 +2578,245 @@ def family_vital_signs_collection():
                          use_container_width=True):
                 st.session_state.current_family_vital_index = len(family_queue)
                 st.rerun()
+
+
+def name_registration_interface():
+    add_to_history('name_registration')
+    st.markdown("## 📝 Name Registration Station")
+    st.info("Register patient names ahead of triage to speed up workflow. Names entered here will be available for vital signs collection.")
+
+    # Current location
+    location_code = st.session_state.clinic_location['country_code']
+    
+    tab1, tab2 = st.tabs(["Register Names", "Name Queue"])
+    
+    with tab1:
+        st.markdown("### Add Patient Names")
+        
+        registration_type = st.radio("Registration Type", 
+                                   ["Individual Patient", "Family Group"], 
+                                   horizontal=True)
+        
+        if registration_type == "Individual Patient":
+            with st.form("name_registration_individual"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    name = st.text_input("Patient Name *")
+                    age = st.number_input("Age", min_value=0, max_value=120, value=None)
+                with col2:
+                    gender = st.selectbox("Gender", ["", "Male", "Female"])
+                    notes = st.text_input("Notes (optional)", placeholder="Special considerations...")
+                
+                if st.form_submit_button("Add to Queue", type="primary"):
+                    if name.strip():
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            INSERT INTO patient_names_queue 
+                            (name, age, gender, location_code, relationship, created_time, notes)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (name.strip(), age, gender if gender else None, location_code, 
+                             'individual', datetime.now().isoformat(), notes.strip() if notes else None))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Added {name.strip()} to registration queue!")
+                        st.rerun()
+                    else:
+                        st.error("Please enter a patient name.")
+        
+        else:  # Family Group
+            st.markdown("#### Family Group Registration")
+            with st.form("name_registration_family"):
+                family_name = st.text_input("Family Name", placeholder="e.g., Rodriguez Family")
+                
+                st.markdown("**Parent/Guardian:**")
+                parent_name = st.text_input("Parent/Guardian Name *")
+                parent_age = st.number_input("Parent Age", min_value=18, max_value=120, value=None)
+                parent_gender = st.selectbox("Parent Gender", ["", "Male", "Female"], key="parent_gender")
+                
+                st.markdown("**Children:**")
+                num_children = st.number_input("Number of Children", min_value=1, max_value=10, value=1)
+                
+                children_data = []
+                for i in range(num_children):
+                    st.markdown(f"**Child {i+1}:**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        child_name = st.text_input(f"Child {i+1} Name", key=f"child_name_{i}")
+                        child_age = st.number_input(f"Child {i+1} Age", min_value=0, max_value=17, value=None, key=f"child_age_{i}")
+                    with col2:
+                        child_gender = st.selectbox(f"Child {i+1} Gender", ["", "Male", "Female"], key=f"child_gender_{i}")
+                    
+                    if child_name:
+                        children_data.append({
+                            'name': child_name.strip(),
+                            'age': child_age,
+                            'gender': child_gender if child_gender else None
+                        })
+                
+                family_notes = st.text_input("Family Notes", placeholder="Special considerations for the family...")
+                
+                if st.form_submit_button("Add Family to Queue", type="primary"):
+                    if parent_name.strip() and children_data:
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        
+                        # Generate family group ID
+                        family_group_id = f"FAM_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        
+                        # Add parent
+                        cursor.execute('''
+                            INSERT INTO patient_names_queue 
+                            (name, age, gender, location_code, relationship, family_group_id, created_time, notes)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (parent_name.strip(), parent_age, parent_gender if parent_gender else None, 
+                             location_code, 'parent', family_group_id, datetime.now().isoformat(), 
+                             f"Family: {family_name}. {family_notes}" if family_notes else f"Family: {family_name}"))
+                        
+                        # Add children
+                        for child in children_data:
+                            cursor.execute('''
+                                INSERT INTO patient_names_queue 
+                                (name, age, gender, location_code, relationship, family_group_id, created_time, notes)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (child['name'], child['age'], child['gender'], location_code, 
+                                 'child', family_group_id, datetime.now().isoformat(), 
+                                 f"Child of {parent_name.strip()}"))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success(f"Added family of {len(children_data) + 1} members to registration queue!")
+                        st.rerun()
+                    else:
+                        st.error("Please enter parent name and at least one child.")
+    
+    with tab2:
+        st.markdown("### Registration Queue")
+        
+        # Get pending names
+        conn = sqlite3.connect(db.db_name)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, name, age, gender, relationship, family_group_id, created_time, notes, status
+            FROM patient_names_queue 
+            WHERE status = 'pending_vitals' AND location_code = ?
+            ORDER BY family_group_id, CASE WHEN relationship = 'parent' THEN 0 ELSE 1 END, created_time
+        ''', (location_code,))
+        
+        pending_names = cursor.fetchall()
+        conn.close()
+        
+        if pending_names:
+            # Group by family if applicable
+            families = {}
+            individuals = []
+            
+            for row in pending_names:
+                name_id, name, age, gender, relationship, family_group_id, created_time, notes, status = row
+                if family_group_id:
+                    if family_group_id not in families:
+                        families[family_group_id] = []
+                    families[family_group_id].append({
+                        'id': name_id, 'name': name, 'age': age, 'gender': gender,
+                        'relationship': relationship, 'created_time': created_time, 'notes': notes
+                    })
+                else:
+                    individuals.append({
+                        'id': name_id, 'name': name, 'age': age, 'gender': gender,
+                        'relationship': relationship, 'created_time': created_time, 'notes': notes
+                    })
+            
+            # Display families
+            for family_id, members in families.items():
+                with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
+                    for member in members:
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        with col1:
+                            icon = "👨" if member['relationship'] == 'parent' else "👶"
+                            st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                            if member['age']:
+                                st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                            if member['notes']:
+                                st.caption(f"Notes: {member['notes']}")
+                        with col2:
+                            if st.button("Start Vitals", key=f"vitals_{member['id']}", type="secondary"):
+                                # Mark as processing and redirect to triage
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE patient_names_queue 
+                                    SET status = 'processing_vitals', processed_by = ?
+                                    WHERE id = ?
+                                ''', (st.session_state.get('user_name', 'Triage Staff'), member['id']))
+                                conn.commit()
+                                conn.close()
+                                
+                                # Store patient info for triage
+                                st.session_state.preregistered_patient = {
+                                    'id': member['id'],
+                                    'name': member['name'],
+                                    'age': member['age'],
+                                    'gender': member['gender'],
+                                    'family_group_id': family_id,
+                                    'relationship': member['relationship'],
+                                    'notes': member['notes']
+                                }
+                                st.session_state.user_role = "triage"
+                                st.rerun()
+                        with col3:
+                            if st.button("Remove", key=f"remove_{member['id']}", type="secondary"):
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (member['id'],))
+                                conn.commit()
+                                conn.close()
+                                st.rerun()
+            
+            # Display individuals
+            for individual in individuals:
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.write(f"👤 **{individual['name']}**")
+                    if individual['age']:
+                        st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                    if individual['notes']:
+                        st.caption(f"Notes: {individual['notes']}")
+                with col2:
+                    if st.button("Start Vitals", key=f"vitals_{individual['id']}", type="secondary"):
+                        # Mark as processing and redirect to triage
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE patient_names_queue 
+                            SET status = 'processing_vitals', processed_by = ?
+                            WHERE id = ?
+                        ''', (st.session_state.get('user_name', 'Triage Staff'), individual['id']))
+                        conn.commit()
+                        conn.close()
+                        
+                        # Store patient info for triage
+                        st.session_state.preregistered_patient = {
+                            'id': individual['id'],
+                            'name': individual['name'],
+                            'age': individual['age'],
+                            'gender': individual['gender'],
+                            'family_group_id': None,
+                            'relationship': individual['relationship'],
+                            'notes': individual['notes']
+                        }
+                        st.session_state.user_role = "triage"
+                        st.rerun()
+                with col3:
+                    if st.button("Remove", key=f"remove_{individual['id']}", type="secondary"):
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (individual['id'],))
+                        conn.commit()
+                        conn.close()
+                        st.rerun()
+        else:
+            st.info("No names in registration queue. Add names in the 'Register Names' tab.")
 
 
 def triage_interface():
