@@ -1339,7 +1339,7 @@ def go_back():
 def show_back_button():
     """Display universal back button on all pages - truly fixed position"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create a simple fixed back button without inline handlers
+        # Create a simple fixed back button positioned properly
         st.markdown("""
         <div id="fixed-back-button" style="
             position: fixed;
@@ -1435,7 +1435,7 @@ def main():
         margin-left: 10px !important;
         position: fixed !important;
         top: 15px !important;
-        left: 60px !important;
+        right: 20px !important;
         z-index: 998 !important;
     }
     
@@ -1584,27 +1584,7 @@ def main():
         background: linear-gradient(135deg, #f3fdf4 0%, #ffffff 100%);
     }
     
-    /* Sticky back button */
-    .css-1rs6os ~ div button[title*="Go to previous page"] {
-        position: fixed !important;
-        top: 20px !important;
-        left: 20px !important;
-        z-index: 999 !important;
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 50% !important;
-        width: 50px !important;
-        height: 50px !important;
-        font-size: 18px !important;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    .css-1rs6os ~ div button[title*="Go to previous page"]:hover {
-        transform: scale(1.1) !important;
-        background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
-    }
+
     
     /* Modern input styling */
     .stTextInput input, .stSelectbox select, .stNumberInput input {
