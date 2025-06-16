@@ -1258,16 +1258,40 @@ def main():
     # Show loading screen on first load
     show_loading_screen()
     
-    # Always visible back button - floating action button style
+    # Fixed back arrow button - floating action button
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Create container at the top for back navigation
-        back_container = st.container()
-        with back_container:
-            col1, col2 = st.columns([1, 10])
-            with col1:
-                if st.button("🔙 Back", key="floating_back_btn", type="secondary", use_container_width=True):
-                    go_back()
-                    st.rerun()
+        # Use session state to track back button clicks
+        if 'back_clicked' not in st.session_state:
+            st.session_state.back_clicked = False
+        
+        # Add the fixed back button HTML
+        st.markdown("""
+        <div id="back-arrow-button" style="
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 99999;
+            width: 50px;
+            height: 50px;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
+        " onclick="document.getElementById('hidden-back-btn').click();">
+            <span style="color: white; font-size: 20px; font-weight: bold; margin-left: -2px;">←</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Hidden Streamlit button to handle the actual navigation
+        st.markdown('<div style="position: absolute; left: -9999px;">', unsafe_allow_html=True)
+        if st.button("Back", key="hidden-back-btn"):
+            go_back()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Modern UI styling with BackpackEMR-inspired design
     st.markdown("""
@@ -2586,20 +2610,26 @@ def new_patient_form():
                         for visit in family_visits:
                             st.write(f"• {visit['patient_name']} ({visit['relationship']}): {visit['patient_id']}")
                         
-                        # Store family visits for vital signs processing
-                        st.session_state.family_vital_signs_queue = family_visits.copy()
-                        st.session_state.current_family_vital_index = 0
-                        st.session_state.family_workflow_active = True
+                        # Show continue button instead of auto-redirecting
+                        st.markdown("---")
+                        st.markdown("**Next Steps:**")
+                        col1, col2 = st.columns(2)
                         
-                        # Clear family registration state
-                        if 'family_parent_id' in st.session_state:
-                            del st.session_state.family_parent_id
-                        if 'family_parent_name' in st.session_state:
-                            del st.session_state.family_parent_name
+                        with col1:
+                            if st.button("📊 Continue to Vital Signs", type="primary", use_container_width=True):
+                                # Store family visits for vital signs processing
+                                st.session_state.family_vital_signs_queue = family_visits.copy()
+                                st.session_state.current_family_vital_index = 0
+                                st.session_state.family_workflow_active = True
+                                st.rerun()
                         
-                        st.info("🔄 Redirecting to family vital signs collection...")
-                        time.sleep(2)
-                        st.rerun()
+                        with col2:
+                            if st.button("📋 Register Another Family", type="secondary", use_container_width=True):
+                                # Clear any family workflow states
+                                for key in ['family_vital_signs_queue', 'current_family_vital_index', 'family_workflow_active']:
+                                    if key in st.session_state:
+                                        del st.session_state[key]
+                                st.rerun()
                     
                     else:
                         st.error("Please provide at least one child's name, or set number of children to 0.")
