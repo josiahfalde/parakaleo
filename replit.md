@@ -109,6 +109,11 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Updated pharmacy references to "Pharmacy/Lab Station" throughout application
   - Added automatic navigation back to consultation tab for smoother family workflow
   - Fixed patient history display to extend outside patient management section
+  - Streamlined triage interface by removing medical history and allergies fields (moved to doctor consultation)
+  - Enhanced prescription checkbox system to show popup fields immediately when medication is checked
+  - Implemented autosave for consultation documents eliminating need for manual save buttons
+  - Removed back button from top left for cleaner interface design
+  - Fixed family workflow navigation to automatically return to consultation tab for next member
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
