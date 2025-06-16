@@ -410,6 +410,7 @@ class DatabaseManager:
             'symptoms TEXT',
             'diagnosis TEXT',
             'treatment_plan TEXT',
+            'notes TEXT',
             'surgical_history TEXT',
             'medical_history TEXT',
             'allergies TEXT',
