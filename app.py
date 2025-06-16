@@ -3981,43 +3981,6 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             db_manager.update_doctor_status(st.session_state.doctor_name, "available")
                             st.session_state.page = 'doctor_interface'
                             st.rerun()
-                                        st.session_state.active_consultation = {
-                                            'visit_id': child_visit_id,
-                                            'patient_id': child_id,
-                                            'patient_name': child_name
-                                        }
-
-                                        # Remove this child from remaining list
-                                        st.session_state.remaining_family_children = st.session_state.remaining_family_children[
-                                            1:]
-
-                                        # Update doctor status
-                                        db_manager.update_doctor_status(
-                                            st.session_state.doctor_name,
-                                            "with_patient", child_id,
-                                            child_name)
-                                        st.rerun()
-                                    else:
-                                        st.error(
-                                            f"No active visit found for {child_name}"
-                                        )
-
-                            with col2:
-                                if st.button("🏠 Finish Family Consultation",
-                                             type="secondary",
-                                             use_container_width=True):
-                                    # Clear family consultation state
-                                    if 'remaining_family_children' in st.session_state:
-                                        del st.session_state.remaining_family_children
-                                    if 'family_consultation_mode' in st.session_state:
-                                        del st.session_state.family_consultation_mode
-
-                                    st.session_state.page = 'doctor'
-                                    st.rerun()
-
-                            return
-
-                        # Clear family consultation mode if no more children
                         if st.session_state.get('family_consultation_mode',
                                                 False):
                             if 'remaining_family_children' in st.session_state:
@@ -4032,82 +3995,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 "All family members have been seen by the doctor."
                             )
 
-                        # If this is a family consultation, show children consultations below
-                        if is_family_consultation:
-                            st.session_state.show_family_children = True
-                        else:
-                            st.session_state.page = 'doctor'
-                            st.rerun()
-
                     except Exception as e:
                         st.error(f"Error completing consultation: {str(e)}")
-                        # No need to handle db_conn here since it's handled in the try block
                 else:
                     st.error(
                         "Please fill in required fields: Doctor Name and Chief Complaint"
                     )
-
-    # Family consultation continuation buttons - outside the form
-    if st.session_state.get('family_consultation_complete'):
-        family_data = st.session_state.family_consultation_complete
-        st.markdown("---")
-        st.info(f"Parent consultation completed. {len(family_data['children'])} children are waiting for consultation.")
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("Continue to Children", type="primary", use_container_width=True):
-                # Clear current consultation first
-                if 'active_consultation' in st.session_state:
-                    del st.session_state.active_consultation
-
-                # Start with first child
-                first_child = family_data['children'][0]
-                child_id, child_name = first_child
-
-                # Get child's visit info
-                db_manager = get_db_manager()
-                child_conn = sqlite3.connect(db_manager.db_name)
-                child_cursor = child_conn.cursor()
-
-                child_cursor.execute('''
-                    SELECT visit_id FROM visits 
-                    WHERE patient_id = ? AND status = 'waiting_consultation' 
-                    AND DATE(visit_date) = DATE('now')
-                    ORDER BY visit_date DESC LIMIT 1
-                ''', (child_id,))
-
-                child_visit = child_cursor.fetchone()
-                child_conn.close()
-
-                if child_visit:
-                    child_visit_id = child_visit[0]
-                    # Start consultation for this child
-                    st.session_state.active_consultation = {
-                        'visit_id': child_visit_id,
-                        'patient_id': child_id,
-                        'patient_name': child_name
-                    }
-                    # Store remaining children for sequential consultation
-                    remaining_children = family_data['children'][1:] if len(family_data['children']) > 1 else []
-                    if remaining_children:
-                        st.session_state.remaining_family_children = remaining_children
-
-                    # Mark this as a family consultation continuation
-                    st.session_state.family_consultation_mode = True
-
-                    # Clear the completion flag
-                    del st.session_state.family_consultation_complete
-                    
-                    # Update doctor status
-                    db_manager.update_doctor_status(
-                        st.session_state.doctor_name,
-                        "with_patient", child_id, child_name)
-                    st.rerun()
-                else:
-                    st.error(f"No active visit found for {child_name}")
-
-        with col2:
-            if st.button("Return to Queue", type="secondary", use_container_width=True):
                 del st.session_state.family_consultation_complete
                 st.session_state.page = 'doctor'
                 st.rerun()
