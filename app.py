@@ -3615,8 +3615,9 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             notes = st.text_area("Additional Notes",
                                  placeholder="Any additional observations")
 
-            # Auto-save consultation data - no submit button needed
-            consultation_submitted = True  # Always save consultation data
+            # Submit button for consultation tab
+            consultation_submitted = st.form_submit_button(
+                "Save Consultation Details", type="secondary")
 
     with tab2:
         # Photo documentation section (now in its own tab)
