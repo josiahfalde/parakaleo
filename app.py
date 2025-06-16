@@ -1779,7 +1779,25 @@ def main():
     .block-container {
         padding-top: 1rem !important;
     }
+    .offline-indicator {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #10b981;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 1000;
+    }
     </style>
+    """, unsafe_allow_html=True)
+    
+    # Offline mode indicator
+    st.markdown("""
+    <div class="offline-indicator">
+        🔄 OFFLINE MODE - Data saved locally
+    </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1, 1])
