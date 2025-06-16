@@ -4311,8 +4311,8 @@ def pharmacy_interface():
     add_to_history('pharmacy')
     st.markdown("## 💊 Pharmacy/Lab Station")
 
-    tab1, tab2, tab3 = st.tabs(
-        ["Ready to Fill", "Lab Results", "Filled Prescriptions"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["Ready to Fill", "Lab Results", "Lab Input", "Filled Prescriptions"])
 
     with tab1:
         pending_prescriptions()
@@ -4321,6 +4321,9 @@ def pharmacy_interface():
         awaiting_lab_prescriptions()
 
     with tab3:
+        lab_results_input()
+
+    with tab4:
         filled_prescriptions()
 
 
@@ -4648,6 +4651,198 @@ def awaiting_lab_prescriptions():
         st.info("No completed lab results available today.")
 
 
+def lab_results_input():
+    st.markdown("### Lab Results Input")
+    st.info("Input lab test results for patients. Results will be sent back to the doctor along with the patient.")
+    
+    # Get pending lab tests for today
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT lt.id, lt.visit_id, lt.test_type, pt.name, pt.patient_id, lt.ordered_time, lt.ordered_by
+        FROM lab_tests lt
+        JOIN visits v ON lt.visit_id = v.visit_id
+        JOIN patients pt ON v.patient_id = pt.patient_id
+        WHERE lt.status = 'pending' AND DATE(lt.ordered_time) = DATE('now')
+        ORDER BY lt.ordered_time
+    ''')
+    
+    pending_tests = cursor.fetchall()
+    conn.close()
+    
+    if pending_tests:
+        for test in pending_tests:
+            test_id, visit_id, test_type, patient_name, patient_id, ordered_time, ordered_by = test
+            
+            with st.expander(f"🧪 {test_type} - {patient_name} (ID: {patient_id})", expanded=True):
+                st.markdown(f"**Ordered by:** {ordered_by}")
+                st.markdown(f"**Ordered:** {ordered_time[:16].replace('T', ' ')}")
+                
+                # Different input forms based on test type
+                if test_type.lower() == 'urinalysis':
+                    st.markdown("#### 10-Parameter Urinalysis Input")
+                    
+                    with st.form(f"urinalysis_{test_id}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**Physical Parameters:**")
+                            color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"color_{test_id}")
+                            clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"clarity_{test_id}")
+                            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005, key=f"sg_{test_id}")
+                            ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"ph_{test_id}")
+                            protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"protein_{test_id}")
+                        
+                        with col2:
+                            st.markdown("**Chemical Parameters:**")
+                            glucose = st.selectbox("Glucose", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"glucose_{test_id}")
+                            ketones = st.selectbox("Ketones", ["Negative", "Trace", "Small", "Moderate", "Large"], key=f"ketones_{test_id}")
+                            blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"blood_{test_id}")
+                            leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"leuk_{test_id}")
+                            nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"nitrites_{test_id}")
+                        
+                        if st.form_submit_button("Complete Urinalysis", type="primary"):
+                            results = f"""URINALYSIS RESULTS:
+Physical Parameters:
+- Color: {color}
+- Clarity: {clarity}
+- Specific Gravity: {specific_gravity}
+- pH: {ph}
+
+Chemical Parameters:
+- Protein: {protein}
+- Glucose: {glucose}
+- Ketones: {ketones}
+- Blood: {blood}
+- Leukocyte Esterase: {leukocyte_esterase}
+- Nitrites: {nitrites}"""
+                            
+                            # Save results to database
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                UPDATE lab_tests 
+                                SET results = ?, completed_time = ?, status = 'completed'
+                                WHERE id = ?
+                            ''', (results, datetime.now().isoformat(), test_id))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success("Urinalysis results saved successfully!")
+                            st.rerun()
+
+                elif test_type.lower() == 'blood glucose' or test_type.lower() == 'glucose':
+                    st.markdown("#### Blood Glucose Test Input")
+                    
+                    with st.form(f"glucose_{test_id}"):
+                        glucose_value = st.number_input("Glucose Level (mg/dL)", min_value=10, max_value=800, value=100, key=f"glucose_val_{test_id}")
+                        glucose_units = st.selectbox("Units", ["mg/dL", "mmol/L"], key=f"glucose_units_{test_id}")
+                        
+                        # Interpretation helper
+                        if glucose_units == "mg/dL":
+                            if glucose_value < 70:
+                                interpretation = "Low (Hypoglycemia)"
+                            elif glucose_value <= 99:
+                                interpretation = "Normal"
+                            elif glucose_value <= 125:
+                                interpretation = "Elevated (Prediabetes range)"
+                            else:
+                                interpretation = "High (Diabetes range)"
+                        else:
+                            if glucose_value < 3.9:
+                                interpretation = "Low (Hypoglycemia)"
+                            elif glucose_value <= 5.5:
+                                interpretation = "Normal"
+                            elif glucose_value <= 6.9:
+                                interpretation = "Elevated (Prediabetes range)"
+                            else:
+                                interpretation = "High (Diabetes range)"
+                        
+                        st.info(f"Interpretation: {interpretation}")
+                        
+                        if st.form_submit_button("Complete Glucose Test", type="primary"):
+                            results = f"{glucose_value} {glucose_units} ({interpretation})"
+                            
+                            # Save results to database
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                UPDATE lab_tests 
+                                SET results = ?, completed_time = ?, status = 'completed'
+                                WHERE id = ?
+                            ''', (results, datetime.now().isoformat(), test_id))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success("Glucose test results saved successfully!")
+                            st.rerun()
+
+                elif test_type.lower() == 'pregnancy test' or test_type.lower() == 'pregnancy':
+                    st.markdown("#### Pregnancy Test Input")
+                    
+                    with st.form(f"pregnancy_{test_id}"):
+                        pregnancy_result = st.selectbox("Pregnancy Test Result", ["Negative", "Positive"], key=f"pregnancy_{test_id}")
+                        
+                        # Additional notes for pregnancy test
+                        if pregnancy_result == "Positive":
+                            st.success("Positive result - Patient is pregnant")
+                        else:
+                            st.info("Negative result - Patient is not pregnant")
+                        
+                        test_notes = st.text_area("Additional Notes (optional)", 
+                                                 placeholder="Any observations about the test...", 
+                                                 key=f"preg_notes_{test_id}")
+                        
+                        if st.form_submit_button("Complete Pregnancy Test", type="primary"):
+                            results = pregnancy_result
+                            if test_notes.strip():
+                                results += f" - Notes: {test_notes.strip()}"
+                            
+                            # Save results to database
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                UPDATE lab_tests 
+                                SET results = ?, completed_time = ?, status = 'completed'
+                                WHERE id = ?
+                            ''', (results, datetime.now().isoformat(), test_id))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success("Pregnancy test results saved successfully!")
+                            st.rerun()
+
+                else:
+                    # Generic test input for other test types
+                    st.markdown(f"#### {test_type} Input")
+                    
+                    with st.form(f"generic_{test_id}"):
+                        test_results = st.text_area("Test Results", 
+                                                   placeholder="Enter the test results...",
+                                                   key=f"generic_results_{test_id}")
+                        
+                        if st.form_submit_button(f"Complete {test_type}", type="primary"):
+                            if test_results.strip():
+                                # Save results to database
+                                conn = sqlite3.connect(db.db_name)
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE lab_tests 
+                                    SET results = ?, completed_time = ?, status = 'completed'
+                                    WHERE id = ?
+                                ''', (test_results.strip(), datetime.now().isoformat(), test_id))
+                                conn.commit()
+                                conn.close()
+                                
+                                st.success(f"{test_type} results saved successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Please enter test results before submitting.")
+    else:
+        st.info("No pending lab tests for today.")
+
+
 def filled_prescriptions():
     st.markdown("### Today's Filled Prescriptions")
 
@@ -4678,7 +4873,7 @@ def filled_prescriptions():
                     <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Dosage:</strong> {prescription[1]}</p>
                 </div>
                 {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[4]}</p>' if prescription[4] else ''}
-                <p style="margin: 0; color: #065f46; font-size: 14px; background: #ecfdf5; padding: 6px 12px; border-radius: 6px; border-left: 3px solid #10b981;"><strong>Filled:</strong> {prescription[5][:16].replace('T', ' ')}</p>
+
             </div>
             """,
                         unsafe_allow_html=True)
