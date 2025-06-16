@@ -328,6 +328,17 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add amount and indications columns to preset_medications table
+        try:
+            cursor.execute('ALTER TABLE preset_medications ADD COLUMN amount TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute('ALTER TABLE preset_medications ADD COLUMN indications TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         try:
             cursor.execute('ALTER TABLE patients ADD COLUMN created_date TEXT')
         except sqlite3.OperationalError:
@@ -5519,12 +5530,17 @@ def medication_management():
                 med_name = st.text_input("Medication Name")
                 dosages = st.text_input("Common Dosages",
                                         placeholder="e.g., 250mg, 500mg")
+                amount = st.text_input("Amount/Quantity",
+                                     placeholder="e.g., 30 tablets, 100ml bottle")
             with col2:
                 category = st.selectbox("Category", [
                     "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes",
                     "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic",
                     "Cholesterol", "UTI Antibiotic", "Other"
                 ])
+                indications = st.text_area("Clinical Indications",
+                                         placeholder="e.g., Hypertension, Pain relief, Bacterial infections",
+                                         height=100)
 
             if st.form_submit_button("Add Medication"):
                 if med_name:
@@ -5532,9 +5548,9 @@ def medication_management():
                     cursor = conn.cursor()
                     cursor.execute(
                         '''
-                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab)
-                        VALUES (?, ?, ?, ?)
-                    ''', (med_name, dosages, category, "no"))
+                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (med_name, dosages, category, "no", amount, indications))
                     conn.commit()
                     conn.close()
                     st.success("Medication added!")
@@ -5567,6 +5583,9 @@ def medication_management():
                                     "Common Dosages",
                                     value=med['common_dosages'],
                                     height=100)
+                                new_amount = st.text_input(
+                                    "Amount/Quantity",
+                                    value=med.get('amount', ''))
                             with col2:
                                 categories = [
                                     "Pain Relief", "Antibiotic",
@@ -5583,6 +5602,10 @@ def medication_management():
                                 new_category = st.selectbox("Category",
                                                             categories,
                                                             index=cat_index)
+                                new_indications = st.text_area(
+                                    "Clinical Indications",
+                                    value=med.get('indications', ''),
+                                    height=100)
 
                             col_save, col_cancel = st.columns(2)
                             with col_save:
@@ -5595,12 +5618,13 @@ def medication_management():
                                         cursor.execute(
                                             '''
                                             UPDATE preset_medications 
-                                            SET medication_name = ?, common_dosages = ?, category = ?
+                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?
                                             WHERE id = ?
                                         ''',
                                             (new_name.strip(),
                                              new_dosages.strip() if new_dosages
-                                             else "", new_category, med['id']))
+                                             else "", new_category, new_amount.strip() if new_amount else "", 
+                                             new_indications.strip() if new_indications else "", med['id']))
                                         conn.commit()
                                         conn.close()
                                         st.session_state[edit_key] = False
@@ -5616,10 +5640,14 @@ def medication_management():
                                     st.rerun()
                     else:
                         # Display mode
-                        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                        col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
                         with col1:
                             st.write(f"**{med['medication_name']}**")
-                            st.caption(med['common_dosages'])
+                            st.caption(f"Dosages: {med['common_dosages']}")
+                            if med.get('amount'):
+                                st.caption(f"Amount: {med['amount']}")
+                            if med.get('indications'):
+                                st.caption(f"Indications: {med['indications']}")
                         with col2:
                             st.write(f"{med['category']}")
                         with col3:

@@ -118,6 +118,7 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented detailed lab result forms with clinical interpretation and structured data entry
   - Removed filled prescription timestamps from display for cleaner interface
   - Enhanced lab workflow to send completed results back to doctors with patients
+  - Added amount and indications fields to medication management admin section for complete drug information
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
