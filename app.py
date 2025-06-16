@@ -3983,7 +3983,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             else:
                                 # All family members completed - go to pharmacy workflow
                                 st.success(f"✅ All family consultations completed!")
-                                st.info("🏥 Sending entire family to pharmacy...")
+                                st.info("🏥 Sending entire family to pharmacy/lab...")
                                 
                                 # Set family pharmacy workflow
                                 st.session_state.family_pharmacy_workflow = family_data['completed_consultations']
@@ -4248,7 +4248,7 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
 
 def pharmacy_interface():
     add_to_history('pharmacy')
-    st.markdown("## 💊 Pharmacy Station")
+    st.markdown("## 💊 Pharmacy/Lab Station")
 
     tab1, tab2, tab3 = st.tabs(
         ["Ready to Fill", "Awaiting Lab Results", "Filled Prescriptions"])

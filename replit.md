@@ -100,6 +100,15 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
 
 ## Changelog
 
+- June 16, 2025. Prescription UI and family workflow improvements
+  - Restored prescription checkbox functionality with popup options appearing after medication selection
+  - Fixed family consultation workflow to process all family members (parent and children) sequentially 
+  - Enhanced family consultation interface with progress tracking and member status display
+  - Improved error handling with user-friendly messages for session state issues
+  - Enhanced pharmacy/lab styling with better readability for timestamps and patient IDs
+  - Updated pharmacy references to "Pharmacy/Lab Station" throughout application
+  - Added automatic navigation back to consultation tab for smoother family workflow
+  - Fixed patient history display to extend outside patient management section
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
