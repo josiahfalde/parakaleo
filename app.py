@@ -1999,7 +1999,7 @@ def main():
                 st.rerun()
 
         with col2:
-            if st.button("Pharmacy",
+            if st.button("Pharmacy/Lab",
                          key="pharmacy",
                          type="primary",
                          use_container_width=True):
@@ -3274,12 +3274,14 @@ def consultation_interface():
 
     cursor.execute('''
         SELECT v.visit_id, v.patient_id, p.name, v.priority, vs.systolic_bp, 
-               vs.diastolic_bp, vs.heart_rate, vs.temperature, p.parent_id, p.relationship
+               vs.diastolic_bp, vs.heart_rate, vs.temperature, p.parent_id, p.relationship,
+               v.return_reason, v.consultation_time
         FROM visits v
         JOIN patients p ON v.patient_id = p.patient_id
         LEFT JOIN vital_signs vs ON v.visit_id = vs.visit_id
         WHERE v.status = 'waiting_consultation' AND DATE(v.visit_date) = DATE('now')
         ORDER BY 
+            CASE WHEN v.return_reason = 'pharmacy_lab_review' THEN 0 ELSE 1 END,
             CASE WHEN p.parent_id IS NULL THEN 0 ELSE 1 END,
             COALESCE(p.parent_id, p.patient_id),
             CASE v.priority 
@@ -3297,50 +3299,145 @@ def consultation_interface():
     families = {}
     individual_patients = []
 
+    # Separate patients with lab results vs new patients
+    lab_return_patients = []
+    regular_patients = []
+    
     for patient in waiting_patients:
-        visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp, parent_id, relationship = patient
+        visit_id, patient_id, name, priority, sys_bp, dia_bp, hr, temp, parent_id, relationship, return_reason, consultation_time = patient
+        
+        patient_data = {
+            'visit_id': visit_id,
+            'patient_id': patient_id,
+            'name': name,
+            'priority': priority,
+            'sys_bp': sys_bp,
+            'dia_bp': dia_bp,
+            'hr': hr,
+            'temp': temp,
+            'parent_id': parent_id,
+            'relationship': relationship,
+            'return_reason': return_reason,
+            'consultation_time': consultation_time
+        }
+        
+        if return_reason == 'pharmacy_lab_review':
+            lab_return_patients.append(patient_data)
+        else:
+            regular_patients.append(patient_data)
 
-        if parent_id:  # This is a child
-            if parent_id not in families:
-                families[parent_id] = {'parent': None, 'children': []}
-            families[parent_id]['children'].append({
-                'visit_id': visit_id,
-                'patient_id': patient_id,
-                'name': name,
-                'priority': priority,
-                'sys_bp': sys_bp,
-                'dia_bp': dia_bp,
-                'hr': hr,
-                'temp': temp,
-                'relationship': relationship
-            })
+    # Process regular patients for family grouping
+    for patient in regular_patients:
+        if patient['parent_id']:  # This is a child
+            if patient['parent_id'] not in families:
+                families[patient['parent_id']] = {'parent': None, 'children': []}
+            families[patient['parent_id']]['children'].append(patient)
         else:  # This is a parent or individual
             # Check if this patient has children
-            has_children = any(p[8] == patient_id for p in waiting_patients)
+            has_children = any(p['parent_id'] == patient['patient_id'] for p in regular_patients)
             if has_children:
-                if patient_id not in families:
-                    families[patient_id] = {'parent': None, 'children': []}
-                families[patient_id]['parent'] = {
-                    'visit_id': visit_id,
-                    'patient_id': patient_id,
-                    'name': name,
-                    'priority': priority,
-                    'sys_bp': sys_bp,
-                    'dia_bp': dia_bp,
-                    'hr': hr,
-                    'temp': temp
-                }
+                if patient['patient_id'] not in families:
+                    families[patient['patient_id']] = {'parent': None, 'children': []}
+                families[patient['patient_id']]['parent'] = patient
             else:
-                individual_patients.append({
-                    'visit_id': visit_id,
-                    'patient_id': patient_id,
-                    'name': name,
-                    'priority': priority,
-                    'sys_bp': sys_bp,
-                    'dia_bp': dia_bp,
-                    'hr': hr,
-                    'temp': temp
-                })
+                individual_patients.append(patient)
+
+    # Display lab return patients first - highest priority
+    if lab_return_patients:
+        st.markdown("#### 🧪 PRIORITY: Patients with Lab Results")
+        st.markdown("*These patients have already been seen and returned from pharmacy/lab for result review*")
+        
+        for patient in lab_return_patients:
+            # Get lab results for this patient
+            conn_lab = sqlite3.connect("clinic_database.db")
+            cursor_lab = conn_lab.cursor()
+            
+            cursor_lab.execute('''
+                SELECT test_type, results, completed_time
+                FROM lab_tests
+                WHERE visit_id = ? AND status = 'completed'
+                ORDER BY completed_time DESC
+            ''', (patient['visit_id'],))
+            
+            lab_results = cursor_lab.fetchall()
+            conn_lab.close()
+            
+            with st.expander(f"🔄 **LAB RESULTS READY** - {patient['name']} (ID: {patient['patient_id']})", expanded=True):
+                
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    st.markdown(f"**Previous Consultation:** {patient['consultation_time'][:16].replace('T', ' ') if patient['consultation_time'] else 'N/A'}")
+                    
+                    # Display lab results prominently
+                    if lab_results:
+                        st.markdown("### 🧪 **LAB RESULTS:**")
+                        for test_type, results, completed_time in lab_results:
+                            
+                            if test_type.lower() == 'urinalysis':
+                                st.markdown(f"**🔬 {test_type} - {completed_time[:16].replace('T', ' ')}**")
+                                st.markdown("**Standard 10-Parameter UA Results:**")
+                                with st.container():
+                                    st.markdown(f"""
+                                    <div style="background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; padding: 16px; margin: 8px 0;">
+                                        <pre style="font-family: monospace; margin: 0; white-space: pre-wrap;">{results}</pre>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            elif test_type.lower() == 'glucose':
+                                st.markdown(f"**🩸 {test_type} - {completed_time[:16].replace('T', ' ')}**")
+                                result_color = "#ef4444" if any(word in results.lower() for word in ['high', 'elevated', 'abnormal']) else "#10b981"
+                                with st.container():
+                                    st.markdown(f"""
+                                    <div style="background: #f0f9ff; border: 3px solid {result_color}; border-radius: 8px; padding: 16px; margin: 8px 0;">
+                                        <h4 style="margin: 0; color: {result_color};">Glucose Level: {results}</h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            elif test_type.lower() == 'pregnancy':
+                                st.markdown(f"**🤰 {test_type} - {completed_time[:16].replace('T', ' ')}**")
+                                result_color = "#10b981" if "positive" in results.lower() else "#6b7280"
+                                with st.container():
+                                    st.markdown(f"""
+                                    <div style="background: #f0f9ff; border: 3px solid {result_color}; border-radius: 8px; padding: 16px; margin: 8px 0;">
+                                        <h4 style="margin: 0; color: {result_color};">Result: {results}</h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            
+                            else:
+                                st.markdown(f"**🔬 {test_type} - {completed_time[:16].replace('T', ' ')}**")
+                                with st.container():
+                                    st.markdown(f"""
+                                    <div style="background: #f0f9ff; border: 2px solid #6b7280; border-radius: 8px; padding: 12px; margin: 8px 0;">
+                                        <strong>Results:</strong> {results}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                    else:
+                        st.warning("No lab results found for this patient.")
+                
+                with col2:
+                    st.markdown("**🏥 Consultation Action**")
+                    if st.button(f"📋 Review Lab Results", 
+                                key=f"lab_review_{patient['patient_id']}", 
+                                type="primary", 
+                                use_container_width=True):
+                        st.session_state.active_consultation = {
+                            'visit_id': patient['visit_id'],
+                            'patient_id': patient['patient_id'],
+                            'patient_name': patient['name'],
+                            'return_from_lab': True,
+                            'lab_results': lab_results
+                        }
+                        # Update doctor status
+                        db = get_db_manager()
+                        db.update_doctor_status(
+                            st.session_state.doctor_name, "with_patient",
+                            patient['patient_id'],
+                            f"{patient['name']} (Lab Review)")
+                        st.session_state.page = 'consultation_form'
+                        st.rerun()
+                        
+        st.markdown("---")
 
     # Display families first
     if families:
@@ -4251,7 +4348,7 @@ def pharmacy_interface():
     st.markdown("## 💊 Pharmacy/Lab Station")
 
     tab1, tab2, tab3 = st.tabs(
-        ["Ready to Fill", "Awaiting Lab Results", "Filled Prescriptions"])
+        ["Ready to Fill", "Lab Results", "Filled Prescriptions"])
 
     with tab1:
         pending_prescriptions()
@@ -4431,173 +4528,160 @@ def pending_prescriptions():
 
 
 def awaiting_lab_prescriptions():
-    st.markdown("### Prescriptions Awaiting Lab Results")
+    st.markdown("### Lab Results & Patient Review")
 
     conn = sqlite3.connect(db.db_name)
     cursor = conn.cursor()
 
+    # Get all completed lab tests for today with patient information
     cursor.execute('''
-        SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
-        FROM prescriptions p
-        JOIN visits v ON p.visit_id = v.visit_id
-        JOIN patients pt ON v.patient_id = pt.patient_id
-        WHERE p.status = 'pending' AND p.awaiting_lab = 'yes' AND DATE(p.prescribed_time) = DATE('now')
-        ORDER BY p.prescribed_time
-    ''')
-
-    awaiting = cursor.fetchall()
-
-    # Get completed lab tests for today
-    cursor.execute('''
-        SELECT lt.visit_id, lt.test_type, lt.results, lt.completed_time
+        SELECT lt.id, lt.visit_id, lt.test_type, lt.results, lt.completed_time, 
+               pt.name, pt.patient_id, v.consultation_time,
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM visits v2 
+                   WHERE v2.patient_id = pt.patient_id 
+                   AND v2.status = 'waiting_consultation' 
+                   AND v2.return_reason = 'pharmacy_lab_review'
+               ) THEN 'returned_to_provider'
+               ELSE 'completed_lab'
+               END as patient_status
         FROM lab_tests lt
+        JOIN visits v ON lt.visit_id = v.visit_id
+        JOIN patients pt ON v.patient_id = pt.patient_id
         WHERE lt.status = 'completed' AND DATE(lt.completed_time) = DATE('now')
+        ORDER BY lt.completed_time DESC
     ''')
 
-    completed_labs = cursor.fetchall()
+    lab_results = cursor.fetchall()
     conn.close()
 
-    # Create a map of visit_id to completed lab tests
-    lab_results = {}
-    for lab in completed_labs:
-        visit_id = lab[0]
-        if visit_id not in lab_results:
-            lab_results[visit_id] = []
-        lab_results[visit_id].append({
-            'test_type': lab[1],
-            'results': lab[2],
-            'completed_time': lab[3]
-        })
-
-    if awaiting:
+    if lab_results:
         # Group by patient
         patients = {}
-        for prescription in awaiting:
-            patient_id = prescription[9]
-            patient_name = prescription[8]
-            visit_id = prescription[1]
-
+        for result in lab_results:
+            patient_id = result[6]
+            patient_name = result[5]
+            
             if patient_id not in patients:
                 patients[patient_id] = {
                     'name': patient_name,
-                    'visit_id': visit_id,
-                    'prescriptions': [],
-                    'lab_results': lab_results.get(visit_id, [])
+                    'visit_id': result[1],
+                    'consultation_time': result[7],
+                    'lab_tests': [],
+                    'status': result[8]
                 }
-
-            patients[patient_id]['prescriptions'].append(prescription)
+            
+            patients[patient_id]['lab_tests'].append({
+                'id': result[0],
+                'test_type': result[2],
+                'results': result[3],
+                'completed_time': result[4]
+            })
 
         for patient_id, patient_data in patients.items():
-            with st.expander(f"⏳ {patient_data['name']} (ID: {patient_id})",
-                             expanded=True):
+            # Show different styling based on whether patient has already been seen
+            if patient_data['status'] == 'returned_to_provider':
+                status_indicator = "🔄 RETURNED TO PROVIDER"
+                status_color = "#10b981"
+                border_color = "#10b981"
+            else:
+                status_indicator = "🧪 LAB RESULTS READY"
+                status_color = "#3b82f6"
+                border_color = "#3b82f6"
 
-                # Show lab results if available
-                if patient_data['lab_results']:
-                    st.markdown("**Lab Results Available:**")
-                    for lab in patient_data['lab_results']:
-                        st.success(
-                            f"✅ {lab['test_type']} - Completed {lab['completed_time'][:16].replace('T', ' ')}"
-                        )
-                        with st.expander(f"View {lab['test_type']} Results"):
-                            st.text(lab['results'])
-                else:
-                    st.warning("🔬 Waiting for lab results...")
-
-                st.markdown("**Medications Awaiting Approval:**")
-
-                prescription_ids = []
-                for prescription in patient_data['prescriptions']:
-                    prescription_ids.append(prescription[0])
-
-                    col1, col2 = st.columns([3, 1])
-
-                    with col1:
-                        st.markdown(f"""
-                        <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <h5 style="color: #92400e; margin: 0 0 12px 0; font-size: 16px;">⏳ {prescription[2]} (Awaiting Lab)</h5>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                                <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
-                                <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
-                            </div>
-                            <p style="margin: 0 0 8px 0; color: #78350f; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
-                            {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
-                            {f'<p style="margin: 0; color: #a16207; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
-                        </div>
-                        """,
-                                    unsafe_allow_html=True)
-
-                    with col2:
-                        # Check if this prescription requires return to provider
-                        return_to_provider = len(prescription) > 9 and prescription[9] == 'yes'
+            with st.expander(f"{status_indicator} - {patient_data['name']} (ID: {patient_id})", expanded=True):
+                
+                # Patient consultation info
+                if patient_data['consultation_time']:
+                    st.markdown(f"**Last Consultation:** {patient_data['consultation_time'][:16].replace('T', ' ')}")
+                
+                # Display detailed lab results
+                st.markdown("### 🧪 Lab Test Results")
+                
+                for lab in patient_data['lab_tests']:
+                    st.markdown(f"**{lab['test_type']} - Completed: {lab['completed_time'][:16].replace('T', ' ')}**")
+                    
+                    # Parse and display specific lab results based on test type
+                    if lab['test_type'].lower() == 'urinalysis':
+                        st.markdown("**Standard 10-Parameter Urinalysis:**")
+                        results = lab['results']
                         
-                        if patient_data['lab_results']:  # Only show options if lab results are available
-                            st.markdown("**Lab Results Available**")
-                            
-                            col_approve, col_deny = st.columns(2)
-                            with col_approve:
-                                approve = st.button(f"✅ Approve", key=f"approve_{prescription[0]}", use_container_width=True)
-                            with col_deny:
-                                deny = st.button(f"❌ Deny", key=f"deny_{prescription[0]}", use_container_width=True)
-                            
-                            # Show return to provider option if specified by doctor
-                            return_patient = False
-                            if return_to_provider:
-                                return_patient = st.button(f"🔄 Return to Provider", 
-                                                          key=f"return_{prescription[0]}", 
-                                                          use_container_width=True,
-                                                          help="Send patient back to doctor as requested")
-
-                            if approve:
-                                # Move prescription to ready status
-                                conn = sqlite3.connect(db.db_name)
-                                cursor = conn.cursor()
-                                cursor.execute('''
-                                    UPDATE prescriptions 
-                                    SET awaiting_lab = 'no', pharmacy_approved_time = ?
-                                    WHERE id = ?
-                                ''', (datetime.now().isoformat(), prescription[0]))
-                                conn.commit()
-                                conn.close()
-                                st.success("Prescription approved and moved to fill queue!")
-                                st.rerun()
-
-                            if deny:
-                                # Mark prescription as denied
-                                conn = sqlite3.connect(db.db_name)
-                                cursor = conn.cursor()
-                                cursor.execute('''
-                                    UPDATE prescriptions 
-                                    SET status = 'denied', pharmacy_denied_time = ?
-                                    WHERE id = ?
-                                ''', (datetime.now().isoformat(), prescription[0]))
-                                conn.commit()
-                                conn.close()
-                                st.warning("Prescription denied based on lab results.")
-                                st.rerun()
-                                
-                            if return_to_provider and return_patient:
-                                # Send patient back to doctor queue
-                                conn = sqlite3.connect(db.db_name)
-                                cursor = conn.cursor()
-                                cursor.execute('''
-                                    UPDATE visits 
-                                    SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
-                                    WHERE patient_id = ? AND DATE(visit_date) = DATE('now')
-                                ''', (patient_data['patient_id'],))
-                                cursor.execute('''
-                                    UPDATE prescriptions 
-                                    SET status = 'returned_to_provider', pharmacy_return_time = ?
-                                    WHERE id = ?
-                                ''', (datetime.now().isoformat(), prescription[0]))
-                                conn.commit()
-                                conn.close()
-                                st.info("Patient returned to doctor for lab result review.")
-                                st.rerun()
-                        else:
-                            st.info("Waiting for lab results...")
+                        # Create a structured display for UA results
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("""
+                            **Physical Parameters:**
+                            - Color
+                            - Clarity
+                            - Specific Gravity
+                            """)
+                        with col2:
+                            st.markdown("""
+                            **Chemical Parameters:**
+                            - Leukocyte Esterase
+                            - Nitrites
+                            - Protein
+                            - Glucose
+                            - Ketones
+                            - Blood
+                            - pH
+                            """)
+                        
+                        with st.expander("Full UA Results", expanded=False):
+                            st.text(results)
+                    
+                    elif lab['test_type'].lower() == 'glucose':
+                        st.markdown("**Blood Glucose Test:**")
+                        with st.container():
+                            st.markdown(f"""
+                            <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px; margin: 8px 0;">
+                                <strong>Glucose Level:</strong> {lab['results']}
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    elif lab['test_type'].lower() == 'pregnancy':
+                        st.markdown("**Pregnancy Test:**")
+                        result_color = "#10b981" if "positive" in lab['results'].lower() else "#ef4444"
+                        with st.container():
+                            st.markdown(f"""
+                            <div style="background: #f0f9ff; border-left: 4px solid {result_color}; padding: 12px; margin: 8px 0;">
+                                <strong>Result:</strong> {lab['results']}
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    else:
+                        # Generic lab result display
+                        with st.expander(f"View {lab['test_type']} Results", expanded=False):
+                            st.text(lab['results'])
+                
+                # Return to provider checkbox - simple and smooth
+                st.markdown("---")
+                st.markdown("### Provider Review")
+                
+                if patient_data['status'] != 'returned_to_provider':
+                    if st.checkbox(f"📋 Return {patient_data['name']} to Provider for Lab Review", 
+                                  key=f"return_patient_{patient_id}"):
+                        
+                        # Send patient back to doctor queue
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        
+                        cursor.execute('''
+                            UPDATE visits 
+                            SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                            WHERE patient_id = ? AND DATE(visit_date) = DATE('now')
+                        ''', (patient_id,))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        st.success(f"✅ {patient_data['name']} returned to provider for lab review!")
+                        st.rerun()
+                else:
+                    st.success("✅ Patient has been returned to provider and is awaiting re-consultation.")
+                    
     else:
-        st.info("No prescriptions awaiting lab results.")
+        st.info("No completed lab results available today.")
 
 
 def filled_prescriptions():
