@@ -2047,43 +2047,44 @@ def main():
     if st.session_state.user_role is None:
         st.markdown("### Select Your Role")
 
+        # Clinic workflow order: Registration → Triage → Doctor → Pharmacy/Lab → Ophthalmologist
         col1, col2 = st.columns(2)
 
         with col1:
-            if st.button("Name Registration",
+            if st.button("1. Name Registration",
                          key="name_registration",
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "name_registration"
                 st.rerun()
 
-            if st.button("Triage Nurse",
-                         key="triage",
-                         type="primary",
-                         use_container_width=True):
-                st.session_state.user_role = "triage"
-                st.rerun()
-
-            if st.button("Doctor",
+            if st.button("3. Doctor",
                          key="doctor",
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "doctor"
                 st.rerun()
 
-        with col2:
-            if st.button("Pharmacy/Lab",
-                         key="pharmacy",
-                         type="primary",
-                         use_container_width=True):
-                st.session_state.user_role = "pharmacy"
-                st.rerun()
-
-            if st.button("Ophthalmologist",
+            if st.button("5. Ophthalmologist",
                          key="ophthalmologist",
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "ophthalmologist"
+                st.rerun()
+
+        with col2:
+            if st.button("2. Triage Nurse",
+                         key="triage",
+                         type="primary",
+                         use_container_width=True):
+                st.session_state.user_role = "triage"
+                st.rerun()
+
+            if st.button("4. Pharmacy/Lab",
+                         key="pharmacy",
+                         type="primary",
+                         use_container_width=True):
+                st.session_state.user_role = "pharmacy"
                 st.rerun()
 
         # Admin button in bottom row with better spacing

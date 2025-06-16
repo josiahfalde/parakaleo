@@ -123,6 +123,8 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added lab test disposition options (Return to Provider vs Treat per Pharmacy Protocol)
   - Created notification system to alert doctors when lab results are completed
   - Enhanced medication validation to require dosage, frequency, and indication before pharmacy submission
+  - Reordered role selection buttons to match clinic workflow: Name Registration → Triage → Doctor → Pharmacy/Lab → Ophthalmologist → Admin
+  - Added numbered workflow indicators (1-5) to role buttons for clear process guidance
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
