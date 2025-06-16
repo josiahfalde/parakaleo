@@ -2450,26 +2450,28 @@ def new_patient_form():
             num_children = st.number_input("Number of children", min_value=0, max_value=10, value=1)
             
             children_data = []
-            for i in range(num_children):
-                st.markdown(f"**Child {i+1}**")
-                col1, col2 = st.columns(2)
-                with col1:
-                    child_name = st.text_input(f"Child {i+1} Name *", key=f"child_name_{i}")
-                    child_age = st.number_input(f"Age", min_value=0, max_value=17, value=None, key=f"child_age_{i}")
-                    child_gender = st.selectbox("Gender", ["", "Male", "Female"], key=f"child_gender_{i}")
-                with col2:
-                    child_medical_history = st.text_area("Medical History", key=f"child_medical_{i}", height=60)
-                    child_allergies = st.text_input("Allergies", key=f"child_allergies_{i}")
-                
-                children_data.append({
-                    'name': child_name,
-                    'age': child_age,
-                    'gender': child_gender,
-                    'medical_history': child_medical_history,
-                    'allergies': child_allergies
-                })
+            if num_children > 0:
+                for i in range(num_children):
+                    st.markdown(f"**Child {i+1}**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        child_name = st.text_input(f"Child {i+1} Name *", key=f"child_name_{i}")
+                        child_age = st.number_input(f"Age", min_value=0, max_value=17, value=None, key=f"child_age_{i}")
+                        child_gender = st.selectbox("Gender", ["", "Male", "Female"], key=f"child_gender_{i}")
+                    with col2:
+                        child_medical_history = st.text_area("Medical History", key=f"child_medical_{i}", height=68)
+                        child_allergies = st.text_input("Allergies", key=f"child_allergies_{i}")
+                    
+                    children_data.append({
+                        'name': child_name,
+                        'age': child_age,
+                        'gender': child_gender,
+                        'medical_history': child_medical_history,
+                        'allergies': child_allergies
+                    })
             
-            family_submitted = st.form_submit_button("Create Family File", type="primary")
+            st.markdown("---")
+            family_submitted = st.form_submit_button("Create Family File", type="primary", use_container_width=True)
             
             if family_submitted:
                 if family_name.strip() and parent_name.strip():
