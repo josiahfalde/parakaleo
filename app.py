@@ -4148,47 +4148,47 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     custom_indication
                 })
 
-                        if ready_count > 0:
-                            st.info(
-                                f"{ready_count} prescriptions sent to pharmacy."
-                            )
-                        if awaiting_count > 0:
-                            st.info(
-                                f"{awaiting_count} prescriptions awaiting lab results."
-                            )
+                st.success("Consultation completed successfully!")
 
-                    # Update doctor status back to available
-                    db_manager.update_doctor_status(
-                        st.session_state.doctor_name, "available")
+                if lab_tests:
+                    st.info(f"Lab tests ordered: {', '.join(lab_tests)}")
 
-                    # Clear current consultation and return to doctor interface
-                    if 'current_consultation' in st.session_state:
-                        del st.session_state.current_consultation
-                    if 'active_consultation' in st.session_state:
-                        del st.session_state.active_consultation
+                if selected_medications:
+                    awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                    ready_count = len(selected_medications) - awaiting_count
+                    
+                    if ready_count > 0:
+                        st.info(f"{ready_count} prescriptions sent to pharmacy.")
+                    if awaiting_count > 0:
+                        st.info(f"{awaiting_count} prescriptions awaiting lab results.")
 
-                    # Save patient history to database
-                    history_conn = sqlite3.connect(db_manager.db_name)
-                    history_cursor = history_conn.cursor()
-                    history_cursor.execute(
-                        '''
-                        UPDATE patients 
-                        SET medical_history = ?, allergies = ?
-                        WHERE patient_id = ?
-                    ''',
-                        (f"Surgical: {surgical_history}\nMedical: {medical_history}",
-                         f"Allergies: {allergies}\nCurrent Meds: {current_medications}",
-                         patient_id))
-                    history_conn.commit()
-                    history_conn.close()
+                # Update doctor status back to available
+                db_manager.update_doctor_status(st.session_state.doctor_name, "available")
 
-                    # Save any photos that were captured during this consultation
-                    if f"symptom_photos_{visit_id}" in st.session_state:
-                        for photo in st.session_state[
-                                f"symptom_photos_{visit_id}"]:
-                            db_manager.save_patient_photo(
-                                visit_id=visit_id,
-                                patient_id=patient_id,
+                # Clear current consultation and return to doctor interface
+                if 'current_consultation' in st.session_state:
+                    del st.session_state.current_consultation
+                if 'active_consultation' in st.session_state:
+                    del st.session_state.active_consultation
+
+                # Save patient history to database
+                history_conn = sqlite3.connect(db_manager.db_name)
+                history_cursor = history_conn.cursor()
+                
+                history_cursor.execute(
+                    '''
+                    UPDATE patients 
+                    SET medical_history = ?, allergies = ?
+                    WHERE patient_id = ?
+                ''',
+                    (f"Surgical: {surgical_history}\nMedical: {medical_history}",
+                     f"Allergies: {allergies}\nCurrent Meds: {current_medications}",
+                     patient_id))
+                
+                history_conn.commit()
+                history_conn.close()
+
+                st.rerun()
                                 photo_data=photo['data'],
                                 description=photo['description'])
 
