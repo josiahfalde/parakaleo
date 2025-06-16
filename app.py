@@ -1339,84 +1339,74 @@ def go_back():
 def show_back_button():
     """Display universal back button on all pages - truly fixed position"""
     if 'nav_history' in st.session_state and len(st.session_state.nav_history) > 1:
-        # Use session state to handle back button clicks
-        if 'back_button_clicked' not in st.session_state:
-            st.session_state.back_button_clicked = False
-            
-        # Check if back button was clicked and handle navigation
-        if st.session_state.back_button_clicked:
-            st.session_state.back_button_clicked = False
-            go_back()
-            st.rerun()
-        
-        # Create truly fixed back button with JavaScript interaction
-        st.markdown(f"""
-        <div id="back-button-overlay" style="
+        # Create a simple fixed back button without inline handlers
+        st.markdown("""
+        <div id="fixed-back-button" style="
             position: fixed;
             top: 20px;
             left: 20px;
             width: 50px;
             height: 50px;
             z-index: 999999;
-            pointer-events: all;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            user-select: none;
         ">
-            <button id="back-arrow-btn" onclick="handleBackClick()" style="
-                width: 50px;
-                height: 50px;
-                border-radius: 50%;
-                background: #3b82f6;
-                border: none;
-                color: white;
-                font-size: 20px;
-                font-weight: bold;
-                cursor: pointer;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                transition: all 0.2s ease;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0;
-                padding: 0;
-            " onmouseover="this.style.background='#2563eb'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0,0,0,0.4)'"
-               onmouseout="this.style.background='#3b82f6'; this.style.transform='translateY(0px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'">
-                ←
-            </button>
+            ←
         </div>
         
         <script>
-        function handleBackClick() {{
-            // Find the hidden back button and click it
-            const hiddenBtn = document.querySelector('button[data-testid*="hidden-back"]');
-            if (hiddenBtn) {{
-                hiddenBtn.click();
-            }} else {{
-                // Fallback: reload page with back flag
-                sessionStorage.setItem('streamlit_back_clicked', 'true');
-                window.location.reload();
-            }}
-        }}
+        // Clean event handling without inline handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            const backBtn = document.getElementById('fixed-back-button');
+            if (backBtn) {
+                backBtn.addEventListener('click', function() {
+                    // Trigger back navigation by setting session storage flag
+                    sessionStorage.setItem('back_nav_requested', Date.now().toString());
+                    window.location.reload();
+                });
+                
+                backBtn.addEventListener('mouseenter', function() {
+                    this.style.background = '#2563eb';
+                    this.style.transform = 'translateY(-2px)';
+                    this.style.boxShadow = '0 6px 16px rgba(0,0,0,0.4)';
+                });
+                
+                backBtn.addEventListener('mouseleave', function() {
+                    this.style.background = '#3b82f6';
+                    this.style.transform = 'translateY(0px)';
+                    this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+                });
+            }
+        });
         
-        // Check for back flag on page load
-        if (sessionStorage.getItem('streamlit_back_clicked') === 'true') {{
-            sessionStorage.removeItem('streamlit_back_clicked');
-            setTimeout(() => {{
-                const hiddenBtn = document.querySelector('button[data-testid*="hidden-back"]');
-                if (hiddenBtn) {{
+        // Check for back navigation request on load
+        if (sessionStorage.getItem('back_nav_requested')) {
+            sessionStorage.removeItem('back_nav_requested');
+            setTimeout(function() {
+                const hiddenBtn = document.querySelector('[data-testid="baseButton-secondary"]');
+                if (hiddenBtn && hiddenBtn.textContent.includes('↩')) {
                     hiddenBtn.click();
-                }}
-            }}, 100);
-        }}
+                }
+            }, 100);
+        }
         </script>
         """, unsafe_allow_html=True)
         
-        # Hidden button to trigger actual navigation
-        col1, col2 = st.columns([1, 20])
-        with col1:
-            st.markdown('<div style="position: absolute; left: -9999px; top: -9999px;">', unsafe_allow_html=True)
-            if st.button("↩", key="hidden-back-btn", help="Back"):
-                st.session_state.back_button_clicked = True
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+        # Hidden button to handle navigation - completely hidden
+        st.markdown('<div style="position: fixed; top: -100px; left: -100px; opacity: 0; pointer-events: none;">', unsafe_allow_html=True)
+        if st.button("↩", key=f"back_nav_{len(st.session_state.nav_history)}", type="secondary", help="Back navigation"):
+            go_back()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def main():
