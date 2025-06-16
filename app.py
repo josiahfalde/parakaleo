@@ -1930,7 +1930,7 @@ def main():
             width=300)
 
     # Navigation buttons in a cleaner horizontal layout
-    nav_col1, nav_col2, nav_col3 = st.columns([3, 4, 5])
+    nav_col1, nav_col2 = st.columns([1, 1])
 
     with nav_col1:
         if st.button("🏠 Home",
@@ -2752,11 +2752,7 @@ def new_patient_form():
             with col2:
                 parent_phone = st.text_input("Parent Phone (if different)",
                                              key="parent_phone")
-                parent_medical_history = st.text_area("Medical History",
-                                                      key="parent_medical",
-                                                      height=80)
-                parent_allergies = st.text_input("Allergies",
-                                                 key="parent_allergies")
+
 
             st.markdown("---")
             st.markdown("**Children Information**")
@@ -2784,19 +2780,12 @@ def new_patient_form():
                                                     ["", "Male", "Female"],
                                                     key=f"child_gender_{i}")
                     with col2:
-                        child_medical_history = st.text_area(
-                            "Medical History",
-                            key=f"child_medical_{i}",
-                            height=68)
-                        child_allergies = st.text_input(
-                            "Allergies", key=f"child_allergies_{i}")
+                        st.write("")  # Placeholder for layout
 
                     children_data.append({
                         'name': child_name,
                         'age': child_age,
-                        'gender': child_gender,
-                        'medical_history': child_medical_history,
-                        'allergies': child_allergies
+                        'gender': child_gender
                     })
 
             st.markdown("---")
@@ -2832,11 +2821,7 @@ def new_patient_form():
                             name=parent_name.strip(),
                             age=parent_age,
                             gender=parent_gender if parent_gender else None,
-                            phone=parent_phone.strip() if parent_phone else "",
-                            medical_history=parent_medical_history.strip()
-                            if parent_medical_history else "",
-                            allergies=parent_allergies.strip()
-                            if parent_allergies else "")
+                            phone=parent_phone.strip() if parent_phone else "")
 
                         # Add children to family
                         family_members = [{
@@ -2854,11 +2839,7 @@ def new_patient_form():
                                 name=child['name'].strip(),
                                 age=child['age'],
                                 gender=child['gender']
-                                if child['gender'] else None,
-                                medical_history=child['medical_history'].strip(
-                                ) if child['medical_history'] else "",
-                                allergies=child['allergies'].strip()
-                                if child['allergies'] else "")
+                                if child['gender'] else None)
 
                             family_members.append({
                                 'patient_id':
