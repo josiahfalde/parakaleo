@@ -3468,8 +3468,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     )
 
     # Check if this is a family consultation
-    is_family_consultation = 'family_consultation' in st.session_state and st.session_state.family_consultation[
-        'parent_id'] == patient_id
+    is_family_consultation = 'family_consultation' in st.session_state and any(
+        member['patient_id'] == patient_id 
+        for member in st.session_state.family_consultation.get('family_members', [])
+    )
 
     if is_family_consultation:
         st.info(
