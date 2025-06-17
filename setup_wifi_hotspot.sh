@@ -21,7 +21,7 @@ macaddr_acl=0
 auth_algs=1
 ignore_broadcast_ssid=0
 wpa=2
-wpa_passphrase=parakaleo2025
+wpa_passphrase=wpawpawpa
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=TKIP
 rsn_pairwise=CCMP
@@ -49,7 +49,7 @@ sudo systemctl enable dnsmasq
 
 echo "WiFi hotspot configured!"
 echo "SSID: ParakaleoMed-Clinic"
-echo "Password: parakaleo2025"
+echo "Password: wpawpawpa"
 echo "Pi IP: 192.168.4.1"
 echo "App URL: http://192.168.4.1:5000"
 echo "Reboot to activate: sudo reboot"
