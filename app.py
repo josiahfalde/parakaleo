@@ -423,6 +423,12 @@ class DatabaseManager:
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+        # Add status column to prescriptions table for consultation state management
+        try:
+            cursor.execute('ALTER TABLE prescriptions ADD COLUMN status TEXT DEFAULT "ready"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Create counter table for location-based patient numbering
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS counters (
@@ -4492,21 +4498,35 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         st.error(f"• {error}")
                 elif current_doctor_name and (current_chief_complaint or len(selected_medications) > 0 or len(lab_tests) > 0):
                     try:
-                        # Use the database manager methods instead of direct connection
-                        # Save consultation
-                        db_conn = sqlite3.connect(db_manager.db_name,
-                                                  timeout=10.0)
+                        # Save consultation state immediately to database for later resumption
+                        db_conn = sqlite3.connect(db_manager.db_name, timeout=10.0)
                         db_conn.execute('BEGIN IMMEDIATE')
                         cursor = db_conn.cursor()
 
+                        # Save complete consultation state to visits table
+                        cursor.execute('''
+                            UPDATE visits 
+                            SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
+                                treatment_plan = ?, notes = ?, surgical_history = ?,
+                                medical_history = ?, allergies = ?, current_medications = ?,
+                                consultation_time = ?
+                            WHERE visit_id = ?
+                        ''', (current_chief_complaint, consultation_data.get('symptoms', ''), 
+                              consultation_data.get('diagnosis', ''), consultation_data.get('treatment_plan', ''),
+                              consultation_data.get('notes', ''), consultation_data.get('surgical_history', ''),
+                              consultation_data.get('medical_history', ''), consultation_data.get('allergies', ''),
+                              consultation_data.get('current_medications', ''), datetime.now().isoformat(), visit_id))
+
+                        # Also save to consultations table for tracking
                         cursor.execute(
                             '''
                             INSERT INTO consultations (visit_id, doctor_name, chief_complaint, 
                                                      symptoms, diagnosis, treatment_plan, notes, 
                                                      needs_ophthalmology, consultation_time)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (visit_id, doctor_name, chief_complaint, symptoms,
-                              diagnosis, treatment_plan, notes,
+                        ''', (visit_id, current_doctor_name, current_chief_complaint, 
+                              consultation_data.get('symptoms', ''), consultation_data.get('diagnosis', ''),
+                              consultation_data.get('treatment_plan', ''), consultation_data.get('notes', ''),
                               needs_ophthalmology, datetime.now().isoformat()))
 
                         # Check if this is a re-consultation (patient returning from lab)
@@ -4516,16 +4536,23 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         ''', (visit_id,))
                         completed_labs = cursor.fetchone()[0]
                         
-                        # Update visit status first
-                        if needs_ophthalmology:
+                        # Determine consultation status and handle prescription state
+                        has_lab_dependent_meds = any(med['awaiting_lab'] == 'yes' for med in selected_medications)
+                        
+                        if lab_tests and not completed_labs:
+                            # Initial consultation with lab orders - save consultation in paused state
+                            new_status = 'waiting_lab'
+                        elif completed_labs > 0:
+                            # Re-consultation after lab results
+                            if selected_medications:
+                                new_status = 'prescribed'
+                                st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
+                            else:
+                                new_status = 'completed'
+                        elif needs_ophthalmology:
                             new_status = 'needs_ophthalmology'
                         elif selected_medications:
                             new_status = 'prescribed'
-                            # If this is a re-consultation with completed labs, notify
-                            if completed_labs > 0:
-                                st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
-                        elif lab_tests:
-                            new_status = 'waiting_lab'
                         else:
                             new_status = 'completed'
 
@@ -4544,49 +4571,67 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             db_manager.order_lab_test(visit_id, test_type,
                                                       current_doctor_name)
 
+                        # Save all prescriptions (including lab-dependent ones) for consultation state preservation
                         for med in selected_medications:
                             if med['name']:
-                                # Add prescription with indication
                                 conn_med = sqlite3.connect(db_manager.db_name)
                                 cursor_med = conn_med.cursor()
+                                
+                                # Determine prescription status based on consultation state
+                                if lab_tests and not completed_labs:
+                                    # Initial consultation - save prescriptions as "paused" if lab dependent
+                                    prescription_status = 'paused_pending_lab' if med['awaiting_lab'] == 'yes' else 'ready'
+                                else:
+                                    # Normal flow or re-consultation
+                                    prescription_status = 'ready'
+                                
                                 cursor_med.execute(
                                     '''
                                     INSERT INTO prescriptions (visit_id, medication_name, 
                                                              dosage, frequency, duration, instructions, 
-                                                             indication, awaiting_lab, return_to_provider, prescribed_time)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                             indication, awaiting_lab, return_to_provider, 
+                                                             prescribed_time, status)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (visit_id, med['name'], med['dosage'],
                                       med['frequency'], med['duration'],
                                       med['instructions'],
                                       med.get('indication', ''), 
                                       med['awaiting_lab'],
                                       med.get('return_to_provider', 'no'),
-                                      datetime.now().isoformat()))
+                                      datetime.now().isoformat(),
+                                      prescription_status))
                                 conn_med.commit()
                                 conn_med.close()
 
-                        st.success("Consultation completed successfully!")
-
-                        if lab_tests:
+                        if lab_tests and not completed_labs:
+                            # Initial consultation with lab orders
                             test_names = [test_info[0] for test_info in lab_tests]
-                            st.info(
-                                f"Lab tests ordered: {', '.join(test_names)}")
+                            st.success("Consultation paused and saved!")
+                            st.info(f"Patient sent to lab for: {', '.join(test_names)}")
+                            
+                            # Show prescription summary for paused consultation
+                            if selected_medications:
+                                awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                                ready_count = len(selected_medications) - awaiting_count
+                                
+                                if ready_count > 0:
+                                    st.info(f"{ready_count} prescriptions ready for pharmacy after lab results.")
+                                if awaiting_count > 0:
+                                    st.info(f"{awaiting_count} prescriptions pending lab confirmation.")
+                                    
+                            st.info("You can now see other patients. When lab results are ready, click 'Review Lab Results' to resume this exact consultation.")
+                        else:
+                            # Normal consultation completion or re-consultation
+                            st.success("Consultation completed successfully!")
+                            
+                            if selected_medications:
+                                awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
+                                ready_count = len(selected_medications) - awaiting_count
 
-                        if selected_medications:
-                            awaiting_count = sum(
-                                1 for med in selected_medications
-                                if med['awaiting_lab'] == 'yes')
-                            ready_count = len(
-                                selected_medications) - awaiting_count
-
-                            if ready_count > 0:
-                                st.info(
-                                    f"{ready_count} prescriptions sent to pharmacy."
-                                )
-                            if awaiting_count > 0:
-                                st.info(
-                                    f"{awaiting_count} prescriptions awaiting lab results."
-                                )
+                                if ready_count > 0:
+                                    st.info(f"{ready_count} prescriptions sent to pharmacy.")
+                                if awaiting_count > 0:
+                                    st.info(f"{awaiting_count} prescriptions awaiting lab results.")
 
                         # Update doctor status back to available
                         db_manager.update_doctor_status(
