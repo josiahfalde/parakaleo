@@ -1,0 +1,25 @@
+PS C:\Users\josia\ParakaleoMed> scp -r .
+usage: scp [-346ABCOpqRrsTv] [-c cipher] [-D sftp_server_path] [-F ssh_config]
+           [-i identity_file] [-J destination] [-l limit] [-o ssh_option]
+           [-P port] [-S program] [-X sftp_option] source ... target
+PS C:\Users\josia\ParakaleoMed> scp -r . josiahfalde@192.168.1.62:/home/josiahfalde/
+josiahfalde@192.168.1.62's password:
+config                                                                                100%  306    99.6KB/s   00:00
+description                                                                           100%   73    35.6KB/s   00:00
+HEAD                                                                                  100%   21    10.3KB/s   00:00
+applypatch-msg.sample                                                                 100%  478   233.4KB/s   00:00
+commit-msg.sample                                                                     100%  896   437.5KB/s   00:00
+fsmonitor-watchman.sample                                                             100% 4726     1.1MB/s   00:00
+post-update.sample                                                                    100%  189    61.5KB/s   00:00
+pre-applypatch.sample                                                                 100%  424    69.0KB/s   00:00
+pre-commit.sample                                                                     100% 1649   536.8KB/s   00:00
+pre-merge-commit.sample                                                               100%  416   135.4KB/s   00:00
+pre-push.sample                                                                       100% 1374   447.3KB/s   00:00
+pre-rebase.sample                                                                     100% 4898     1.2MB/s   00:00
+pre-receive.sample                                                                    100%  544   177.1KB/s   00:00
+prepare-commit-msg.sample                                                             100% 1492   728.5KB/s   00:00
+push-to-checkout.sample                                                               100% 2783   905.9KB/s   00:00
+sendemail-validate.sample                                                             100% 2308   751.3KB/s   00:00
+update.sample                                                                         100% 3650     1.2MB/s   00:00
+exclude                                                                               100%  240    46.9KB/s   00:00
+PS C:\Users\josia\ParakaleoMed>
