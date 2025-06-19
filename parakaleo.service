@@ -7,7 +7,7 @@ After=network.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/parakaleoMed
-ExecStart=/home/pi/parakaleoMed/start_parakaleo.sh
+ExecStart=/home/pi/parakaleo/start_parakaleo.sh
 Restart=always
 RestartSec=10
 
