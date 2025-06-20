@@ -4,6 +4,38 @@ from datetime import datetime
 import os
 from typing import Dict, List, Optional
 import time
+from streamlit.components.v1 import html
+
+# WebSocket connection script for real-time updates
+ws_connect_script = """
+<script>
+  if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
+    const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
+    window.ws = ws;
+    ws.onopen = () => console.log("Connected to WebSocket server");
+    ws.onmessage = (event) => {
+      const data = event.data;
+      // Trigger page refresh for real-time updates
+      if (data.includes("new_patient") || data.includes("status_update")) {
+        location.reload();
+      }
+    };
+    ws.onclose = () => console.log("WebSocket closed");
+    ws.onerror = (error) => console.log("WebSocket error:", error);
+  }
+</script>
+"""
+
+# Broadcast function to send updates to all connected devices
+def broadcast_to_clients(message: str):
+    """Sends a message to all connected WebSocket clients"""
+    html(f"""
+    <script>
+    if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
+        window.ws.send('{message}');
+    }}
+    </script>
+    """, height=0)
 
 # Configure page for mobile/tablet use
 st.set_page_config(
