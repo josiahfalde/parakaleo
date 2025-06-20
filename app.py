@@ -691,6 +691,62 @@ class DatabaseManager:
             # Column doesn't exist, add it
             cursor.execute("ALTER TABLE visits ADD COLUMN priority TEXT")
 
+        # Handle missing columns in vital_signs table
+        try:
+            cursor.execute("SELECT recorded_time FROM vital_signs LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE vital_signs ADD COLUMN recorded_time TEXT")
+
+        try:
+            cursor.execute("SELECT oxygen_saturation FROM vital_signs LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER")
+
+        # Handle missing columns in patients table for family structure
+        try:
+            cursor.execute("SELECT family_id FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN family_id TEXT")
+
+        try:
+            cursor.execute("SELECT relationship FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN relationship TEXT")
+
+        try:
+            cursor.execute("SELECT parent_id FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN parent_id TEXT")
+
+        try:
+            cursor.execute("SELECT is_independent FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN is_independent INTEGER DEFAULT 0")
+
+        try:
+            cursor.execute("SELECT separation_date FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN separation_date TEXT")
+
+        try:
+            cursor.execute("SELECT address FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN address TEXT")
+
+        try:
+            cursor.execute("SELECT registration_time FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN registration_time TEXT")
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS doctor_status (
                 id INTEGER PRIMARY KEY,
@@ -1101,7 +1157,9 @@ class DatabaseManager:
 
         cursor.execute(
             '''
-            SELECT * FROM patients 
+            SELECT patient_id, name, age, gender, phone, emergency_contact, 
+                   medical_history, allergies, created_date, last_visit
+            FROM patients 
             WHERE patient_id LIKE ? OR name LIKE ?
             ORDER BY name
         ''', (f'%{query}%', f'%{query}%'))
@@ -3596,7 +3654,7 @@ def existing_patient_search():
                         <p><strong>ID:</strong> {patient['patient_id']}</p>
                         <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
                         <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
-                        <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
+                        <p><strong>Last Visit:</strong> {str(patient['last_visit'])[:10] if patient['last_visit'] else 'Never'}</p>
                     </div>
                     """,
                                 unsafe_allow_html=True)
