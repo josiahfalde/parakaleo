@@ -1503,6 +1503,9 @@ def show_back_button():
 
 
 def main():
+    # Initialize WebSocket connection for real-time updates across iPads
+    html(ws_connect_script, height=0)
+    
     # Initialize navigation
     initialize_navigation()
 
@@ -2844,6 +2847,9 @@ def name_registration_interface():
                                 conn.commit()
                                 conn.close()
                                 
+                                # Broadcast update to all connected devices
+                                broadcast_to_clients(f"new_patient_vitals:{member['name']}")
+                                
                                 # Store patient info for triage
                                 st.session_state.preregistered_patient = {
                                     'id': member['id'],
@@ -3223,6 +3229,9 @@ def new_patient_form():
                         st.info(f"**Patient ID:** {patient_id}")
                         st.info(f"**Visit ID:** {visit_id}")
 
+                        # Broadcast new patient registration to all devices
+                        broadcast_to_clients(f"new_patient:{patient_data['name']}:{patient_id}")
+
                         # Clear duplicate check data
                         del st.session_state.duplicate_check_results
                         del st.session_state.new_patient_data
@@ -3587,6 +3596,10 @@ def vital_signs_form(visit_id: str):
                 "✅ Vital signs recorded! Patient is ready for consultation.")
 
             # Green confirmation box
+            # Broadcast vital signs completion to all devices
+            patient_name = st.session_state.get('patient_name', 'Patient')
+            broadcast_to_clients(f"vitals_complete:{patient_name}:waiting_consultation")
+            
             st.markdown("""
                 <div style="background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 0.375rem; padding: 1rem; margin: 0.5rem 0;">
                     <div style="color: #155724; font-weight: bold; font-size: 1.1rem;">
@@ -3596,8 +3609,7 @@ def vital_signs_form(visit_id: str):
                         <strong>{}</strong> is now waiting for consultation
                     </div>
                 </div>
-            """.format(st.session_state.get('patient_name', 'Patient')),
-                        unsafe_allow_html=True)
+            """.format(patient_name), unsafe_allow_html=True)
 
             # Check if this patient has children - if so, start family vital signs workflow
             patient_conn = sqlite3.connect(db.db_name)
