@@ -631,6 +631,13 @@ class DatabaseManager:
             # Column doesn't exist, add it
             cursor.execute("ALTER TABLE doctors ADD COLUMN is_active BOOLEAN DEFAULT 1")
 
+        # Handle missing gender column in patients table
+        try:
+            cursor.execute("SELECT gender FROM patients LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE patients ADD COLUMN gender TEXT")
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS doctor_status (
                 id INTEGER PRIMARY KEY,
