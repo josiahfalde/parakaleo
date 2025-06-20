@@ -8,9 +8,6 @@ from streamlit.components.v1 import html
 
 # WebSocket connection script for real-time updates
 ws_connect_script = """
-#Send new patient entries to the websocket server
-html("""
-23ef2e2 (Updated websocket server and app for real-time syncing)
 <script>
   if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
     const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
@@ -18,9 +15,12 @@ html("""
     ws.onopen = () => console.log("Connected to WebSocket server");
     ws.onmessage = (event) => {
       const data = event.data;
+      console.log("WebSocket message received:", data);
       // Trigger page refresh for real-time updates
-      if (data.includes("new_patient") || data.includes("status_update")) {
-        location.reload();
+      if (data.includes("new_patient") || data.includes("vitals_complete") || 
+          data.includes("consultation_complete") || data.includes("lab_complete") || 
+          data.includes("prescriptions_filled")) {
+        setTimeout(() => location.reload(), 1000);
       }
     };
     ws.onclose = () => console.log("WebSocket closed");
@@ -39,15 +39,9 @@ def broadcast_to_clients(message: str):
     }}
     </script>
     """, height=0)
-      alert("New update: " + data);  // Replace with DOM update later if needed
-    };
-    ws.onclose = () => console.log("WebSocket closed");
-  }
-</script>
-""", height=0)
 
 # Inject this script into the app (runs in the browser)
-html(ws_connect_script, height=0)  # height=0 hides the component UI
+html(ws_connect_script, height=0)
 
 #Broadcast from python into Javascript
 def broadcast_to_clients(message: str):
@@ -59,7 +53,6 @@ def broadcast_to_clients(message: str):
     }}
     </script>
     """, unsafe_allow_html=True)
-23ef2e2 (Updated websocket server and app for real-time syncing)
 
 # Configure page for mobile/tablet use
 st.set_page_config(

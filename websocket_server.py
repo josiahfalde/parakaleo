@@ -82,25 +82,3 @@ if __name__ == "__main__":
     
     # Run the server
     asyncio.run(main())
-import asyncio
-import websockets
-
-connected_clients = set()
-
-async def handler(websocket, path):
-    connected_clients.add(websocket)
-    try:
-        async for message in websocket:
-            for client in connected_clients:
-                if client != websocket:
-                    await client.send(message)
-    finally:
-        connected_clients.remove(websocket)
-
-async def main():
-    async with websockets.serve(handler, "0.0.0.0", 6789):
-        await asyncio.Future()  # run forever
-
-if __name__ == "__main__":
-    asyncio.run(main())
-23ef2e2 (Updated websocket server and app for real-time syncing)
