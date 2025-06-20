@@ -6,19 +6,6 @@ from typing import Dict, List, Optional
 import time
 from streamlit.components.v1 import html
 
-# Configure page for mobile/tablet use - MUST BE FIRST
-st.set_page_config(
-    page_title="ParakaleoMed",
-    page_icon="🏥",
-    layout="wide",
-    initial_sidebar_state="collapsed")
-
-# Initialize session state for page persistence
-if 'current_page' not in st.session_state:
-    st.session_state.current_page = 'main'
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
-
 # WebSocket connection script for real-time updates
 ws_connect_script = """
 <script>
@@ -28,23 +15,9 @@ ws_connect_script = """
     ws.onopen = () => console.log("Connected to WebSocket server");
     ws.onmessage = (event) => {
       const data = event.data;
-      console.log("WebSocket message received:", data);
-      // Show notification without page refresh to maintain session state
-      if (data.includes("new_patient") || data.includes("vitals_complete") || 
-          data.includes("consultation_complete") || data.includes("lab_complete") || 
-          data.includes("prescriptions_filled")) {
-        console.log("Patient status update received:", data);
-        
-        // Create notification without page refresh
-        const notification = document.createElement('div');
-        notification.innerHTML = '🔄 Patient status updated - Check queue for changes';
-        notification.style.cssText = 'position:fixed;top:70px;right:20px;background:#10b981;color:white;padding:12px 16px;border-radius:8px;z-index:1000;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-width:300px;';
-        document.body.appendChild(notification);
-        setTimeout(() => {
-          notification.style.opacity = '0';
-          notification.style.transform = 'translateX(100%)';
-          setTimeout(() => notification.remove(), 300);
-        }, 4000);
+      // Trigger page refresh for real-time updates
+      if (data.includes("new_patient") || data.includes("status_update")) {
+        location.reload();
       }
     };
     ws.onclose = () => console.log("WebSocket closed");
@@ -53,6 +26,7 @@ ws_connect_script = """
 </script>
 """
 
+# Broadcast function to send updates to all connected devices
 def broadcast_to_clients(message: str):
     """Sends a message to all connected WebSocket clients"""
     html(f"""
@@ -63,10 +37,13 @@ def broadcast_to_clients(message: str):
     </script>
     """, height=0)
 
-# Inject WebSocket script
-html(ws_connect_script, height=0)
-
-
+# Configure page for mobile/tablet use
+st.set_page_config(
+    page_title="Medical Clinic Charting",
+    page_icon=
+    "attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png",
+    layout="wide",
+    initial_sidebar_state="collapsed")
 
 # Custom CSS for mobile-friendly interface
 st.markdown("""
@@ -624,129 +601,6 @@ class DatabaseManager:
             )
         ''')
 
-        # Handle missing is_active column in existing databases
-        try:
-            cursor.execute("SELECT is_active FROM doctors LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE doctors ADD COLUMN is_active BOOLEAN DEFAULT 1")
-
-        # Handle missing gender column in patients table
-        try:
-            cursor.execute("SELECT gender FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN gender TEXT")
-
-        # Handle missing emergency_contact column in patients table
-        try:
-            cursor.execute("SELECT emergency_contact FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN emergency_contact TEXT")
-
-        # Handle missing medical_history column in patients table
-        try:
-            cursor.execute("SELECT medical_history FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN medical_history TEXT")
-
-        # Handle missing allergies column in patients table
-        try:
-            cursor.execute("SELECT allergies FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN allergies TEXT")
-
-        # Handle missing last_visit column in patients table
-        try:
-            cursor.execute("SELECT last_visit FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN last_visit TEXT")
-
-        # Handle missing columns in visits table
-        try:
-            cursor.execute("SELECT triage_time FROM visits LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE visits ADD COLUMN triage_time TEXT")
-
-        try:
-            cursor.execute("SELECT consultation_time FROM visits LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE visits ADD COLUMN consultation_time TEXT")
-
-        try:
-            cursor.execute("SELECT pharmacy_time FROM visits LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE visits ADD COLUMN pharmacy_time TEXT")
-
-        try:
-            cursor.execute("SELECT priority FROM visits LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE visits ADD COLUMN priority TEXT")
-
-        # Handle missing columns in vital_signs table
-        try:
-            cursor.execute("SELECT recorded_time FROM vital_signs LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE vital_signs ADD COLUMN recorded_time TEXT")
-
-        try:
-            cursor.execute("SELECT oxygen_saturation FROM vital_signs LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE vital_signs ADD COLUMN oxygen_saturation INTEGER")
-
-        # Handle missing columns in patients table for family structure
-        try:
-            cursor.execute("SELECT family_id FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN family_id TEXT")
-
-        try:
-            cursor.execute("SELECT relationship FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN relationship TEXT")
-
-        try:
-            cursor.execute("SELECT parent_id FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN parent_id TEXT")
-
-        try:
-            cursor.execute("SELECT is_independent FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN is_independent INTEGER DEFAULT 0")
-
-        try:
-            cursor.execute("SELECT separation_date FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN separation_date TEXT")
-
-        try:
-            cursor.execute("SELECT address FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN address TEXT")
-
-        try:
-            cursor.execute("SELECT registration_time FROM patients LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE patients ADD COLUMN registration_time TEXT")
-
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS doctor_status (
                 id INTEGER PRIMARY KEY,
@@ -1157,9 +1011,7 @@ class DatabaseManager:
 
         cursor.execute(
             '''
-            SELECT patient_id, name, age, gender, phone, emergency_contact, 
-                   medical_history, allergies, created_date, last_visit
-            FROM patients 
+            SELECT * FROM patients 
             WHERE patient_id LIKE ? OR name LIKE ?
             ORDER BY name
         ''', (f'%{query}%', f'%{query}%'))
@@ -3654,7 +3506,7 @@ def existing_patient_search():
                         <p><strong>ID:</strong> {patient['patient_id']}</p>
                         <p><strong>Age:</strong> {patient['age'] or 'Not specified'}</p>
                         <p><strong>Gender:</strong> {patient['gender'] or 'Not specified'}</p>
-                        <p><strong>Last Visit:</strong> {str(patient['last_visit'])[:10] if patient['last_visit'] else 'Never'}</p>
+                        <p><strong>Last Visit:</strong> {patient['last_visit'][:10] if patient['last_visit'] else 'Never'}</p>
                     </div>
                     """,
                                 unsafe_allow_html=True)

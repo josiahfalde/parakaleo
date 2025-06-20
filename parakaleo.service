@@ -1,13 +1,12 @@
-#!/bin/bash
+
 [Unit]
-Description=Parakaleo Medical Clinic App
+Description=ParakaleoMed Medical Clinic App
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/parakaleo
-27a7290 (WIP: local changes before rebase)
+WorkingDirectory=/home/pi/parakaleoMed
 ExecStart=/home/pi/parakaleo/start_parakaleo.sh
 Restart=always
 RestartSec=10

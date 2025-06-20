@@ -1,6 +1,4 @@
 #!/bin/bash
-cd /home/pi/parakaleo
-23ef2e2 (Updated websocket server and app for real-time syncing)
 
 # ParakaleoMed Clinic System Startup Script
 # This script starts both the medical app and WebSocket server for real-time iPad synchronization
@@ -32,8 +30,3 @@ echo "iPads will automatically sync in real-time"
 # Keep the script running and monitor both processes
 wait $STREAMLIT_PID
 wait $WEBSOCKET_PID
-
-# Start the app using the venv’s Python directly
-/home/pi/venv/bin/python -m streamlit run /home/pi/parakaleo/app.py --server.port 5000 --server.address 0.0.0.0 --server.headless true
-
-23ef2e2 (Updated websocket server and app for real-time syncing)

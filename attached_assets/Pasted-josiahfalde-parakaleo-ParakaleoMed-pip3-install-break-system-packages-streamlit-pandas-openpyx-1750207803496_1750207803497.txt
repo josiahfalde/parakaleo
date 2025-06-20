@@ -1,0 +1,84 @@
+josiahfalde@parakaleo:~/ParakaleoMed $ pip3 install --break-system-packages streamlit pandas openpyxl plotly xlrd
+Defaulting to user installation because normal site-packages is not writeable
+Looking in indexes: https://pypi.org/simple, https://www.piwheels.org/simple
+Collecting streamlit
+  Downloading streamlit-1.45.1-py3-none-any.whl (9.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.9/9.9 MB 283.1 kB/s eta 0:00:00
+Collecting pandas
+  Downloading pandas-2.3.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (11.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.8/11.8 MB 213.3 kB/s eta 0:00:00
+Collecting openpyxl
+  Downloading https://www.piwheels.org/simple/openpyxl/openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 250.9/250.9 kB 67.6 kB/s eta 0:00:00
+Collecting plotly
+  Downloading plotly-6.1.2-py3-none-any.whl (16.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.3/16.3 MB 199.1 kB/s eta 0:00:00
+Collecting xlrd
+  Downloading xlrd-2.0.2-py2.py3-none-any.whl (96 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 96.6/96.6 kB 123.1 kB/s eta 0:00:00
+Collecting altair<6,>=4.0
+  Downloading https://www.piwheels.org/simple/altair/altair-5.5.0-py3-none-any.whl (731 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 731.2/731.2 kB 718.0 kB/s eta 0:00:00
+Requirement already satisfied: blinker<2,>=1.5.0 in /usr/lib/python3/dist-packages (from streamlit) (1.5)
+Collecting cachetools<6,>=4.0
+  Downloading https://www.piwheels.org/simple/cachetools/cachetools-5.5.2-py3-none-any.whl (10 kB)
+Requirement already satisfied: click<9,>=7.0 in /usr/lib/python3/dist-packages (from streamlit) (8.1.3)
+Requirement already satisfied: numpy<3,>=1.23 in /usr/lib/python3/dist-packages (from streamlit) (1.24.2)
+Collecting packaging<25,>=20
+  Downloading https://www.piwheels.org/simple/packaging/packaging-24.2-py3-none-any.whl (65 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 65.5/65.5 kB 28.8 kB/s eta 0:00:00
+Requirement already satisfied: pillow<12,>=7.1.0 in /usr/lib/python3/dist-packages (from streamlit) (9.4.0)
+Collecting protobuf<7,>=3.20
+  Downloading protobuf-6.31.1-cp39-abi3-manylinux2014_aarch64.whl (322 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 322.1/322.1 kB 835.5 kB/s eta 0:00:00
+Collecting pyarrow>=7.0
+  Downloading pyarrow-20.0.0-cp311-cp311-manylinux_2_28_aarch64.whl (40.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.7/40.7 MB 116.3 kB/s eta 0:00:00
+Requirement already satisfied: requests<3,>=2.27 in /usr/lib/python3/dist-packages (from streamlit) (2.28.1)
+Collecting tenacity<10,>=8.1.0
+  Downloading tenacity-9.1.2-py3-none-any.whl (28 kB)
+Requirement already satisfied: toml<2,>=0.10.1 in /usr/lib/python3/dist-packages (from streamlit) (0.10.2)
+Requirement already satisfied: typing-extensions<5,>=4.4.0 in /usr/lib/python3/dist-packages (from streamlit) (4.4.0)
+Collecting watchdog<7,>=2.1.5
+  Downloading watchdog-6.0.0-py3-none-manylinux2014_aarch64.whl (79 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 79.1/79.1 kB 411.8 kB/s eta 0:00:00
+Collecting gitpython!=3.1.19,<4,>=3.0.7
+  WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))': /simple/gitpython/GitPython-3.1.44-py3-none-any.whl
+  Downloading https://www.piwheels.org/simple/gitpython/GitPython-3.1.44-py3-none-any.whl (207 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 207.6/207.6 kB 48.8 kB/s eta 0:00:00
+Collecting pydeck<1,>=0.8.0b4
+  Downloading pydeck-0.9.1-py2.py3-none-any.whl (6.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 297.6 kB/s eta 0:00:00
+Collecting tornado<7,>=6.0.3
+  Downloading tornado-6.5.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (443 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 443.7/443.7 kB 103.4 kB/s eta 0:00:00
+Collecting python-dateutil>=2.8.2
+  Downloading https://www.piwheels.org/simple/python-dateutil/python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 229.9/229.9 kB 315.2 kB/s eta 0:00:00
+Requirement already satisfied: pytz>=2020.1 in /usr/lib/python3/dist-packages (from pandas) (2022.7.1)
+Collecting tzdata>=2022.7
+  Downloading https://www.piwheels.org/simple/tzdata/tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 347.8/347.8 kB 258.0 kB/s eta 0:00:00
+Collecting et-xmlfile
+  Downloading https://www.piwheels.org/simple/et-xmlfile/et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+Collecting narwhals>=1.15.1
+  Downloading narwhals-1.43.0-py3-none-any.whl (362 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 362.7/362.7 kB 223.8 kB/s eta 0:00:00
+Requirement already satisfied: jinja2 in /usr/lib/python3/dist-packages (from altair<6,>=4.0->streamlit) (3.1.2)
+Requirement already satisfied: jsonschema>=3.0 in /usr/lib/python3/dist-packages (from altair<6,>=4.0->streamlit) (4.10.3)
+Collecting typing-extensions<5,>=4.4.0
+  Downloading typing_extensions-4.14.0-py3-none-any.whl (43 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 43.8/43.8 kB 436.7 kB/s eta 0:00:00
+Collecting gitdb<5,>=4.0.1
+  Downloading https://www.piwheels.org/simple/gitdb/gitdb-4.0.12-py3-none-any.whl (62 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.8/62.8 kB 291.9 kB/s eta 0:00:00
+Requirement already satisfied: six>=1.5 in /usr/lib/python3/dist-packages (from python-dateutil>=2.8.2->pandas) (1.16.0)
+Collecting smmap<6,>=3.0.1
+  Downloading https://www.piwheels.org/simple/smmap/smmap-5.0.2-py3-none-any.whl (24 kB)
+Requirement already satisfied: attrs>=17.4.0 in /usr/lib/python3/dist-packages (from jsonschema>=3.0->altair<6,>=4.0->streamlit) (22.2.0)
+Requirement already satisfied: pyrsistent!=0.17.0,!=0.17.1,!=0.17.2,>=0.14.0 in /usr/lib/python3/dist-packages (from jsonschema>=3.0->altair<6,>=4.0->streamlit) (0.18.1)
+Installing collected packages: xlrd, watchdog, tzdata, typing-extensions, tornado, tenacity, smmap, python-dateutil, pydeck, pyarrow, protobuf, packaging, narwhals, et-xmlfile, cachetools, plotly, pandas, openpyxl, gitdb, altair, gitpython, streamlit
+  WARNING: The script watchmedo is installed in '/home/josiahfalde/.local/bin' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The script plotly_get_chrome is installed in '/home/josiahfalde/.local/bin' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
