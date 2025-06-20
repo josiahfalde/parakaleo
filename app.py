@@ -624,6 +624,13 @@ class DatabaseManager:
             )
         ''')
 
+        # Handle missing is_active column in existing databases
+        try:
+            cursor.execute("SELECT is_active FROM doctors LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE doctors ADD COLUMN is_active BOOLEAN DEFAULT 1")
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS doctor_status (
                 id INTEGER PRIMARY KEY,
