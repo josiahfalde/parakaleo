@@ -145,6 +145,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added prescription status tracking (ready, paused_pending_lab) for proper workflow state management
   - Enhanced consultation workflow to save all prescription data when patients sent for lab tests
   - Created "pause button" effect for consultations allowing doctors to move to other patients while awaiting lab results
+- June 20, 2025. Real-time WebSocket synchronization implementation
+  - Added WebSocket client-server architecture for real-time updates across all clinic iPads
+  - Implemented broadcast functionality for patient status changes, new registrations, and workflow updates
+  - Created websocket_server.py for handling multi-device synchronization on port 6789
+  - Added broadcast calls throughout patient workflow: registration, vital signs completion, consultation updates
+  - Enhanced clinic setup with automatic WebSocket server startup alongside medical app
+  - Enabled real-time notifications when patients move between triage, consultation, lab, and pharmacy stations
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

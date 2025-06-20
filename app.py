@@ -4647,11 +4647,17 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 conn_med.commit()
                                 conn_med.close()
 
+                        # Broadcast consultation completion to all devices
+                        patient_name = st.session_state.get('current_patient_name', 'Patient')
+                        
                         if lab_tests and not completed_labs:
                             # Initial consultation with lab orders
                             test_names = [test_info[0] for test_info in lab_tests]
                             st.success("Consultation paused and saved!")
                             st.info(f"Patient sent to lab for: {', '.join(test_names)}")
+                            
+                            # Broadcast lab order to all devices
+                            broadcast_to_clients(f"consultation_paused:{patient_name}:lab_ordered:{','.join(test_names)}")
                             
                             # Show prescription summary for paused consultation
                             if selected_medications:
@@ -4667,6 +4673,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         else:
                             # Normal consultation completion or re-consultation
                             st.success("Consultation completed successfully!")
+                            
+                            # Broadcast consultation completion to all devices
+                            if selected_medications:
+                                broadcast_to_clients(f"consultation_complete:{patient_name}:prescribed:{len(selected_medications)}")
+                            else:
+                                broadcast_to_clients(f"consultation_complete:{patient_name}:no_prescriptions")
                             
                             if selected_medications:
                                 awaiting_count = sum(1 for med in selected_medications if med['awaiting_lab'] == 'yes')
@@ -5798,6 +5810,23 @@ def urinalysis_form(test_id: int):
             db_manager = get_db_manager()
             db_manager.complete_lab_test(test_id, results_text)
 
+            # Get patient info for broadcast
+            conn = sqlite3.connect(db_manager.db_name)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.name, lt.test_type 
+                FROM lab_tests lt
+                JOIN visits v ON lt.visit_id = v.visit_id
+                JOIN patients p ON v.patient_id = p.patient_id
+                WHERE lt.test_id = ?
+            ''', (test_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                patient_name, test_type = result
+                broadcast_to_clients(f"lab_complete:{patient_name}:{test_type}:urinalysis")
+
             st.success("Urinalysis completed!")
             st.rerun()
 
@@ -5821,6 +5850,24 @@ def glucose_form(test_id: int):
 
             db_manager = get_db_manager()
             db_manager.complete_lab_test(test_id, results)
+
+            # Get patient info for broadcast
+            conn = sqlite3.connect(db_manager.db_name)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.name 
+                FROM lab_tests lt
+                JOIN visits v ON lt.visit_id = v.visit_id
+                JOIN patients p ON v.patient_id = p.patient_id
+                WHERE lt.test_id = ?
+            ''', (test_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                patient_name = result[0]
+                broadcast_to_clients(f"lab_complete:{patient_name}:glucose:{glucose_value}mg/dL")
+
             st.success("Glucose test completed!")
             st.rerun()
 
@@ -5839,6 +5886,24 @@ def pregnancy_form(test_id: int):
 
             db_manager = get_db_manager()
             db_manager.complete_lab_test(test_id, results)
+
+            # Get patient info for broadcast
+            conn = sqlite3.connect(db_manager.db_name)
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.name 
+                FROM lab_tests lt
+                JOIN visits v ON lt.visit_id = v.visit_id
+                JOIN patients p ON v.patient_id = p.patient_id
+                WHERE lt.test_id = ?
+            ''', (test_id,))
+            lab_result = cursor.fetchone()
+            conn.close()
+            
+            if lab_result:
+                patient_name = lab_result[0]
+                broadcast_to_clients(f"lab_complete:{patient_name}:pregnancy:{result}")
+
             st.success("Pregnancy test completed!")
             st.rerun()
 

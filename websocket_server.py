@@ -64,18 +64,21 @@ async def broadcast_to_all(message):
         # Remove disconnected clients
         connected_clients.difference_update(disconnected)
 
-def start_server():
+async def start_server():
     """Start the WebSocket server"""
     logger.info("Starting ParakaleoMed WebSocket server on port 6789...")
-    return websockets.serve(handle_client, "0.0.0.0", 6789)
-
-if __name__ == "__main__":
-    # Start the WebSocket server
-    server = start_server()
-    
+    server = await websockets.serve(handle_client, "0.0.0.0", 6789)
     logger.info("ParakaleoMed WebSocket server running on ws://0.0.0.0:6789")
     logger.info("Ready to sync clinic iPads in real-time!")
+    return server
+
+if __name__ == "__main__":
+    async def main():
+        # Start the WebSocket server
+        server = await start_server()
+        
+        # Keep the server running
+        await server.wait_closed()
     
     # Run the server
-    asyncio.get_event_loop().run_until_complete(server)
-    asyncio.get_event_loop().run_forever()
+    asyncio.run(main())
