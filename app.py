@@ -6,6 +6,19 @@ from typing import Dict, List, Optional
 import time
 from streamlit.components.v1 import html
 
+# Configure page for mobile/tablet use - MUST BE FIRST
+st.set_page_config(
+    page_title="ParakaleoMed",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="collapsed")
+
+# Initialize session state for page persistence
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 'main'
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = None
+
 # WebSocket connection script for real-time updates
 ws_connect_script = """
 <script>
@@ -16,11 +29,22 @@ ws_connect_script = """
     ws.onmessage = (event) => {
       const data = event.data;
       console.log("WebSocket message received:", data);
-      // Trigger page refresh for real-time updates
+      // Show notification without page refresh to maintain session state
       if (data.includes("new_patient") || data.includes("vitals_complete") || 
           data.includes("consultation_complete") || data.includes("lab_complete") || 
           data.includes("prescriptions_filled")) {
-        setTimeout(() => location.reload(), 1000);
+        console.log("Patient status update received:", data);
+        
+        // Create notification without page refresh
+        const notification = document.createElement('div');
+        notification.innerHTML = '🔄 Patient status updated - Check queue for changes';
+        notification.style.cssText = 'position:fixed;top:70px;right:20px;background:#10b981;color:white;padding:12px 16px;border-radius:8px;z-index:1000;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-width:300px;';
+        document.body.appendChild(notification);
+        setTimeout(() => {
+          notification.style.opacity = '0';
+          notification.style.transform = 'translateX(100%)';
+          setTimeout(() => notification.remove(), 300);
+        }, 4000);
       }
     };
     ws.onclose = () => console.log("WebSocket closed");
@@ -29,7 +53,6 @@ ws_connect_script = """
 </script>
 """
 
-# Broadcast function to send updates to all connected devices
 def broadcast_to_clients(message: str):
     """Sends a message to all connected WebSocket clients"""
     html(f"""
@@ -40,26 +63,8 @@ def broadcast_to_clients(message: str):
     </script>
     """, height=0)
 
-# Inject this script into the app (runs in the browser)
+# Inject WebSocket script
 html(ws_connect_script, height=0)
-
-def broadcast_to_clients(message: str):
-    """Sends a message to all connected WebSocket clients"""
-    html(f"""
-    <script>
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
-        window.ws.send('{message}');
-    }}
-    </script>
-    """, height=0)
-
-# Configure page for mobile/tablet use
-st.set_page_config(
-    page_title="ParakaleoMed",
-    page_icon=
-    "attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png",
-    layout="wide",
-    initial_sidebar_state="collapsed")
 
 
 

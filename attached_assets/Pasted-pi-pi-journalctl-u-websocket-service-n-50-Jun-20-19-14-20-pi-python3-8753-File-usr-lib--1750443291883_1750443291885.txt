@@ -1,0 +1,31 @@
+pi@pi:~ $ journalctl -u websocket.service -n 50
+Jun 20 19:14:20 pi python3[8753]:   File "/usr/lib/python3.11/asyncio/runners.py", line 118, in run
+Jun 20 19:14:20 pi python3[8753]:     return self._loop.run_until_complete(task)
+Jun 20 19:14:20 pi python3[8753]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jun 20 19:14:20 pi python3[8753]:   File "/usr/lib/python3.11/asyncio/base_events.py", line 653, in run_until_complete
+Jun 20 19:14:20 pi python3[8753]:     return future.result()
+Jun 20 19:14:20 pi python3[8753]:            ^^^^^^^^^^^^^^^
+Jun 20 19:14:20 pi python3[8753]:   File "/home/pi/parakaleo/websocket_server.py", line 78, in main
+Jun 20 19:14:20 pi python3[8753]:     server = await start_server()
+Jun 20 19:14:20 pi python3[8753]:              ^^^^^^^^^^^^^^^^^^^^
+Jun 20 19:14:20 pi python3[8753]:   File "/home/pi/parakaleo/websocket_server.py", line 70, in start_server
+Jun 20 19:14:20 pi python3[8753]:     server = await websockets.serve(handle_client, "0.0.0.0", 6789)
+Jun 20 19:14:20 pi python3[8753]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Jun 20 19:14:20 pi python3[8753]:   File "/home/pi/.local/lib/python3.11/site-packages/websockets/asyncio/server.py", l>
+Jun 20 19:14:20 pi python3[8753]:     server = await self.create_server
+Jun 20 19:14:20 pi python3[8753]:              ^^^^^^^^^^^^^^^^^^^^^^^^
+Jun 20 19:14:20 pi python3[8753]:   File "/usr/lib/python3.11/asyncio/base_events.py", line 1525, in create_server
+Jun 20 19:14:20 pi python3[8753]:     raise OSError(err.errno, 'error while attempting '
+Jun 20 19:14:20 pi python3[8753]: OSError: [Errno 98] error while attempting to bind on address ('0.0.0.0', 6789): addr>
+Jun 20 19:14:20 pi systemd[1]: websocket.service: Main process exited, code=exited, status=1/FAILURE
+Jun 20 19:14:20 pi systemd[1]: websocket.service: Failed with result 'exit-code'.
+Jun 20 19:14:23 pi systemd[1]: websocket.service: Scheduled restart job, restart counter is at 1784.
+Jun 20 19:14:23 pi systemd[1]: Stopped websocket.service - ParakaleoMed WebSocket Server.
+Jun 20 19:14:23 pi systemd[1]: Started websocket.service - ParakaleoMed WebSocket Server.
+Jun 20 19:14:24 pi python3[8771]: INFO:__main__:Starting ParakaleoMed WebSocket server on port 6789...
+Jun 20 19:14:24 pi python3[8771]: Traceback (most recent call last):
+Jun 20 19:14:24 pi python3[8771]:   File "/home/pi/parakaleo/websocket_server.py", line 84, in <module>
+Jun 20 19:14:24 pi python3[8771]:     asyncio.run(main())
+Jun 20 19:14:24 pi python3[8771]:   File "/usr/lib/python3.11/asyncio/runners.py", line 190, in run
+Jun 20 19:14:24 pi python3[8771]:     return runner.run(main)
+lines 1-29
