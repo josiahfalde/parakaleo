@@ -43,16 +43,15 @@ def broadcast_to_clients(message: str):
 # Inject this script into the app (runs in the browser)
 html(ws_connect_script, height=0)
 
-#Broadcast from python into Javascript
 def broadcast_to_clients(message: str):
-    """Injects a script that sends a message to the WebSocket server from the client."""
-    st.markdown(f"""
+    """Sends a message to all connected WebSocket clients"""
+    html(f"""
     <script>
     if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
-        window.ws.send({message!r});
+        window.ws.send('{message}');
     }}
     </script>
-    """, unsafe_allow_html=True)
+    """, height=0)
 
 # Configure page for mobile/tablet use
 st.set_page_config(
@@ -62,17 +61,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed")
 
-# Inter-iPad syncing JF
-st.markdown("""
-<script>
-  const socket = new WebSocket("ws://192.168.4.1:6789");
-  socket.onmessage = function(event) {
-    const nameRegistered = event.data;
-    alert('New name registered: ' + nameRegistered);
-    // You can modify this to update the page dynamically if needed
-  };
-</script>
-""", unsafe_allow_html=True)
+
 
 # Custom CSS for mobile-friendly interface
 st.markdown("""
