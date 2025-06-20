@@ -666,6 +666,31 @@ class DatabaseManager:
             # Column doesn't exist, add it
             cursor.execute("ALTER TABLE patients ADD COLUMN last_visit TEXT")
 
+        # Handle missing columns in visits table
+        try:
+            cursor.execute("SELECT triage_time FROM visits LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE visits ADD COLUMN triage_time TEXT")
+
+        try:
+            cursor.execute("SELECT consultation_time FROM visits LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE visits ADD COLUMN consultation_time TEXT")
+
+        try:
+            cursor.execute("SELECT pharmacy_time FROM visits LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE visits ADD COLUMN pharmacy_time TEXT")
+
+        try:
+            cursor.execute("SELECT priority FROM visits LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE visits ADD COLUMN priority TEXT")
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS doctor_status (
                 id INTEGER PRIMARY KEY,
