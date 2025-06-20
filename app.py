@@ -5109,6 +5109,10 @@ def pending_prescriptions():
             conn.commit()
             conn.close()
             
+            # Broadcast family prescription completion to all devices
+            family_names = [member['patient_name'] for member in family_data]
+            broadcast_to_clients(f"prescriptions_filled:family:{','.join(family_names)}:complete")
+            
             # Clear family workflow
             del st.session_state.family_pharmacy_workflow
             
@@ -5213,6 +5217,9 @@ def pending_prescriptions():
 
                     conn.commit()
                     conn.close()
+
+                    # Broadcast prescription completion to all devices
+                    broadcast_to_clients(f"prescriptions_filled:{patient_data['name']}:individual:complete")
 
                     st.success(
                         f"✅ All prescriptions completed for {patient_data['name']}!"
