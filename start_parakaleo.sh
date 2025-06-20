@@ -3,6 +3,9 @@
 # ParakaleoMed Clinic System Startup Script
 # This script starts both the medical app and WebSocket server for real-time iPad synchronization
 
+# Kill existing process on port 6789 (if any)
+fuser -k 6789/tcp 2>/dev/null
+
 echo "Starting ParakaleoMed Clinic System..."
 
 # Set the working directory
