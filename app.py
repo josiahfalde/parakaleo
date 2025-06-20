@@ -3960,6 +3960,33 @@ def consultation_interface():
                                 key=f"lab_review_{patient['patient_id']}", 
                                 type="primary", 
                                 use_container_width=True):
+                        # Load existing consultation data from database for restoration
+                        conn_restore = sqlite3.connect("clinic_database.db")
+                        cursor_restore = conn_restore.cursor()
+                        cursor_restore.execute('''
+                            SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                                   surgical_history, medical_history, allergies, current_medications
+                            FROM visits 
+                            WHERE visit_id = ?
+                        ''', (patient['visit_id'],))
+                        consultation_data = cursor_restore.fetchone()
+                        conn_restore.close()
+                        
+                        # Store consultation data in session state for restoration
+                        consultation_key = f"consultation_data_{patient['visit_id']}"
+                        if consultation_data:
+                            st.session_state[consultation_key] = {
+                                'chief_complaint': consultation_data[0] or '',
+                                'symptoms': consultation_data[1] or '',
+                                'diagnosis': consultation_data[2] or '',
+                                'treatment_plan': consultation_data[3] or '',
+                                'notes': consultation_data[4] or '',
+                                'surgical_history': consultation_data[5] or '',
+                                'medical_history': consultation_data[6] or '',
+                                'allergies': consultation_data[7] or '',
+                                'current_medications': consultation_data[8] or ''
+                            }
+                        
                         st.session_state.active_consultation = {
                             'visit_id': patient['visit_id'],
                             'patient_id': patient['patient_id'],
@@ -4127,9 +4154,32 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 status = "✅ Completed" if i < current_index else "⏳ Current" if i == current_index else "⏸️ Waiting"
                 st.write(f"{status} {member['name']} ({member.get('relationship', 'family member')})")
     
+    # Check if this patient is returning from lab tests
+    is_returning_from_lab = st.session_state.get('active_consultation', {}).get('return_from_lab', False)
+    lab_results = st.session_state.get('active_consultation', {}).get('lab_results', [])
+    
     # Display current patient information
     st.markdown(f"**Current Patient:** {patient_name}")
     st.markdown(f"**Relationship:** {'Parent/Guardian' if not is_family_consultation or (is_family_consultation and st.session_state.family_consultation['current_member_index'] == 0) else 'Child'}")
+
+    # Show lab results prominently if patient is returning from lab
+    if is_returning_from_lab and lab_results:
+        st.markdown("---")
+        st.markdown("### 🧪 **LAB RESULTS COMPLETED**")
+        st.success("This patient has returned from lab/pharmacy with completed results. Original consultation data has been restored below.")
+        
+        for test_type, results, completed_time in lab_results:
+            with st.expander(f"🔬 {test_type} Results - {completed_time[:16].replace('T', ' ')}", expanded=True):
+                if test_type.lower() == 'urinalysis':
+                    st.markdown("**Standard 10-Parameter Urinalysis:**")
+                    st.code(results, language=None)
+                elif test_type.lower() == 'glucose':
+                    st.markdown(f"**Blood Glucose:** {results}")
+                elif test_type.lower() == 'pregnancy':
+                    st.markdown(f"**Pregnancy Test:** {results}")
+                else:
+                    st.markdown(f"**{test_type}:** {results}")
+        st.markdown("---")
 
     # Use tabs for consultation sections including optional photo documentation
     tab1, tab2, tab3 = st.tabs(
