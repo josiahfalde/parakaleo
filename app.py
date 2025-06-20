@@ -8,6 +8,9 @@ from streamlit.components.v1 import html
 
 # WebSocket connection script for real-time updates
 ws_connect_script = """
+#Send new patient entries to the websocket server
+html("""
+23ef2e2 (Updated websocket server and app for real-time syncing)
 <script>
   if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
     const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
@@ -36,14 +39,47 @@ def broadcast_to_clients(message: str):
     }}
     </script>
     """, height=0)
+      alert("New update: " + data);  // Replace with DOM update later if needed
+    };
+    ws.onclose = () => console.log("WebSocket closed");
+  }
+</script>
+""", height=0)
+
+# Inject this script into the app (runs in the browser)
+html(ws_connect_script, height=0)  # height=0 hides the component UI
+
+#Broadcast from python into Javascript
+def broadcast_to_clients(message: str):
+    """Injects a script that sends a message to the WebSocket server from the client."""
+    st.markdown(f"""
+    <script>
+    if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
+        window.ws.send({message!r});
+    }}
+    </script>
+    """, unsafe_allow_html=True)
+23ef2e2 (Updated websocket server and app for real-time syncing)
 
 # Configure page for mobile/tablet use
 st.set_page_config(
-    page_title="Medical Clinic Charting",
+    page_title="ParakaleoMed",
     page_icon=
     "attached_assets/ChatGPT Image Jun 15, 2025, 05_23_25 PM_1750022665650.png",
     layout="wide",
     initial_sidebar_state="collapsed")
+
+# Inter-iPad syncing JF
+st.markdown("""
+<script>
+  const socket = new WebSocket("ws://192.168.4.1:6789");
+  socket.onmessage = function(event) {
+    const nameRegistered = event.data;
+    alert('New name registered: ' + nameRegistered);
+    // You can modify this to update the page dynamically if needed
+  };
+</script>
+""", unsafe_allow_html=True)
 
 # Custom CSS for mobile-friendly interface
 st.markdown("""
