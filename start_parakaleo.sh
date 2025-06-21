@@ -21,7 +21,7 @@ sleep 3
 
 # Start the main Streamlit application
 echo "Starting ParakaleoMed medical application..."
-streamlit run app.py --server.port 5000 --server.address 0.0.0.0 &
+/home/pi/parakaleo/venv/bin/streamlit run app.py --server.port 5000 --server.address 0.0.0.0 &
 STREAMLIT_PID=$!
 
 echo "ParakaleoMed system started successfully!"
