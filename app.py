@@ -4775,12 +4775,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             # Initial consultation with lab orders - save consultation in paused state
                             new_status = 'waiting_lab'
                         elif completed_labs > 0:
-                            # Re-consultation after lab results
+                            # Re-consultation after lab results - send back to pharmacy
                             if selected_medications:
                                 new_status = 'prescribed'
                                 st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
                             else:
-                                new_status = 'completed'
+                                new_status = 'prescribed'  # Even without new meds, send to pharmacy to complete visit
                         elif needs_ophthalmology:
                             new_status = 'needs_ophthalmology'
                         elif selected_medications:
@@ -5066,6 +5066,8 @@ def consultation_history():
         JOIN visits v ON c.visit_id = v.visit_id
         JOIN patients p ON v.patient_id = p.patient_id
         WHERE DATE(c.consultation_time) = DATE('now')
+        AND v.status IN ('completed', 'prescribed', 'needs_ophthalmology')
+        AND v.return_reason IS NULL
         ORDER BY c.consultation_time DESC
     ''')
 
@@ -5255,8 +5257,20 @@ def pharmacy_interface():
     add_to_history('pharmacy')
     st.markdown("## 💊 Pharmacy/Lab Station")
 
+    # Get pending lab test count
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT COUNT(*) FROM lab_tests 
+        WHERE status = 'pending' AND DATE(ordered_time) = DATE('now')
+    ''')
+    pending_lab_count = cursor.fetchone()[0]
+    conn.close()
+    
+    lab_input_label = f"Lab Input ({pending_lab_count})" if pending_lab_count > 0 else "Lab Input"
+    
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["Ready to Fill", "Lab Results", "Lab Input", "Filled Prescriptions"])
+        ["Ready to Fill", "Lab Results", lab_input_label, "Filled Prescriptions"])
 
     with tab1:
         pending_prescriptions()
