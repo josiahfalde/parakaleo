@@ -6,22 +6,87 @@ from typing import Dict, List, Optional
 import time
 from streamlit.components.v1 import html
 
+# Page state persistence - store current page in URL parameters
+def preserve_page_state():
+    """Initialize page state persistence"""
+    if 'page_initialized' not in st.session_state:
+        # Get page from URL parameters if available
+        query_params = st.query_params
+        if 'page' in query_params:
+            st.session_state.page = query_params['page']
+        elif 'page' not in st.session_state:
+            st.session_state.page = 'main'
+        st.session_state.page_initialized = True
+
+def update_page_url(page_name: str):
+    """Update URL to reflect current page"""
+    st.query_params['page'] = page_name
+    if 'role' in st.session_state:
+        st.query_params['role'] = st.session_state.role
+
 # WebSocket connection script for real-time updates
 ws_connect_script = """
 <script>
-  if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
-    const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
-    window.ws = ws;
-    ws.onopen = () => console.log("Connected to WebSocket server");
-    ws.onmessage = (event) => {
-      const data = event.data;
-      // Trigger page refresh for real-time updates
-      if (data.includes("new_patient") || data.includes("status_update")) {
-        location.reload();
+  if (!window.wsInitialized) {
+    function connectWebSocket() {
+      try {
+        const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
+        window.ws = ws;
+        
+        ws.onopen = function() {
+          console.log("Connected to ParakaleoMed sync server");
+          window.wsConnected = true;
+        };
+        
+        ws.onmessage = function(event) {
+          console.log("Received update:", event.data);
+          // Show notification without full page reload
+          if (event.data.includes("new_patient") || 
+              event.data.includes("vitals_complete") || 
+              event.data.includes("consultation_complete") ||
+              event.data.includes("lab_complete") ||
+              event.data.includes("prescriptions_filled")) {
+            
+            // Create notification banner
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+              position: fixed; top: 10px; right: 10px; z-index: 9999;
+              background: #10b981; color: white; padding: 12px 20px;
+              border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              font-weight: bold; max-width: 300px;
+            `;
+            notification.textContent = '🔄 Clinic Update: ' + event.data.replace(/:/g, ' - ');
+            document.body.appendChild(notification);
+            
+            // Auto-remove notification after 3 seconds
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+              }
+            }, 3000);
+          }
+        };
+        
+        ws.onclose = function() {
+          console.log("WebSocket connection closed");
+          window.wsConnected = false;
+          // Attempt to reconnect after 5 seconds
+          setTimeout(connectWebSocket, 5000);
+        };
+        
+        ws.onerror = function(error) {
+          console.log("WebSocket error:", error);
+          window.wsConnected = false;
+        };
+        
+      } catch (error) {
+        console.log("WebSocket connection failed:", error);
+        window.wsConnected = false;
       }
-    };
-    ws.onclose = () => console.log("WebSocket closed");
-    ws.onerror = (error) => console.log("WebSocket error:", error);
+    }
+    
+    connectWebSocket();
+    window.wsInitialized = true;
   }
 </script>
 """
@@ -29,13 +94,17 @@ ws_connect_script = """
 # Broadcast function to send updates to all connected devices
 def broadcast_to_clients(message: str):
     """Sends a message to all connected WebSocket clients"""
-    html(f"""
-    <script>
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
-        window.ws.send('{message}');
-    }}
-    </script>
-    """, height=0)
+    try:
+        html(f"""
+        <script>
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
+            window.ws.send('{message}');
+        }}
+        </script>
+        """, height=0)
+    except Exception as e:
+        # Silently handle WebSocket errors to prevent app crashes
+        pass
 
 # Configure page for mobile/tablet use
 st.set_page_config(
@@ -1503,6 +1572,9 @@ def show_back_button():
 
 
 def main():
+    # Initialize page state persistence
+    preserve_page_state()
+    
     # Initialize WebSocket connection for real-time updates across iPads
     html(ws_connect_script, height=0)
     

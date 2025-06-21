@@ -6,7 +6,7 @@ After=network.target
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/parakaleoMed
+WorkingDirectory=/home/pi/parakaleo
 ExecStart=/home/pi/parakaleo/start_parakaleo.sh
 Restart=always
 RestartSec=10

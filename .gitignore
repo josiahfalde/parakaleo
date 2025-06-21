@@ -1,0 +1,39 @@
+# Ignore compiled Python files
+*.pyc
+__pycache__/
+
+# Ignore log files
+*.log
+
+# Ignore environment and configuration files
+.env
+config/
+
+# Ignore specific files or directories
+attached_assets/
+clinic_database.db
+
+# Ignore backups and temporary files
+*.bak
+*.tmp
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE and editor settings
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vscode/
+
+# Ignore build directories
+build/
+dist/
+node_modules/
+
+# Ignore repl.it configuration file
+replit.md
+
+.pythonlibs
+store.json
