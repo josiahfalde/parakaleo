@@ -17,19 +17,22 @@ logger = logging.getLogger(__name__)
 # Store connected clients
 connected_clients = set()
 
-async def handle_client(websocket, path):
+async def handle_client(websocket):
     """Handle a new WebSocket client connection"""
     connected_clients.add(websocket)
-    client_ip = websocket.remote_address[0]
+    client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
     logger.info(f"New client connected from {client_ip}. Total clients: {len(connected_clients)}")
     
     try:
+        # Send welcome message
+        await websocket.send(f"welcome:ParakaleoMed_sync_server")
+        
         async for message in websocket:
             # Broadcast message to all other connected clients
             if connected_clients:
                 # Parse message and add timestamp
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                broadcast_message = f"[{timestamp}] {message}"
+                broadcast_message = f"{message}"
                 
                 # Send to all clients except sender
                 disconnected = set()
@@ -37,7 +40,10 @@ async def handle_client(websocket, path):
                     if client != websocket:
                         try:
                             await client.send(broadcast_message)
-                        except websockets.exceptions.ConnectionClosed:
+                        except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
+                            disconnected.add(client)
+                        except Exception as e:
+                            logger.warning(f"Error sending to client: {e}")
                             disconnected.add(client)
                 
                 # Remove disconnected clients
@@ -45,8 +51,10 @@ async def handle_client(websocket, path):
                 
                 logger.info(f"Broadcasted: {message} to {len(connected_clients)-1} clients")
                 
-    except websockets.exceptions.ConnectionClosed:
-        pass
+    except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
+        logger.info(f"Client {client_ip} connection closed normally")
+    except Exception as e:
+        logger.error(f"Error handling client {client_ip}: {e}")
     finally:
         connected_clients.discard(websocket)
         logger.info(f"Client {client_ip} disconnected. Total clients: {len(connected_clients)}")

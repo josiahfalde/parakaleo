@@ -152,6 +152,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added broadcast calls throughout patient workflow: registration, vital signs completion, consultation updates
   - Enhanced clinic setup with automatic WebSocket server startup alongside medical app
   - Enabled real-time notifications when patients move between triage, consultation, lab, and pharmacy stations
+  - Fixed consultation state restoration issue where returning lab patients lost their original consultation data
+  - Implemented proper page state persistence to maintain current page on browser refresh
+  - Enhanced WebSocket client-server handshake to resolve connection errors and enable cross-device notifications
+  - Added URL parameter tracking to preserve user location and role across page refreshes
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

@@ -2144,6 +2144,8 @@ def main():
                 del st.session_state.doctor_name
             if 'active_consultation' in st.session_state:
                 del st.session_state.active_consultation
+            # Clear URL parameters
+            st.query_params.clear()
             st.rerun()
 
     with nav_col2:
@@ -2188,6 +2190,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "name_registration"
+                st.session_state.page = "name_registration"
+                update_page_url("name_registration")
                 st.rerun()
 
             if st.button("3. Doctor",
@@ -2195,6 +2199,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "doctor"
+                st.session_state.page = "doctor_login"
+                update_page_url("doctor_login")
                 st.rerun()
 
             if st.button("5. Ophthalmologist",
@@ -2202,6 +2208,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "ophthalmologist"
+                st.session_state.page = "ophthalmologist"
+                update_page_url("ophthalmologist")
                 st.rerun()
 
         with col2:
@@ -2210,6 +2218,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "triage"
+                st.session_state.page = "triage"
+                update_page_url("triage")
                 st.rerun()
 
             if st.button("4. Pharmacy/Lab",
@@ -2217,6 +2227,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "pharmacy"
+                st.session_state.page = "pharmacy"
+                update_page_url("pharmacy")
                 st.rerun()
 
             if st.button("6. Patient Queue Monitor",
@@ -2224,6 +2236,8 @@ def main():
                          type="primary",
                          use_container_width=True):
                 st.session_state.user_role = "queue_monitor"
+                st.session_state.page = "queue_monitor"
+                update_page_url("queue_monitor")
                 st.rerun()
 
         # Admin button centered below
@@ -2235,6 +2249,8 @@ def main():
                          type="secondary",
                          use_container_width=True):
                 st.session_state.user_role = "admin"
+                st.session_state.page = "admin"
+                update_page_url("admin")
                 st.rerun()
 
         st.markdown("---")
@@ -2249,6 +2265,7 @@ def main():
             'page'
     ) == 'consultation_form' and 'active_consultation' in st.session_state:
         consultation = st.session_state.active_consultation
+        update_page_url('consultation_form')
         consultation_form(consultation['visit_id'], consultation['patient_id'],
                           consultation['patient_name'])
         return
@@ -2258,25 +2275,34 @@ def main():
         show_lan_status_page()
         return
 
-# Role-based interface routing
+# Role-based interface routing with URL state persistence
     if st.session_state.user_role == "name_registration":
+        update_page_url("name_registration")
         name_registration_interface()
     elif st.session_state.user_role == "triage":
+        update_page_url("triage")
         triage_interface()
     elif st.session_state.user_role == "doctor":
         if 'doctor_name' not in st.session_state:
+            update_page_url("doctor_login")
             doctor_login()
         else:
+            update_page_url("doctor_interface")
             doctor_interface()
     elif st.session_state.user_role == "pharmacy":
+        update_page_url("pharmacy")
         pharmacy_interface()
     elif st.session_state.user_role == "lab":
+        update_page_url("lab")
         lab_interface()
     elif st.session_state.user_role == "ophthalmologist":
+        update_page_url("ophthalmologist")
         ophthalmologist_interface()
     elif st.session_state.user_role == "queue_monitor":
+        update_page_url("queue_monitor")
         patient_queue_monitor_interface()
     elif st.session_state.user_role == "admin":
+        update_page_url("admin")
         admin_interface()
 
     # Sidebar header with location info
