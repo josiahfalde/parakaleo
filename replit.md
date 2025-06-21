@@ -156,6 +156,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented proper page state persistence to maintain current page on browser refresh
   - Enhanced WebSocket client-server handshake to resolve connection errors and enable cross-device notifications
   - Added URL parameter tracking to preserve user location and role across page refreshes
+  - Implemented Lab & Prescriptions tab state preservation to maintain selected medications and lab orders when patients return from lab tests
+  - Added automatic patient return from lab input to doctor queue without requiring checkbox confirmation
+  - Enhanced consultation workflow to save and restore all medication selections, dosages, frequencies, and lab test choices
+  - Streamlined lab workflow by automatically sending patients back to doctors upon test completion (urinalysis, glucose, pregnancy)
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

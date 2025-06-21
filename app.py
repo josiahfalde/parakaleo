@@ -6170,8 +6170,30 @@ def pregnancy_form(test_id: int):
             if lab_result:
                 patient_name = lab_result[0]
                 broadcast_to_clients(f"lab_complete:{patient_name}:pregnancy:{result}")
+                
+                # Automatically send patient back to doctor queue
+                visit_conn = sqlite3.connect(db_manager.db_name)
+                visit_cursor = visit_conn.cursor()
+                visit_cursor.execute('''
+                    SELECT visit_id FROM lab_tests WHERE test_id = ?
+                ''', (test_id,))
+                visit_result = visit_cursor.fetchone()
+                
+                if visit_result:
+                    visit_id = visit_result[0]
+                    visit_cursor.execute('''
+                        UPDATE visits 
+                        SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                        WHERE visit_id = ?
+                    ''', (visit_id,))
+                    visit_conn.commit()
+                    
+                    # Broadcast patient return to doctor
+                    broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:pregnancy_complete")
+                    
+                visit_conn.close()
 
-            st.success("Pregnancy test completed!")
+            st.success("Pregnancy test completed! Patient automatically returned to doctor.")
             st.rerun()
 
 
