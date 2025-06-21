@@ -4488,26 +4488,45 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         st.rerun()
 
     with tab3:
+        # Check if this patient is returning from lab and restore previous selections
+        lab_prescriptions_key = f"lab_prescriptions_{visit_id}"
+        previous_selections = st.session_state.get(lab_prescriptions_key, {})
+        
         st.markdown("#### Lab Tests")
         
         # Lab tests section - outside form for immediate updates
         lab_tests = []
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.checkbox("Urinalysis", key=f"ua_check_{visit_id}"):
-                lab_tests.append(("Urinalysis", st.selectbox("Urinalysis Disposition", 
-                                                            ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                            key=f"ua_disp_{visit_id}")))
+            ua_checked = st.checkbox("Urinalysis", 
+                                   value=previous_selections.get('ua_checked', False),
+                                   key=f"ua_check_{visit_id}")
+            if ua_checked:
+                ua_disp = st.selectbox("Urinalysis Disposition", 
+                                     ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                     index=0 if previous_selections.get('ua_disp') == "Return to Provider" else 1 if previous_selections.get('ua_disp') else 0,
+                                     key=f"ua_disp_{visit_id}")
+                lab_tests.append(("Urinalysis", ua_disp))
         with col2:
-            if st.checkbox("Blood Glucose", key=f"gluc_check_{visit_id}"):
-                lab_tests.append(("Blood Glucose", st.selectbox("Glucose Disposition", 
-                                                                ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                                key=f"gluc_disp_{visit_id}")))
+            gluc_checked = st.checkbox("Blood Glucose", 
+                                     value=previous_selections.get('gluc_checked', False),
+                                     key=f"gluc_check_{visit_id}")
+            if gluc_checked:
+                gluc_disp = st.selectbox("Glucose Disposition", 
+                                       ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                       index=0 if previous_selections.get('gluc_disp') == "Return to Provider" else 1 if previous_selections.get('gluc_disp') else 0,
+                                       key=f"gluc_disp_{visit_id}")
+                lab_tests.append(("Blood Glucose", gluc_disp))
         with col3:
-            if st.checkbox("Pregnancy Test", key=f"preg_check_{visit_id}"):
-                lab_tests.append(("Pregnancy Test", st.selectbox("Pregnancy Test Disposition", 
-                                                                 ["Return to Provider", "Treat per Pharmacy Protocol"], 
-                                                                 key=f"preg_disp_{visit_id}")))
+            preg_checked = st.checkbox("Pregnancy Test", 
+                                     value=previous_selections.get('preg_checked', False),
+                                     key=f"preg_check_{visit_id}")
+            if preg_checked:
+                preg_disp = st.selectbox("Pregnancy Test Disposition", 
+                                       ["Return to Provider", "Treat per Pharmacy Protocol"], 
+                                       index=0 if previous_selections.get('preg_disp') == "Return to Provider" else 1 if previous_selections.get('preg_disp') else 0,
+                                       key=f"preg_disp_{visit_id}")
+                lab_tests.append(("Pregnancy Test", preg_disp))
 
         # Prescriptions section - outside form for immediate checkbox updates
         st.markdown("#### Prescriptions")
@@ -4537,8 +4556,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 ]
 
                 for med in category_meds:
+                    # Check if this medication was previously selected
+                    med_key = f"med_{med['id']}"
+                    was_previously_selected = previous_selections.get('medications', {}).get(med_key, {}).get('selected', False)
+                    
                     # Medication checkbox
                     selected = st.checkbox(f"{med['medication_name']}",
+                                           value=was_previously_selected,
                                            key=f"med_{med['id']}_{visit_id}")
 
                     # Show additional fields immediately when medication is checked
@@ -4546,38 +4570,54 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         with st.container():
                             st.markdown("---")
                             
+                            # Get previously saved values for this medication
+                            prev_med_data = previous_selections.get('medications', {}).get(med_key, {})
+                            
                             # Dosage and frequency options
                             col1, col2, col3 = st.columns(3)
                             with col1:
                                 dosages = med['common_dosages'].split(', ')
+                                prev_dosage_idx = 0
+                                if prev_med_data.get('dosage') in dosages:
+                                    prev_dosage_idx = dosages.index(prev_med_data.get('dosage'))
                                 selected_dosage = st.selectbox(
-                                    "Dosage", dosages, key=f"dosage_{med['id']}_{visit_id}")
+                                    "Dosage", dosages, 
+                                    index=prev_dosage_idx,
+                                    key=f"dosage_{med['id']}_{visit_id}")
                             with col2:
-                                frequency = st.selectbox("Frequency", [
-                                    "Once daily", "Twice daily",
-                                    "Three times daily", "Four times daily",
-                                    "As needed"
-                                ], key=f"freq_{med['id']}_{visit_id}")
+                                freq_options = ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"]
+                                prev_freq_idx = 0
+                                if prev_med_data.get('frequency') in freq_options:
+                                    prev_freq_idx = freq_options.index(prev_med_data.get('frequency'))
+                                frequency = st.selectbox("Frequency", freq_options,
+                                                        index=prev_freq_idx,
+                                                        key=f"freq_{med['id']}_{visit_id}")
                             with col3:
-                                duration = st.selectbox("Duration", [
-                                    "3 days", "5 days", "7 days", "10 days",
-                                    "14 days", "30 days"
-                                ], key=f"dur_{med['id']}_{visit_id}")
+                                dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
+                                prev_dur_idx = 0
+                                if prev_med_data.get('duration') in dur_options:
+                                    prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
+                                duration = st.selectbox("Duration", dur_options,
+                                                       index=prev_dur_idx,
+                                                       key=f"dur_{med['id']}_{visit_id}")
 
                             # Additional fields
                             col4, col5 = st.columns(2)
                             with col4:
                                 pharmacy_dosage = st.text_input(
                                     "Dosage for Pharmacy",
+                                    value=prev_med_data.get('pharmacy_dosage', ''),
                                     placeholder="e.g., 500mg twice daily for 7 days",
                                     key=f"pharma_dose_{med['id']}_{visit_id}")
                             with col5:
                                 indication = st.text_input(
                                     "Indication",
+                                    value=prev_med_data.get('indication', ''),
                                     placeholder="e.g., UTI, hypertension",
                                     key=f"indication_{med['id']}_{visit_id}")
 
                             instructions = st.text_input("Special Instructions",
+                                                         value=prev_med_data.get('instructions', ''),
                                                          key=f"inst_{med['id']}_{visit_id}")
 
                             # Lab results options with indentation
@@ -4762,6 +4802,34 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             test_type, disposition = test_info
                             db_manager.order_lab_test(visit_id, test_type,
                                                       current_doctor_name)
+
+                        # Save Lab & Prescriptions state for restoration when patient returns
+                        lab_prescriptions_data = {
+                            'ua_checked': any(test[0] == "Urinalysis" for test in lab_tests),
+                            'ua_disp': next((test[1] for test in lab_tests if test[0] == "Urinalysis"), None),
+                            'gluc_checked': any(test[0] == "Blood Glucose" for test in lab_tests),
+                            'gluc_disp': next((test[1] for test in lab_tests if test[0] == "Blood Glucose"), None),
+                            'preg_checked': any(test[0] == "Pregnancy Test" for test in lab_tests),
+                            'preg_disp': next((test[1] for test in lab_tests if test[0] == "Pregnancy Test"), None),
+                            'medications': {}
+                        }
+                        
+                        # Save medication selections
+                        for med in selected_medications:
+                            if med['name']:
+                                med_key = f"med_{med.get('med_id', med['name'].replace(' ', '_'))}"
+                                lab_prescriptions_data['medications'][med_key] = {
+                                    'selected': True,
+                                    'dosage': med['dosage'],
+                                    'frequency': med['frequency'],
+                                    'duration': med['duration'],
+                                    'pharmacy_dosage': med.get('pharmacy_dosage', ''),
+                                    'indication': med.get('indication', ''),
+                                    'instructions': med['instructions'],
+                                    'awaiting_lab': med['awaiting_lab']
+                                }
+                        
+                        st.session_state[lab_prescriptions_key] = lab_prescriptions_data
 
                         # Save all prescriptions (including lab-dependent ones) for consultation state preservation
                         for med in selected_medications:
@@ -5981,8 +6049,30 @@ def urinalysis_form(test_id: int):
             if result:
                 patient_name, test_type = result
                 broadcast_to_clients(f"lab_complete:{patient_name}:{test_type}:urinalysis")
+                
+                # Automatically send patient back to doctor queue
+                visit_conn = sqlite3.connect(db_manager.db_name)
+                visit_cursor = visit_conn.cursor()
+                visit_cursor.execute('''
+                    SELECT visit_id FROM lab_tests WHERE test_id = ?
+                ''', (test_id,))
+                visit_result = visit_cursor.fetchone()
+                
+                if visit_result:
+                    visit_id = visit_result[0]
+                    visit_cursor.execute('''
+                        UPDATE visits 
+                        SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                        WHERE visit_id = ?
+                    ''', (visit_id,))
+                    visit_conn.commit()
+                    
+                    # Broadcast patient return to doctor
+                    broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:urinalysis_complete")
+                    
+                visit_conn.close()
 
-            st.success("Urinalysis completed!")
+            st.success("Urinalysis completed! Patient automatically returned to doctor.")
             st.rerun()
 
 
@@ -6022,8 +6112,30 @@ def glucose_form(test_id: int):
             if result:
                 patient_name = result[0]
                 broadcast_to_clients(f"lab_complete:{patient_name}:glucose:{glucose_value}mg/dL")
+                
+                # Automatically send patient back to doctor queue
+                visit_conn = sqlite3.connect(db_manager.db_name)
+                visit_cursor = visit_conn.cursor()
+                visit_cursor.execute('''
+                    SELECT visit_id FROM lab_tests WHERE test_id = ?
+                ''', (test_id,))
+                visit_result = visit_cursor.fetchone()
+                
+                if visit_result:
+                    visit_id = visit_result[0]
+                    visit_cursor.execute('''
+                        UPDATE visits 
+                        SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                        WHERE visit_id = ?
+                    ''', (visit_id,))
+                    visit_conn.commit()
+                    
+                    # Broadcast patient return to doctor
+                    broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:glucose_complete")
+                    
+                visit_conn.close()
 
-            st.success("Glucose test completed!")
+            st.success("Glucose test completed! Patient automatically returned to doctor.")
             st.rerun()
 
 
