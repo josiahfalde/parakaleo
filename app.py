@@ -2830,13 +2830,19 @@ def name_registration_interface():
         
         else:  # Family Group
             st.markdown("#### Family Group Registration")
-            with st.form("name_registration_family"):
-                family_name = st.text_input("Family Name", placeholder="e.g., Rodriguez Family")
+            
+            # Check if form was just submitted successfully to clear fields
+            if st.session_state.get('family_registration_success', False):
+                st.session_state.family_registration_success = False
+                st.success("Family added to queue! Form cleared for next entry.")
+            
+            with st.form("name_registration_family", clear_on_submit=True):
+                family_name = st.text_input("Family Name", placeholder="e.g., Rodriguez Family", value="")
                 
                 st.markdown("**Parent/Guardian:**")
-                parent_name = st.text_input("Parent/Guardian Name *")
-                parent_age = st.number_input("Parent Age", min_value=18, max_value=120, value=None)
-                parent_gender = st.selectbox("Parent Gender", ["", "Male", "Female"], key="parent_gender")
+                parent_name = st.text_input("Parent/Guardian Name *", value="")
+                parent_age = st.number_input("Parent Age", min_value=18, max_value=120, value=18)
+                parent_gender = st.selectbox("Parent Gender", ["", "Male", "Female"], index=0, key="parent_gender")
                 
                 st.markdown("**Children:**")
                 num_children = st.number_input("Number of Children", min_value=1, max_value=10, value=1)
@@ -2846,19 +2852,19 @@ def name_registration_interface():
                     st.markdown(f"**Child {i+1}:**")
                     col1, col2 = st.columns(2)
                     with col1:
-                        child_name = st.text_input(f"Child {i+1} Name", key=f"child_name_{i}")
-                        child_age = st.number_input(f"Child {i+1} Age", min_value=0, max_value=17, value=None, key=f"child_age_{i}")
+                        child_name = st.text_input(f"Child {i+1} Name", key=f"child_name_{i}", value="")
+                        child_age = st.number_input(f"Child {i+1} Age", min_value=0, max_value=17, value=0, key=f"child_age_{i}")
                     with col2:
-                        child_gender = st.selectbox(f"Child {i+1} Gender", ["", "Male", "Female"], key=f"child_gender_{i}")
+                        child_gender = st.selectbox(f"Child {i+1} Gender", ["", "Male", "Female"], index=0, key=f"child_gender_{i}")
                     
                     if child_name:
                         children_data.append({
                             'name': child_name.strip(),
-                            'age': child_age,
+                            'age': child_age if child_age > 0 else None,
                             'gender': child_gender if child_gender else None
                         })
                 
-                family_notes = st.text_input("Family Notes", placeholder="Special considerations for the family...")
+                family_notes = st.text_input("Family Notes", placeholder="Special considerations for the family...", value="")
                 
                 if st.form_submit_button("Add Family to Queue", type="primary"):
                     if parent_name.strip() and children_data:
@@ -2873,7 +2879,7 @@ def name_registration_interface():
                             INSERT INTO patient_names_queue 
                             (name, age, gender, location_code, relationship, family_group_id, created_time, notes)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (parent_name.strip(), parent_age, parent_gender if parent_gender else None, 
+                        ''', (parent_name.strip(), parent_age if parent_age > 18 else None, parent_gender if parent_gender else None, 
                              location_code, 'parent', family_group_id, datetime.now().isoformat(), 
                              f"Family: {family_name}. {family_notes}" if family_notes else f"Family: {family_name}"))
                         
@@ -2893,9 +2899,7 @@ def name_registration_interface():
                         # Broadcast update to all connected devices
                         broadcast_to_clients(f"new_family_registered:{family_name}:{len(children_data) + 1}_members")
                         
-                        st.success(f"Added family of {len(children_data) + 1} members to registration queue!")
-                        
-                        # Clear form success flag to reset form
+                        # Set success flag to show confirmation and clear form
                         st.session_state.family_registration_success = True
                         
                         st.rerun()

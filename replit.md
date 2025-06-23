@@ -163,6 +163,8 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Fixed patient routing to prevent repeated lab returns by clearing return_reason after re-consultation
   - Enhanced photo documentation preservation to display previously saved photos when patients return from lab
   - Implemented complete medication selection state restoration including dosages, frequencies, and lab-dependent flags
+  - Enhanced name registration form to clear input fields after successful patient registration to prevent duplicates
+  - Added clear_on_submit parameter and success confirmation messages for both individual and family registration forms
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
