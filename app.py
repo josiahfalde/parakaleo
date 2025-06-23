@@ -2791,14 +2791,19 @@ def name_registration_interface():
                                    horizontal=True)
         
         if registration_type == "Individual Patient":
-            with st.form("name_registration_individual"):
+            # Check if form was just submitted successfully to clear fields
+            if st.session_state.get('name_registration_success', False):
+                st.session_state.name_registration_success = False
+                st.success("Patient added to queue! Form cleared for next entry.")
+            
+            with st.form("name_registration_individual", clear_on_submit=True):
                 col1, col2 = st.columns(2)
                 with col1:
-                    name = st.text_input("Patient Name *")
-                    age = st.number_input("Age", min_value=0, max_value=120, value=None)
+                    name = st.text_input("Patient Name *", value="")
+                    age = st.number_input("Age", min_value=0, max_value=120, value=0)
                 with col2:
-                    gender = st.selectbox("Gender", ["", "Male", "Female"])
-                    notes = st.text_input("Notes (optional)", placeholder="Special considerations...")
+                    gender = st.selectbox("Gender", ["", "Male", "Female"], index=0)
+                    notes = st.text_input("Notes (optional)", placeholder="Special considerations...", value="")
                 
                 if st.form_submit_button("Add to Queue", type="primary"):
                     if name.strip():
@@ -2808,11 +2813,17 @@ def name_registration_interface():
                             INSERT INTO patient_names_queue 
                             (name, age, gender, location_code, relationship, created_time, notes)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', (name.strip(), age, gender if gender else None, location_code, 
+                        ''', (name.strip(), age if age > 0 else None, gender if gender else None, location_code, 
                              'individual', datetime.now().isoformat(), notes.strip() if notes else None))
                         conn.commit()
                         conn.close()
-                        st.success(f"Added {name.strip()} to registration queue!")
+                        
+                        # Broadcast update to all connected devices
+                        broadcast_to_clients(f"new_name_registered:{name.strip()}")
+                        
+                        # Set success flag to show confirmation and clear form
+                        st.session_state.name_registration_success = True
+                        
                         st.rerun()
                     else:
                         st.error("Please enter a patient name.")
@@ -2879,7 +2890,14 @@ def name_registration_interface():
                         conn.commit()
                         conn.close()
                         
+                        # Broadcast update to all connected devices
+                        broadcast_to_clients(f"new_family_registered:{family_name}:{len(children_data) + 1}_members")
+                        
                         st.success(f"Added family of {len(children_data) + 1} members to registration queue!")
+                        
+                        # Clear form success flag to reset form
+                        st.session_state.family_registration_success = True
+                        
                         st.rerun()
                     else:
                         st.error("Please enter parent name and at least one child.")
