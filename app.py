@@ -4785,12 +4785,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             # Initial consultation with lab orders - save consultation in paused state
                             new_status = 'waiting_lab'
                         elif completed_labs > 0:
-                            # Re-consultation after lab results - send back to pharmacy
-                            if selected_medications:
-                                new_status = 'prescribed'
-                                st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
-                            else:
-                                new_status = 'prescribed'  # Even without new meds, send to pharmacy to complete visit
+                            # Re-consultation after lab results - send back to pharmacy with cleared return reason
+                            new_status = 'prescribed'
+                            # Clear return_reason to prevent repeated lab returns
+                            cursor.execute('''
+                                UPDATE visits 
+                                SET return_reason = NULL 
+                                WHERE visit_id = ?
+                            ''', (visit_id,))
+                            st.info("Patient being sent back to pharmacy with updated prescriptions based on lab results.")
                         elif needs_ophthalmology:
                             new_status = 'needs_ophthalmology'
                         elif selected_medications:

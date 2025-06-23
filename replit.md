@@ -160,6 +160,9 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added automatic patient return from lab input to doctor queue without requiring checkbox confirmation
   - Enhanced consultation workflow to save and restore all medication selections, dosages, frequencies, and lab test choices
   - Streamlined lab workflow by automatically sending patients back to doctors upon test completion (urinalysis, glucose, pregnancy)
+  - Fixed patient routing to prevent repeated lab returns by clearing return_reason after re-consultation
+  - Enhanced photo documentation preservation to display previously saved photos when patients return from lab
+  - Implemented complete medication selection state restoration including dosages, frequencies, and lab-dependent flags
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
