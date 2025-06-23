@@ -4471,12 +4471,21 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 else:
                     st.error("Please add a description for the photo.")
 
-        # Display previously saved photos for this visit
-        if f"symptom_photos_{visit_id}" in st.session_state and st.session_state[
-                f"symptom_photos_{visit_id}"]:
-            st.markdown("**Saved Photos for this visit:**")
-            for i, photo in enumerate(
-                    st.session_state[f"symptom_photos_{visit_id}"]):
+        # Load existing photos from database and session state
+        db = get_db_manager()
+        existing_photos = db.get_patient_photos(patient_id)
+        session_photos = st.session_state.get(f"symptom_photos_{visit_id}", [])
+        
+        # Display saved photos from database
+        if existing_photos:
+            st.markdown("**Previously Saved Photos:**")
+            for photo in existing_photos:
+                st.markdown(f"📷 **{photo['description']}** - {photo['created_time'][:16].replace('T', ' ')}")
+        
+        # Display current session photos for this visit
+        if session_photos:
+            st.markdown("**New Photos for this visit:**")
+            for i, photo in enumerate(session_photos):
                 col1, col2 = st.columns([1, 3])
                 with col1:
                     st.write(f"Photo {i+1}")
@@ -4620,14 +4629,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                                          value=prev_med_data.get('instructions', ''),
                                                          key=f"inst_{med['id']}_{visit_id}")
 
-                            # Lab results options with indentation
+                            # Lab results options with indentation - restore previous values
                             st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
                             col_indent, col_lab = st.columns([0.1, 0.9])
                             with col_lab:
+                                prev_awaiting_lab = prev_med_data.get('awaiting_lab', 'no') == 'yes'
                                 awaiting_lab = "yes" if st.checkbox(
                                     "Awaiting Lab Results",
                                     key=f"await_{med['id']}_{visit_id}",
-                                    value=False) else "no"
+                                    value=prev_awaiting_lab) else "no"
                                 
                                 return_to_provider = "no"
                                 if awaiting_lab == "yes":
