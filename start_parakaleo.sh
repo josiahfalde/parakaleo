@@ -3,6 +3,9 @@
 # ParakaleoMed Clinic System Startup Script
 # This script starts both the medical app and WebSocket server for real-time iPad synchronization
 
+# Kill existing process on port 6789 (if any)
+fuser -k 6789/tcp 2>/dev/null
+
 echo "Starting ParakaleoMed Clinic System..."
 
 # Set the working directory
@@ -18,7 +21,7 @@ sleep 3
 
 # Start the main Streamlit application
 echo "Starting ParakaleoMed medical application..."
-streamlit run app.py --server.port 5000 --server.address 0.0.0.0 &
+/home/pi/parakaleo/venv/bin/streamlit run app.py --server.port 5000 --server.address 0.0.0.0 &
 STREAMLIT_PID=$!
 
 echo "ParakaleoMed system started successfully!"
