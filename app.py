@@ -5666,29 +5666,12 @@ def awaiting_lab_prescriptions():
                         with st.container():
                             st.text(lab['results'])
                 
-                # Return to provider checkbox - simple and smooth
+                # Provider review status - automatic return
                 st.markdown("---")
                 st.markdown("### Provider Review")
                 
                 if patient_data['status'] != 'returned_to_provider':
-                    if st.checkbox(f"📋 Return {patient_data['name']} to Provider for Lab Review", 
-                                  key=f"return_patient_{patient_id}"):
-                        
-                        # Send patient back to doctor queue
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        
-                        cursor.execute('''
-                            UPDATE visits 
-                            SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
-                            WHERE patient_id = ? AND DATE(visit_date) = DATE('now')
-                        ''', (patient_id,))
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        st.success(f"✅ {patient_data['name']} returned to provider for lab review!")
-                        st.rerun()
+                    st.info("🔄 Patient automatically returned to provider upon test completion.")
                 else:
                     st.success("✅ Patient has been returned to provider and is awaiting re-consultation.")
                     
@@ -5795,10 +5778,20 @@ Chemical Parameters:
                                      f"Urinalysis results available for {patient_name} (ID: {patient_id})", 
                                      "lab_results", datetime.now().isoformat()))
                             
+                            # Automatically send patient back to doctor queue
+                            cursor.execute('''
+                                UPDATE visits 
+                                SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                                WHERE visit_id = ?
+                            ''', (visit_id,))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success(f"Urinalysis results saved successfully! Notification sent to Dr. {doctor_name}")
+                            # Broadcast automatic patient return
+                            broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:urinalysis_complete")
+                            
+                            st.success(f"Urinalysis completed! {patient_name} automatically returned to Dr. {doctor_name}")
                             st.rerun()
 
                 elif test_type.lower() == 'blood glucose' or test_type.lower() == 'glucose':
@@ -5865,10 +5858,22 @@ Chemical Parameters:
                                      f"Blood glucose results available for {patient_name} (ID: {patient_id}): {results}", 
                                      "lab_results", datetime.now().isoformat()))
                             
+                            # Automatically send patient back to doctor queue
+                            if patient_info:
+                                cursor.execute('''
+                                    UPDATE visits 
+                                    SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                                    WHERE visit_id = ?
+                                ''', (visit_id,))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success(f"Glucose test results saved successfully! Notification sent to Dr. {doctor_name if patient_info else 'Unknown'}")
+                            # Broadcast automatic patient return
+                            if patient_info:
+                                broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:glucose_complete")
+                            
+                            st.success(f"Glucose test completed! {patient_name if patient_info else 'Patient'} automatically returned to Dr. {doctor_name if patient_info else 'doctor'}")
                             st.rerun()
 
                 elif test_type.lower() == 'pregnancy test' or test_type.lower() == 'pregnancy':
@@ -5924,10 +5929,22 @@ Chemical Parameters:
                                      f"Pregnancy test results available for {patient_name} (ID: {patient_id}): {results}", 
                                      "lab_results", datetime.now().isoformat()))
                             
+                            # Automatically send patient back to doctor queue
+                            if patient_info:
+                                cursor.execute('''
+                                    UPDATE visits 
+                                    SET status = 'waiting_consultation', return_reason = 'pharmacy_lab_review'
+                                    WHERE visit_id = ?
+                                ''', (visit_id,))
+                            
                             conn.commit()
                             conn.close()
                             
-                            st.success(f"Pregnancy test results saved successfully! Notification sent to Dr. {doctor_name if patient_info else 'Unknown'}")
+                            # Broadcast automatic patient return
+                            if patient_info:
+                                broadcast_to_clients(f"patient_returned_to_doctor:{patient_name}:pregnancy_complete")
+                            
+                            st.success(f"Pregnancy test completed! {patient_name if patient_info else 'Patient'} automatically returned to Dr. {doctor_name if patient_info else 'doctor'}")
                             st.rerun()
 
                 else:
