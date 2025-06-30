@@ -165,6 +165,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented complete medication selection state restoration including dosages, frequencies, and lab-dependent flags
   - Enhanced name registration form to clear input fields after successful patient registration to prevent duplicates
   - Added clear_on_submit parameter and success confirmation messages for both individual and family registration forms
+  - Fixed pharmacy workflow issue where patients weren't appearing in "Ready to Fill" after doctor consultation completion
+  - Corrected prescription status from 'ready' to 'pending' to match pharmacy interface expectations
+  - Implemented prescription history preservation system similar to consultation history functionality
+  - Added save_prescription_state() and restore_prescription_state() functions for pharmacy workflow continuity
+  - Enhanced filled prescriptions display to group by patient and show comprehensive prescription history
+  - Added prescription state restoration notifications when patients return to pharmacy stations
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

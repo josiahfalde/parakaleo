@@ -4867,6 +4867,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         st.session_state[lab_prescriptions_key] = lab_prescriptions_data
 
                         # Save all prescriptions (including lab-dependent ones) for consultation state preservation
+                        prescription_data = []
                         for med in selected_medications:
                             if med['name']:
                                 conn_med = sqlite3.connect(db_manager.db_name)
@@ -4875,10 +4876,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 # Determine prescription status based on consultation state
                                 if lab_tests and not completed_labs:
                                     # Initial consultation - save prescriptions as "paused" if lab dependent
-                                    prescription_status = 'paused_pending_lab' if med['awaiting_lab'] == 'yes' else 'ready'
+                                    prescription_status = 'paused_pending_lab' if med['awaiting_lab'] == 'yes' else 'pending'
                                 else:
-                                    # Normal flow or re-consultation
-                                    prescription_status = 'ready'
+                                    # Normal flow or re-consultation - send to pharmacy
+                                    prescription_status = 'pending'
                                 
                                 cursor_med.execute(
                                     '''
@@ -4897,6 +4898,24 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                       prescription_status))
                                 conn_med.commit()
                                 conn_med.close()
+                                
+                                # Save prescription data for state preservation
+                                prescription_data.append({
+                                    'medication_name': med['name'],
+                                    'dosage': med['dosage'],
+                                    'frequency': med['frequency'],
+                                    'duration': med['duration'],
+                                    'instructions': med['instructions'],
+                                    'indication': med.get('indication', ''),
+                                    'awaiting_lab': med['awaiting_lab'],
+                                    'status': prescription_status
+                                })
+                        
+                        # Save prescription state for pharmacy workflow
+                        if prescription_data:
+                            patient_name = st.session_state.get('current_patient_name', 'Patient')
+                            patient_id = st.session_state.get('current_patient_id', '')
+                            save_prescription_state(visit_id, patient_id, patient_name, prescription_data)
 
                         # Broadcast consultation completion to all devices
                         patient_name = st.session_state.get('current_patient_name', 'Patient')
@@ -5320,6 +5339,22 @@ def pharmacy_interface():
         filled_prescriptions()
 
 
+def save_prescription_state(visit_id: str, patient_id: str, patient_name: str, prescriptions: list):
+    """Save prescription state for when patients return to pharmacy"""
+    prescription_state_key = f"prescription_state_{visit_id}"
+    st.session_state[prescription_state_key] = {
+        'patient_id': patient_id,
+        'patient_name': patient_name,
+        'visit_id': visit_id,
+        'prescriptions': prescriptions,
+        'saved_time': datetime.now().isoformat()
+    }
+
+def restore_prescription_state(visit_id: str) -> dict:
+    """Restore prescription state when patient returns to pharmacy"""
+    prescription_state_key = f"prescription_state_{visit_id}"
+    return st.session_state.get(prescription_state_key, None)
+
 def pending_prescriptions():
     st.markdown("### Prescriptions to Fill")
     
@@ -5406,16 +5441,24 @@ def pending_prescriptions():
         # Group by patient
         patients = {}
         for prescription in pending:
-            patient_id = prescription[9]
-            patient_name = prescription[8]
+            patient_id = prescription[10]
+            patient_name = prescription[9]
+            visit_id = prescription[1]
 
             if patient_id not in patients:
                 patients[patient_id] = {
                     'name': patient_name,
+                    'visit_id': visit_id,
                     'prescriptions': []
                 }
 
             patients[patient_id]['prescriptions'].append(prescription)
+            
+        # Check for prescription state restoration
+        for patient_id, patient_data in patients.items():
+            restored_state = restore_prescription_state(patient_data['visit_id'])
+            if restored_state:
+                st.info(f"📋 Prescription history restored for {patient_data['name']}")
 
         for patient_id, patient_data in patients.items():
             with st.expander(f"👤 {patient_data['name']} (ID: {patient_id})",
@@ -5918,14 +5961,14 @@ Chemical Parameters:
 
 
 def filled_prescriptions():
-    st.markdown("### Today's Filled Prescriptions")
+    st.markdown("### Prescription History")
 
     conn = sqlite3.connect(db.db_name)
     cursor = conn.cursor()
 
     cursor.execute('''
         SELECT p.medication_name, p.dosage, p.frequency, p.duration, 
-               p.indication, p.filled_time, pt.name, v.patient_id
+               p.indication, p.filled_time, pt.name, v.patient_id, p.instructions
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -5937,20 +5980,40 @@ def filled_prescriptions():
     conn.close()
 
     if filled:
+        # Group prescriptions by patient for better history display
+        patients = {}
         for prescription in filled:
-            st.markdown(f"""
-            <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <h5 style="color: #047857; margin: 0 0 12px 0; font-size: 16px;">✅ {prescription[6]}</h5>
-                <p style="margin: 0 0 8px 0; color: #065f46; font-size: 12px; background: #f0fdf4; padding: 3px 8px; border-radius: 4px; display: inline-block;"><strong>Patient ID:</strong> {prescription[7]}</p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Medication:</strong> {prescription[0]}</p>
-                    <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Dosage:</strong> {prescription[1]}</p>
-                </div>
-                {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[4]}</p>' if prescription[4] else ''}
-
-            </div>
-            """,
-                        unsafe_allow_html=True)
+            patient_id = prescription[7]
+            patient_name = prescription[6]
+            
+            if patient_id not in patients:
+                patients[patient_id] = {
+                    'name': patient_name,
+                    'prescriptions': [],
+                    'filled_time': prescription[5]
+                }
+            
+            patients[patient_id]['prescriptions'].append(prescription)
+        
+        for patient_id, patient_data in patients.items():
+            with st.expander(f"📋 {patient_data['name']} (ID: {patient_id}) - {len(patient_data['prescriptions'])} prescriptions filled", expanded=True):
+                for prescription in patient_data['prescriptions']:
+                    indication_text = f" - For: {prescription[4]}" if prescription[4] else ""
+                    instructions_text = f" - {prescription[8]}" if prescription[8] else ""
+                    
+                    st.markdown(f"""
+                    <div style="background: #d1fae5; border: 1px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                        <h5 style="color: #047857; margin: 0 0 8px 0; font-size: 16px;">✅ {prescription[0]}</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Dosage:</strong> {prescription[1]}</p>
+                            <p style="margin: 0; color: #065f46; font-size: 14px;"><strong>Frequency:</strong> {prescription[2]}</p>
+                        </div>
+                        <p style="margin: 0 0 8px 0; color: #065f46; font-size: 14px;"><strong>Duration:</strong> {prescription[3]}</p>
+                        {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #ecfdf5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[4]}</p>' if prescription[4] else ''}
+                        {f'<p style="margin: 0 0 8px 0; color: #065f46; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[8]}</p>' if prescription[8] else ''}
+                        <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 12px;">Filled: {prescription[5][:16].replace('T', ' ')}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
     else:
         st.info("No prescriptions filled today.")
 
