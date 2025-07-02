@@ -179,6 +179,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented comprehensive URL parameter restoration for page, role, and clinic location states
   - Added clinic location information to URL parameters for complete state preservation
   - Fixed browser refresh behavior to maintain current page and role across all application sections
+  - Enhanced WebSocket real-time synchronization to automatically refresh pages when patient data changes
+  - Implemented automatic page reloading across all iPads when updates are received from other devices
+  - Added intelligent update detection that triggers immediate data refresh without manual intervention
+  - Eliminated need for manual page refreshes to see new patients, completed consultations, or lab results
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
