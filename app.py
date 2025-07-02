@@ -10,19 +10,39 @@ from streamlit.components.v1 import html
 def preserve_page_state():
     """Initialize page state persistence"""
     if 'page_initialized' not in st.session_state:
-        # Get page from URL parameters if available
+        # Get page and role from URL parameters if available
         query_params = st.query_params
+        
+        # Restore page state
         if 'page' in query_params:
             st.session_state.page = query_params['page']
         elif 'page' not in st.session_state:
             st.session_state.page = 'main'
+        
+        # Restore role state
+        if 'role' in query_params:
+            st.session_state.user_role = query_params['role']
+        
+        # Restore location state from URL parameters
+        if 'location_city' in query_params and 'location_country' in query_params:
+            st.session_state.clinic_location = {
+                'city': query_params['location_city'],
+                'country_name': query_params['location_country'],
+                'country_code': query_params.get('location_code', query_params['location_country'][:2].upper())
+            }
+        
         st.session_state.page_initialized = True
 
 def update_page_url(page_name: str):
     """Update URL to reflect current page"""
     st.query_params['page'] = page_name
-    if 'role' in st.session_state:
-        st.query_params['role'] = st.session_state.role
+    if 'user_role' in st.session_state and st.session_state.user_role:
+        st.query_params['role'] = st.session_state.user_role
+    if 'clinic_location' in st.session_state and st.session_state.clinic_location:
+        location = st.session_state.clinic_location
+        st.query_params['location_city'] = location['city']
+        st.query_params['location_country'] = location['country_name']
+        st.query_params['location_code'] = location['country_code']
 
 # WebSocket connection script for real-time updates
 ws_connect_script = """
@@ -2536,6 +2556,7 @@ def location_setup():
                 with col2:
                     if st.button("Select", key=f"select_{location['id']}"):
                         st.session_state.clinic_location = location
+                        update_page_url("role_selection")
                         st.rerun()
         else:
             st.info("No locations found. Please add a new location below.")
@@ -2567,6 +2588,7 @@ def location_setup():
                         'created_date': datetime.now().isoformat()
                     }
                     st.session_state.clinic_location = new_location
+                    update_page_url("role_selection")
                     st.rerun()
                 else:
                     st.error("Please enter a city name.")
