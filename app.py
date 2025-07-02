@@ -10,19 +10,72 @@ from streamlit.components.v1 import html
 def preserve_page_state():
     """Initialize page state persistence"""
     if 'page_initialized' not in st.session_state:
-        # Get page from URL parameters if available
+        # Get page and role from URL parameters if available
         query_params = st.query_params
+        
+        # Restore page state
         if 'page' in query_params:
             st.session_state.page = query_params['page']
         elif 'page' not in st.session_state:
             st.session_state.page = 'main'
+        
+        # Restore role state
+        if 'role' in query_params:
+            st.session_state.user_role = query_params['role']
+        
+        # Restore location state from URL parameters
+        if 'location_city' in query_params and 'location_country' in query_params:
+            st.session_state.clinic_location = {
+                'city': query_params['location_city'],
+                'country_name': query_params['location_country'],
+                'country_code': query_params.get('location_code', query_params['location_country'][:2].upper())
+            }
+        
         st.session_state.page_initialized = True
 
 def update_page_url(page_name: str):
     """Update URL to reflect current page"""
     st.query_params['page'] = page_name
-    if 'role' in st.session_state:
-        st.query_params['role'] = st.session_state.role
+    if 'user_role' in st.session_state and st.session_state.user_role:
+        st.query_params['role'] = st.session_state.user_role
+    if 'clinic_location' in st.session_state and st.session_state.clinic_location:
+        location = st.session_state.clinic_location
+        st.query_params['location_city'] = location['city']
+        st.query_params['location_country'] = location['country_name']
+        st.query_params['location_code'] = location['country_code']
+
+def check_for_updates():
+    """Check if there are pending updates and trigger rerun"""
+    # Add automatic rerun system that responds to WebSocket updates
+    html("""
+    <script>
+    // Auto-rerun system for real-time updates
+    if (!window.autoRerunInitialized) {
+        window.autoRerunInitialized = true;
+        
+        // Check for updates every 3 seconds
+        setInterval(() => {
+            if (window.streamlitUpdatePending) {
+                window.streamlitUpdatePending = false;
+                console.log("Triggering automatic page update...");
+                
+                // Multiple methods to trigger rerun
+                try {
+                    // Method 1: Query parameter change
+                    const url = new URL(window.location);
+                    url.searchParams.set('_t', Date.now());
+                    window.history.replaceState({}, '', url);
+                    
+                    // Method 2: Force reload
+                    window.location.reload();
+                } catch (e) {
+                    console.log("Auto-rerun error:", e);
+                }
+            }
+        }, 3000);
+    }
+    </script>
+    """, height=0)
 
 # WebSocket connection script for real-time updates
 ws_connect_script = """
@@ -40,30 +93,67 @@ ws_connect_script = """
         
         ws.onmessage = function(event) {
           console.log("Received update:", event.data);
-          // Show notification without full page reload
-          if (event.data.includes("new_patient") || 
-              event.data.includes("vitals_complete") || 
-              event.data.includes("consultation_complete") ||
-              event.data.includes("lab_complete") ||
-              event.data.includes("prescriptions_filled")) {
-            
-            // Create notification banner
+          
+          // Parse message to determine if page should reload
+          const updateData = event.data;
+          let shouldReload = false;
+          let notificationText = '';
+          
+          if (updateData.includes("new_patient") || updateData.includes("new_name_registered") || updateData.includes("new_family_registered")) {
+            shouldReload = true;
+            notificationText = "New patient registered";
+          } else if (updateData.includes("vitals_complete")) {
+            shouldReload = true;
+            notificationText = "Vital signs completed";
+          } else if (updateData.includes("consultation_complete") || updateData.includes("consultation_paused")) {
+            shouldReload = true;
+            notificationText = "Consultation updated";
+          } else if (updateData.includes("lab_complete") || updateData.includes("patient_returned_to_doctor")) {
+            shouldReload = true;
+            notificationText = "Lab results available";
+          } else if (updateData.includes("prescriptions_filled")) {
+            shouldReload = true;
+            notificationText = "Prescriptions completed";
+          }
+          
+          if (shouldReload) {
+            // Show brief notification
             const notification = document.createElement('div');
             notification.style.cssText = `
               position: fixed; top: 10px; right: 10px; z-index: 9999;
-              background: #10b981; color: white; padding: 12px 20px;
-              border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-              font-weight: bold; max-width: 300px;
+              background: #10b981; color: white; padding: 8px 16px;
+              border-radius: 6px; font-weight: bold; font-size: 14px;
             `;
-            notification.textContent = '🔄 Clinic Update: ' + event.data.replace(/:/g, ' - ');
+            notification.textContent = '🔄 ' + notificationText;
             document.body.appendChild(notification);
             
-            // Auto-remove notification after 3 seconds
+            // Set update flag and remove notification after short delay
             setTimeout(() => {
               if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
               }
-            }, 3000);
+              // Set flag for Streamlit to detect update
+              window.streamlitUpdatePending = true;
+              
+              // Also try to trigger rerun through various methods
+              try {
+                // Method 1: Fragment-based reload
+                if (window.location.hash !== '#updated') {
+                  window.location.hash = '#updated';
+                } else {
+                  window.location.hash = '#updated-' + Date.now();
+                }
+                
+                // Method 2: Force page refresh as fallback
+                setTimeout(() => {
+                  if (window.streamlitUpdatePending) {
+                    window.location.reload(true);
+                  }
+                }, 2000);
+              } catch (e) {
+                console.log("Update trigger error:", e);
+              }
+            }, 1000);
           }
         };
         
@@ -1578,6 +1668,9 @@ def main():
     # Initialize WebSocket connection for real-time updates across iPads
     html(ws_connect_script, height=0)
     
+    # Check for pending updates and trigger rerun if needed
+    check_for_updates()
+    
     # Initialize navigation
     initialize_navigation()
 
@@ -2536,6 +2629,7 @@ def location_setup():
                 with col2:
                     if st.button("Select", key=f"select_{location['id']}"):
                         st.session_state.clinic_location = location
+                        update_page_url("role_selection")
                         st.rerun()
         else:
             st.info("No locations found. Please add a new location below.")
@@ -2567,6 +2661,7 @@ def location_setup():
                         'created_date': datetime.now().isoformat()
                     }
                     st.session_state.clinic_location = new_location
+                    update_page_url("role_selection")
                     st.rerun()
                 else:
                     st.error("Please enter a city name.")
