@@ -4437,6 +4437,55 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     st.markdown(f"**Current Patient:** {patient_name}")
     st.markdown(f"**Relationship:** {'Parent/Guardian' if not is_family_consultation or (is_family_consultation and st.session_state.family_consultation['current_member_index'] == 0) else 'Child'}")
 
+    # Display vital signs for this patient
+    db_manager = get_db_manager()
+    conn = sqlite3.connect(db_manager.db_name)
+    cursor = conn.cursor()
+    
+    # Get vital signs for this visit
+    cursor.execute('''
+        SELECT systolic_bp, diastolic_bp, heart_rate, temperature, weight, oxygen_saturation, recorded_time
+        FROM vital_signs 
+        WHERE visit_id = ?
+        ORDER BY recorded_time DESC
+        LIMIT 1
+    ''', (visit_id,))
+    
+    vital_signs = cursor.fetchone()
+    conn.close()
+    
+    if vital_signs:
+        systolic, diastolic, hr, temp, weight, o2_sat, recorded_time = vital_signs
+        
+        # Display vital signs in a nicely formatted card
+        st.markdown("#### 📊 Vital Signs")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if systolic and diastolic:
+                st.metric("Blood Pressure", f"{systolic}/{diastolic}")
+        with col2:
+            if hr:
+                st.metric("Heart Rate", f"{hr} bpm")
+        with col3:
+            if temp:
+                st.metric("Temperature", f"{temp}°F")
+        with col4:
+            if o2_sat:
+                st.metric("O2 Saturation", f"{o2_sat}%")
+        
+        # Second row for weight and timestamp
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if weight:
+                st.metric("Weight", f"{weight} kg")
+        with col2:
+            if recorded_time:
+                time_display = recorded_time[:16].replace('T', ' ')
+                st.caption(f"Recorded: {time_display}")
+    else:
+        st.warning("⚠️ No vital signs recorded for this patient")
+
     # Show lab results prominently if patient is returning from lab
     if is_returning_from_lab and lab_results:
         st.markdown("---")

@@ -211,6 +211,9 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added preset duration field to medications for automatic duration population when prescribing
   - Enhanced consultation interface to use preset durations as defaults (e.g., vitamins default to 30 days)
   - Updated medication display to show default duration settings in admin interface
+  - Fixed preset duration format matching to handle both number-only and full duration entries
+  - Added vital signs display to consultation form for doctors to review during patient assessment
+  - Enhanced doctor interface with prominent patient vital signs metrics display
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
