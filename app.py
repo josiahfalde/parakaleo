@@ -57,7 +57,7 @@ def update_page_url(page_name: str):
         st.query_params['location_code'] = location['country_code']
     
     # Preserve consultation state in URL for doctor consultation forms
-    if 'active_consultation' in st.session_state and st.session_state.active_consultation:
+    if 'active_consultation' in st.session_state and st.session_state.active_consultation and isinstance(st.session_state.active_consultation, dict):
         consultation = st.session_state.active_consultation
         st.query_params['visit_id'] = consultation['visit_id']
         st.query_params['patient_id'] = consultation['patient_id']
@@ -2537,7 +2537,7 @@ def doctor_login():
                     'patient_id': doctor_status[0],
                     'patient_name': doctor_status[1]
                 }
-                st.session_state.active_consultation = True
+                # Don't set active_consultation to boolean - it should only be a dict or None
                 st.success(f"Logged in as {selected_doctor} - Returning to consultation with {doctor_status[1]}")
             else:
                 # Update doctor status to available
