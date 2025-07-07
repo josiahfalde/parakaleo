@@ -4786,7 +4786,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                 dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
                                 prev_dur_idx = 0
                                 
-                                # Debug: Check what preset_duration value we have
+                                # Get preset duration and normalize it
                                 preset_dur = med.get('preset_duration', '').strip()
                                 
                                 # Use preset duration if available and no previous data exists
@@ -4794,13 +4794,16 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                     # Use previously selected duration
                                     if prev_med_data.get('duration') in dur_options:
                                         prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
-                                elif preset_dur and preset_dur in dur_options:
-                                    # Use preset duration as default
-                                    prev_dur_idx = dur_options.index(preset_dur)
-                                
-                                # Debug info (remove after testing)
-                                if preset_dur:
-                                    st.caption(f"Debug: Preset duration is '{preset_dur}' - {'✅' if preset_dur in dur_options else '❌'}")
+                                elif preset_dur:
+                                    # Try to match preset duration - handle various formats
+                                    # If just a number, add " days"
+                                    if preset_dur.isdigit():
+                                        preset_dur_formatted = f"{preset_dur} days"
+                                    else:
+                                        preset_dur_formatted = preset_dur
+                                    
+                                    if preset_dur_formatted in dur_options:
+                                        prev_dur_idx = dur_options.index(preset_dur_formatted)
                                 
                                 duration = st.selectbox("Duration", dur_options,
                                                        index=prev_dur_idx,
