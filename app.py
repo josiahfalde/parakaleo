@@ -778,7 +778,9 @@ class DatabaseManager:
                  'Blood Pressure', 'no'),
                 ('Atorvastatin', '20mg daily, 40mg daily', 'Cholesterol',
                  'no'),
-                ('Furosemide', '20mg daily, 40mg daily', 'Diuretic', 'no')
+                ('Furosemide', '20mg daily, 40mg daily', 'Diuretic', 'no'),
+                ('Blood Pressure Handout', 'As needed for patient education', 'Teaching Pamphlets', 'no'),
+                ('Diabetes Handout', 'As needed for patient education', 'Teaching Pamphlets', 'no')
             ]
 
             for med in default_meds:
@@ -6899,9 +6901,9 @@ def admin_interface():
     add_to_history('admin')
     st.markdown("## Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Patient Management", "Doctor Management", "Medication Management",
-        "Reports", "Settings"
+        "Location Management", "Reports", "Settings"
     ])
 
     with tab1:
@@ -6914,9 +6916,12 @@ def admin_interface():
         medication_management()
 
     with tab4:
-        daily_reports()
+        location_management()
 
     with tab5:
+        daily_reports()
+
+    with tab6:
         clinic_settings()
 
 
@@ -7008,6 +7013,144 @@ def doctor_management():
             st.caption(f"Last updated: {last_update}")
 
 
+def location_management():
+    """Admin interface for managing clinic locations"""
+    add_to_history('location_management')
+    st.markdown("### Location Management")
+    
+    db = get_db_manager()
+    locations = db.get_locations()
+    
+    # Add new location
+    with st.expander("Add New Location"):
+        with st.form("new_location"):
+            col1, col2 = st.columns(2)
+            with col1:
+                country_code = st.text_input("Country Code", 
+                                           placeholder="e.g., DR, H", 
+                                           max_chars=5,
+                                           help="Short code for patient ID prefix")
+                country_name = st.text_input("Country Name", 
+                                           placeholder="e.g., Dominican Republic, Haiti")
+            with col2:
+                city = st.text_input("City/Location", 
+                                   placeholder="e.g., Santiago, Port-au-Prince")
+            
+            if st.form_submit_button("Add Location"):
+                if country_code and country_name and city:
+                    # Check if location already exists
+                    existing = any(
+                        loc['country_code'] == country_code.upper() and 
+                        loc['city'].lower() == city.lower() 
+                        for loc in locations
+                    )
+                    
+                    if not existing:
+                        location_id = db.add_location(country_code.upper(), country_name, city)
+                        st.success(f"Location added: {country_name} - {city}")
+                        st.rerun()
+                    else:
+                        st.error("Location already exists!")
+                else:
+                    st.error("Please fill in all fields")
+    
+    # Display existing locations
+    if locations:
+        st.markdown("### Existing Locations")
+        for location in locations:
+            with st.expander(f"{location['country_name']} - {location['city']}", expanded=True):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    st.write(f"**Country Code:** {location['country_code']}")
+                    st.write(f"**Country:** {location['country_name']}")
+                    st.write(f"**City:** {location['city']}")
+                
+                with col2:
+                    # Edit button
+                    edit_key = f"edit_location_{location['id']}"
+                    if st.button("✏️ Edit", key=f"edit_btn_{location['id']}"):
+                        st.session_state[edit_key] = True
+                        st.rerun()
+                
+                with col3:
+                    # Delete button with confirmation
+                    delete_key = f"delete_location_{location['id']}"
+                    if st.button("🗑️ Delete", key=f"delete_btn_{location['id']}", type="secondary"):
+                        st.session_state[delete_key] = True
+                        st.rerun()
+                
+                # Edit form
+                if st.session_state.get(edit_key, False):
+                    st.markdown("---")
+                    with st.form(f"edit_location_{location['id']}"):
+                        st.markdown("**Edit Location**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            new_country_code = st.text_input("Country Code", 
+                                                           value=location['country_code'],
+                                                           max_chars=5)
+                            new_country_name = st.text_input("Country Name", 
+                                                           value=location['country_name'])
+                        with col2:
+                            new_city = st.text_input("City/Location", 
+                                                   value=location['city'])
+                        
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.form_submit_button("Save Changes", type="primary"):
+                                if new_country_code and new_country_name and new_city:
+                                    # Update location in database
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE locations 
+                                        SET country_code = ?, country_name = ?, city = ?
+                                        WHERE id = ?
+                                    ''', (new_country_code.upper(), new_country_name, new_city, location['id']))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    st.session_state[edit_key] = False
+                                    st.success("Location updated!")
+                                    st.rerun()
+                                else:
+                                    st.error("Please fill in all fields")
+                        
+                        with col_cancel:
+                            if st.form_submit_button("Cancel"):
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                
+                # Delete confirmation
+                if st.session_state.get(delete_key, False):
+                    st.markdown("---")
+                    st.error("⚠️ **Are you sure you want to delete this location?**")
+                    st.write("This action cannot be undone. Patients may already be using this location code.")
+                    
+                    col_confirm, col_cancel = st.columns(2)
+                    with col_confirm:
+                        if st.button("Yes, Delete", key=f"confirm_delete_{location['id']}", type="primary"):
+                            # Delete location from database
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('DELETE FROM locations WHERE id = ?', (location['id'],))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.session_state[delete_key] = False
+                            st.success("Location deleted!")
+                            st.rerun()
+                    
+                    with col_cancel:
+                        if st.button("Cancel", key=f"cancel_delete_{location['id']}"):
+                            st.session_state[delete_key] = False
+                            st.rerun()
+    else:
+        st.info("No locations configured yet.")
+
+
 def medication_management():
     add_to_history('medication_management')
     st.markdown("### Preset Medications")
@@ -7044,7 +7187,7 @@ def medication_management():
                 category = st.selectbox("Category", [
                     "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes",
                     "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic",
-                    "Cholesterol", "UTI Antibiotic", "Other"
+                    "Cholesterol", "UTI Antibiotic", "Teaching Pamphlets", "Other"
                 ])
                 require_indication = st.checkbox("Require indication when prescribing", 
                                                 value=True,
@@ -7116,7 +7259,7 @@ def medication_management():
                                     "Blood Pressure", "Diabetes", "Stomach",
                                     "Respiratory", "Vitamin", "Steroid",
                                     "Diuretic", "Cholesterol",
-                                    "UTI Antibiotic", "Other"
+                                    "UTI Antibiotic", "Teaching Pamphlets", "Other"
                                 ]
                                 try:
                                     cat_index = categories.index(
