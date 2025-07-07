@@ -202,6 +202,8 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Consultation data now automatically saves to database as user enters information
   - Enhanced consultation workflow to eliminate need for "Update Consultation" button clicks
   - Added auto-save success indicator showing consultation is continuously saved
+  - Fixed all remaining surgical_history and allergies variable references causing database errors
+  - Cleaned up database queries to remove references to deleted fields while preserving schema compatibility
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

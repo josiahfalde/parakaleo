@@ -4222,7 +4222,7 @@ def consultation_interface():
                         cursor_restore = conn_restore.cursor()
                         cursor_restore.execute('''
                             SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                                   surgical_history, medical_history, allergies, current_medications
+                                   medical_history, current_medications
                             FROM visits 
                             WHERE visit_id = ?
                         ''', (patient['visit_id'],))
@@ -4238,10 +4238,8 @@ def consultation_interface():
                                 'diagnosis': consultation_data[2] or '',
                                 'treatment_plan': consultation_data[3] or '',
                                 'notes': consultation_data[4] or '',
-                                'surgical_history': consultation_data[5] or '',
-                                'medical_history': consultation_data[6] or '',
-                                'allergies': consultation_data[7] or '',
-                                'current_medications': consultation_data[8] or ''
+                                'medical_history': consultation_data[5] or '',
+                                'current_medications': consultation_data[6] or ''
                             }
                         
                         st.session_state.active_consultation = {
@@ -4929,13 +4927,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             UPDATE visits 
                             SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
                                 treatment_plan = ?, notes = ?, 
-                                medical_history = ?, allergies = ?, current_medications = ?,
+                                medical_history = ?, current_medications = ?,
                                 consultation_time = ?
                             WHERE visit_id = ?
                         ''', (current_chief_complaint, consultation_data.get('symptoms', ''), 
                               consultation_data.get('diagnosis', ''), consultation_data.get('treatment_plan', ''),
                               consultation_data.get('notes', ''), 
-                              consultation_data.get('medical_history', ''), consultation_data.get('allergies', ''),
+                              consultation_data.get('medical_history', ''), 
                               consultation_data.get('current_medications', ''), datetime.now().isoformat(), visit_id))
 
                         # Also save to consultations table for tracking
@@ -5132,11 +5130,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         history_cursor.execute(
                             '''
                             UPDATE patients 
-                            SET medical_history = ?, allergies = ?
+                            SET medical_history = ?
                             WHERE patient_id = ?
                         ''',
-                            (f"Surgical: {surgical_history}\nMedical: {medical_history}",
-                             f"Allergies: {allergies}\nCurrent Meds: {current_medications}",
+                            (f"Medical: {medical_history}\nCurrent Meds: {current_medications}",
                              patient_id))
                         history_conn.commit()
                         history_conn.close()
