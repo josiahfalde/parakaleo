@@ -4781,8 +4781,16 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             with col3:
                                 dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
                                 prev_dur_idx = 0
-                                if prev_med_data.get('duration') in dur_options:
-                                    prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
+                                
+                                # Use preset duration if available and no previous data exists
+                                if prev_med_data.get('duration'):
+                                    # Use previously selected duration
+                                    if prev_med_data.get('duration') in dur_options:
+                                        prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
+                                elif med.get('preset_duration') and med['preset_duration'] in dur_options:
+                                    # Use preset duration as default
+                                    prev_dur_idx = dur_options.index(med['preset_duration'])
+                                
                                 duration = st.selectbox("Duration", dur_options,
                                                        index=prev_dur_idx,
                                                        key=f"dur_{med['id']}_{visit_id}")
@@ -6966,6 +6974,9 @@ def medication_management():
                                         placeholder="e.g., 250mg, 500mg")
                 amount = st.text_input("Amount/Quantity",
                                      placeholder="e.g., 30 tablets, 100ml bottle")
+                preset_duration = st.text_input("Preset Duration",
+                                              placeholder="e.g., 30 days, 7 days, 10 days",
+                                              help="Default duration that will auto-populate when prescribing")
             with col2:
                 category = st.selectbox("Category", [
                     "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes",
@@ -6983,17 +6994,19 @@ def medication_management():
                 if med_name:
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
-                    # First check if require_indication column exists, if not add it
+                    # Check if columns exist, if not add them
                     cursor.execute("PRAGMA table_info(preset_medications)")
                     columns = [column[1] for column in cursor.fetchall()]
                     if 'require_indication' not in columns:
                         cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                    if 'preset_duration' not in columns:
+                        cursor.execute('ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT DEFAULT ""')
                     
                     cursor.execute(
                         '''
-                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications, require_indication)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (med_name, dosages, category, "no", amount, indications, "yes" if require_indication else "no"))
+                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications, require_indication, preset_duration)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (med_name, dosages, category, "no", amount, indications, "yes" if require_indication else "no", preset_duration))
                     conn.commit()
                     conn.close()
                     st.success("Medication added!")
@@ -7029,6 +7042,11 @@ def medication_management():
                                 new_amount = st.text_input(
                                     "Amount/Quantity",
                                     value=med.get('amount', ''))
+                                new_preset_duration = st.text_input(
+                                    "Preset Duration",
+                                    value=med.get('preset_duration', ''),
+                                    placeholder="e.g., 30 days, 7 days, 10 days",
+                                    help="Default duration that will auto-populate when prescribing")
                             with col2:
                                 categories = [
                                     "Pain Relief", "Antibiotic",
@@ -7061,23 +7079,26 @@ def medication_management():
                                         conn = sqlite3.connect(
                                             "clinic_database.db")
                                         cursor = conn.cursor()
-                                        # Check if require_indication column exists, if not add it
+                                        # Check if columns exist, if not add them
                                         cursor.execute("PRAGMA table_info(preset_medications)")
                                         columns = [column[1] for column in cursor.fetchall()]
                                         if 'require_indication' not in columns:
                                             cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                                        if 'preset_duration' not in columns:
+                                            cursor.execute('ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT DEFAULT ""')
                                         
                                         cursor.execute(
                                             '''
                                             UPDATE preset_medications 
-                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?, require_indication = ?
+                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?, require_indication = ?, preset_duration = ?
                                             WHERE id = ?
                                         ''',
                                             (new_name.strip(),
                                              new_dosages.strip() if new_dosages
                                              else "", new_category, new_amount.strip() if new_amount else "", 
                                              new_indications.strip() if new_indications else "", 
-                                             "yes" if new_require_indication else "no", med['id']))
+                                             "yes" if new_require_indication else "no", 
+                                             new_preset_duration.strip() if new_preset_duration else "", med['id']))
                                         conn.commit()
                                         conn.close()
                                         st.session_state[edit_key] = False
@@ -7099,6 +7120,8 @@ def medication_management():
                             st.caption(f"Dosages: {med['common_dosages']}")
                             if med.get('amount'):
                                 st.caption(f"Amount: {med['amount']}")
+                            if med.get('preset_duration'):
+                                st.caption(f"Default Duration: {med['preset_duration']}")
                             if med.get('indications'):
                                 st.caption(f"Indications: {med['indications']}")
                             # Show indication requirement status

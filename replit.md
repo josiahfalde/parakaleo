@@ -208,6 +208,9 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Enhanced prescription validation to only require indications for medications marked as needing them
   - Vitamins and similar medications can now be prescribed without requiring specific indications
   - Updated medication display to show when indications are not required with visual indicator
+  - Added preset duration field to medications for automatic duration population when prescribing
+  - Enhanced consultation interface to use preset durations as defaults (e.g., vitamins default to 30 days)
+  - Updated medication display to show default duration settings in admin interface
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
