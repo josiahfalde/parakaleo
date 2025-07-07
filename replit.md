@@ -196,6 +196,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Modified auto-rerun system to use gentle updates for consultation pages instead of full page reload
   - Added consultation_form page handling in main routing logic to maintain consultation state on refresh
   - Ensured consultation forms maintain all patient data and form state when browser page is refreshed
+- July 7, 2025. Consultation form improvements and auto-save implementation
+  - Removed allergies field from doctor consultation page per user request
+  - Implemented auto-save functionality for consultations - no manual save button needed
+  - Consultation data now automatically saves to database as user enters information
+  - Enhanced consultation workflow to eliminate need for "Update Consultation" button clicks
+  - Added auto-save success indicator showing consultation is continuously saved
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

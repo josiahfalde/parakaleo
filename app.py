@@ -4459,125 +4459,121 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         ["📋 Consultation", "📸 Photo Documentation", "🔬 Lab & Prescriptions"])
 
     with tab1:
-        with st.form(f"consultation_{visit_id}"):
-            # Check for existing consultation data from previous visit
-            consultation_key = f"consultation_data_{visit_id}"
-            existing_data = st.session_state.get(consultation_key, {})
+        # Auto-save consultation - no form needed, changes saved automatically
+        # Check for existing consultation data from previous visit
+        consultation_key = f"consultation_data_{visit_id}"
+        existing_data = st.session_state.get(consultation_key, {})
             
-            # If no session data, check database for previous consultation
-            if not existing_data:
-                conn = sqlite3.connect("clinic_database.db")
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                           medical_history, allergies, current_medications
-                    FROM visits 
-                    WHERE visit_id = ?
-                ''', (visit_id,))
-                db_data = cursor.fetchone()
-                conn.close()
-                
-                if db_data:
-                    existing_data = {
-                        'chief_complaint': db_data[0] or '',
-                        'symptoms': db_data[1] or '',
-                        'diagnosis': db_data[2] or '',
-                        'treatment_plan': db_data[3] or '',
-                        'notes': db_data[4] or '',
-                        'medical_history': db_data[5] or '',
-                        'allergies': db_data[6] or '',
-                        'current_medications': db_data[7] or ''
-                    }
+        # If no session data, check database for previous consultation
+        if not existing_data:
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                       medical_history, current_medications
+                FROM visits 
+                WHERE visit_id = ?
+            ''', (visit_id,))
+            db_data = cursor.fetchone()
+            conn.close()
             
-            # History Section (surgical history removed per user request)
-            st.markdown("#### Patient History")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                # Load medical history from patient registration if available
-                conn_pat = sqlite3.connect("clinic_database.db")
-                cursor_pat = conn_pat.cursor()
-                cursor_pat.execute('SELECT medical_history FROM patients WHERE patient_id = ?', (patient_id,))
-                patient_medical_history = cursor_pat.fetchone()
-                conn_pat.close()
-                
-                initial_medical_history = ""
-                if patient_medical_history and patient_medical_history[0]:
-                    initial_medical_history = patient_medical_history[0]
-                elif existing_data.get('medical_history'):
-                    initial_medical_history = existing_data.get('medical_history', '')
-                
-                medical_history = st.text_area(
-                    "Medical History",
-                    value=initial_medical_history,
-                    placeholder="Chronic conditions, past illnesses...")
-                
-                allergies = st.text_area(
-                    "Allergies",
-                    value=existing_data.get('allergies', ''),
-                    placeholder="Drug allergies, food allergies...")
-
-            with col2:
-                current_medications = st.text_area(
-                    "Current Medications",
-                    value=existing_data.get('current_medications', ''),
-                    placeholder="Current medications and dosages...")
-
-            st.markdown("---")
-            # Auto-fill doctor name from logged-in session
-            doctor_name = st.session_state.get('doctor_name', '')
-            st.text_input("Doctor Name", value=doctor_name, disabled=True)
-
-            chief_complaint = st.text_area(
-                "Chief Complaint",
-                value=existing_data.get('chief_complaint', ''),
-                placeholder="What brought the patient in today?")
-            symptoms = st.text_area(
-                "Symptoms", 
-                value=existing_data.get('symptoms', ''),
-                placeholder="Describe symptoms observed/reported")
-            diagnosis = st.text_area("Diagnosis", 
-                                   value=existing_data.get('diagnosis', ''),
-                                   placeholder="Your diagnosis")
-            treatment_plan = st.text_area("Treatment Plan",
-                                          value=existing_data.get('treatment_plan', ''),
-                                          placeholder="Recommended treatment")
-            notes = st.text_area("Additional Notes",
-                                 value=existing_data.get('notes', ''),
-                                 placeholder="Any additional observations")
-
-            # Submit button for consultation updates
-            if st.form_submit_button("Update Consultation", type="primary"):
-                # Save consultation data to session state and database (surgical history removed per user request)
-                consultation_key = f"consultation_data_{visit_id}"
-                st.session_state[consultation_key] = {
-                    'doctor_name': doctor_name,
-                    'chief_complaint': chief_complaint,
-                    'symptoms': symptoms,
-                    'diagnosis': diagnosis,
-                    'treatment_plan': treatment_plan,
-                    'notes': notes,
-                    'medical_history': medical_history,
-                    'allergies': allergies,
-                    'current_medications': current_medications
+            if db_data:
+                existing_data = {
+                    'chief_complaint': db_data[0] or '',
+                    'symptoms': db_data[1] or '',
+                    'diagnosis': db_data[2] or '',
+                    'treatment_plan': db_data[3] or '',
+                    'notes': db_data[4] or '',
+                    'medical_history': db_data[5] or '',
+                    'current_medications': db_data[6] or ''
                 }
-                
-                # Update database with consultation details (surgical history removed)
-                conn = sqlite3.connect("clinic_database.db")
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE visits 
-                    SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
-                        treatment_plan = ?, notes = ?,
-                        medical_history = ?, allergies = ?, current_medications = ?
-                    WHERE visit_id = ?
-                ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                      medical_history, allergies, current_medications, visit_id))
-                conn.commit()
-                conn.close()
-                
-                st.success("Consultation updated successfully!")
-                st.info("Continue to Lab & Prescriptions tab to complete the re-consultation.")
+        
+        # History Section (surgical history removed per user request)
+        st.markdown("#### Patient History")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Load medical history from patient registration if available
+            conn_pat = sqlite3.connect("clinic_database.db")
+            cursor_pat = conn_pat.cursor()
+            cursor_pat.execute('SELECT medical_history FROM patients WHERE patient_id = ?', (patient_id,))
+            patient_medical_history = cursor_pat.fetchone()
+            conn_pat.close()
+            
+            initial_medical_history = ""
+            if patient_medical_history and patient_medical_history[0]:
+                initial_medical_history = patient_medical_history[0]
+            elif existing_data.get('medical_history'):
+                initial_medical_history = existing_data.get('medical_history', '')
+            
+            medical_history = st.text_area(
+                "Medical History",
+                value=initial_medical_history,
+                placeholder="Chronic conditions, past illnesses...")
+
+        with col2:
+            current_medications = st.text_area(
+                "Current Medications",
+                value=existing_data.get('current_medications', ''),
+                placeholder="Current medications and dosages...")
+
+        st.markdown("---")
+        # Auto-fill doctor name from logged-in session
+        doctor_name = st.session_state.get('doctor_name', '')
+        st.text_input("Doctor Name", value=doctor_name, disabled=True)
+
+        chief_complaint = st.text_area(
+            "Chief Complaint",
+            value=existing_data.get('chief_complaint', ''),
+            placeholder="What brought the patient in today?")
+        symptoms = st.text_area(
+            "Symptoms", 
+            value=existing_data.get('symptoms', ''),
+            placeholder="Describe symptoms observed/reported")
+        diagnosis = st.text_area("Diagnosis", 
+                               value=existing_data.get('diagnosis', ''),
+                               placeholder="Your diagnosis")
+        treatment_plan = st.text_area("Treatment Plan",
+                                      value=existing_data.get('treatment_plan', ''),
+                                      placeholder="Recommended treatment")
+        notes = st.text_area("Additional Notes",
+                             value=existing_data.get('notes', ''),
+                             placeholder="Any additional observations")
+
+        # Auto-save functionality - consultation is saved automatically as user types
+        def auto_save_consultation():
+            """Auto-save consultation data to database"""
+            consultation_key = f"consultation_data_{visit_id}"
+            st.session_state[consultation_key] = {
+                'doctor_name': doctor_name,
+                'chief_complaint': chief_complaint,
+                'symptoms': symptoms,
+                'diagnosis': diagnosis,
+                'treatment_plan': treatment_plan,
+                'notes': notes,
+                'medical_history': medical_history,
+                'current_medications': current_medications
+            }
+            
+            # Update database with consultation details
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE visits 
+                SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
+                    treatment_plan = ?, notes = ?,
+                    medical_history = ?, current_medications = ?
+                WHERE visit_id = ?
+            ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                  medical_history, current_medications, visit_id))
+            conn.commit()
+            conn.close()
+        
+        # Call auto-save after fields are defined
+        auto_save_consultation()
+        
+        st.success("✅ Consultation auto-saved")
+        st.info("All changes are automatically saved. Continue to Lab & Prescriptions tab to complete the consultation.")
 
     with tab2:
         # Photo documentation section (now in its own tab)
