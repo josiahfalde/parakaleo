@@ -183,6 +183,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented automatic page reloading across all iPads when updates are received from other devices
   - Added intelligent update detection that triggers immediate data refresh without manual intervention
   - Eliminated need for manual page refreshes to see new patients, completed consultations, or lab results
+- July 7, 2025. Triage page modifications and medical history restructuring
+  - Removed height option from triage vital signs forms per user request
+  - Eliminated surgical history fields from consultation forms
+  - Added medical history field to both name registration and triage new patient pages
+  - Made medical history editable on doctor consultation page while preserving data from earlier forms
+  - Updated database queries to remove height from vital signs and surgical history from consultation records
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

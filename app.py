@@ -2787,11 +2787,6 @@ def family_vital_signs_collection():
                                      max_value=500.0,
                                      value=None,
                                      step=0.1)
-            height = st.number_input("Height (inches)",
-                                     min_value=12.0,
-                                     max_value=96.0,
-                                     value=None,
-                                     step=0.5)
             oxygen_sat = st.number_input("O2 Saturation (%)",
                                          min_value=70,
                                          max_value=100,
@@ -2812,10 +2807,10 @@ def family_vital_signs_collection():
                 cursor.execute(
                     '''
                     INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                           temperature, weight, height, oxygen_saturation, recorded_time)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                           temperature, weight, oxygen_saturation, recorded_time)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (current_member['visit_id'], systolic, diastolic,
-                      heart_rate, temperature, weight, height, oxygen_sat,
+                      heart_rate, temperature, weight, oxygen_sat,
                       datetime.now().isoformat()))
 
                 # Update visit status
@@ -2900,6 +2895,12 @@ def name_registration_interface():
                     gender = st.selectbox("Gender", ["", "Male", "Female"], index=0)
                     notes = st.text_input("Notes (optional)", placeholder="Special considerations...", value="")
                 
+                # Medical History field
+                medical_history = st.text_area("Medical History", 
+                                               placeholder="Any relevant medical conditions, allergies, or medications",
+                                               height=100,
+                                               value="")
+                
                 if st.form_submit_button("Add to Queue", type="primary"):
                     if name.strip():
                         conn = sqlite3.connect(db.db_name)
@@ -2909,7 +2910,8 @@ def name_registration_interface():
                             (name, age, gender, location_code, relationship, created_time, notes)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (name.strip(), age if age > 0 else None, gender if gender else None, location_code, 
-                             'individual', datetime.now().isoformat(), notes.strip() if notes else None))
+                             'individual', datetime.now().isoformat(), 
+                             (medical_history.strip() + ('\n' + notes.strip() if notes else '')) if medical_history else (notes.strip() if notes else None)))
                         conn.commit()
                         conn.close()
                         
@@ -3325,6 +3327,11 @@ def new_patient_form():
                 phone = st.text_input("Phone Number", placeholder="Optional")
                 emergency_contact = st.text_input("Emergency Contact",
                                                   placeholder="Optional")
+            
+            # Medical History field
+            medical_history = st.text_area("Medical History",
+                                           placeholder="Any relevant medical conditions, allergies, or medications",
+                                           height=100)
 
             if st.form_submit_button("Register Patient", type="primary"):
                 if name.strip():
@@ -3347,7 +3354,7 @@ def new_patient_form():
                         emergency_contact.strip()
                         if emergency_contact else None,
                         'medical_history':
-                        None,
+                        medical_history.strip() if medical_history else None,
                         'allergies':
                         None
                     }
@@ -3776,11 +3783,6 @@ def vital_signs_form(visit_id: str):
                                      value=None,
                                      step=0.1)
             height = st.number_input("Height (inches)",
-                                     min_value=12.0,
-                                     max_value=96.0,
-                                     value=None,
-                                     step=0.5)
-            oxygen_sat = st.number_input("O2 Saturation (%)",
                                          min_value=70,
                                          max_value=100,
                                          value=98)
@@ -3792,10 +3794,10 @@ def vital_signs_form(visit_id: str):
             cursor.execute(
                 '''
                 INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                       temperature, weight, height, oxygen_saturation, recorded_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       temperature, weight, oxygen_saturation, recorded_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (visit_id, systolic, diastolic, heart_rate, temperature,
-                  weight, height, oxygen_sat, datetime.now().isoformat()))
+                  weight, oxygen_sat, datetime.now().isoformat()))
 
             # Update visit status
             cursor.execute(
@@ -4412,7 +4414,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 cursor = conn.cursor()
                 cursor.execute('''
                     SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                           surgical_history, medical_history, allergies, current_medications
+                           medical_history, allergies, current_medications
                     FROM visits 
                     WHERE visit_id = ?
                 ''', (visit_id,))
@@ -4426,31 +4428,40 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         'diagnosis': db_data[2] or '',
                         'treatment_plan': db_data[3] or '',
                         'notes': db_data[4] or '',
-                        'surgical_history': db_data[5] or '',
-                        'medical_history': db_data[6] or '',
-                        'allergies': db_data[7] or '',
-                        'current_medications': db_data[8] or ''
+                        'medical_history': db_data[5] or '',
+                        'allergies': db_data[6] or '',
+                        'current_medications': db_data[7] or ''
                     }
             
-            # History Section (above chief complaint)
+            # History Section (surgical history removed per user request)
             st.markdown("#### Patient History")
             col1, col2 = st.columns(2)
 
             with col1:
-                surgical_history = st.text_area(
-                    "Surgical History",
-                    value=existing_data.get('surgical_history', ''),
-                    placeholder="Previous surgeries, procedures...")
+                # Load medical history from patient registration if available
+                conn_pat = sqlite3.connect("clinic_database.db")
+                cursor_pat = conn_pat.cursor()
+                cursor_pat.execute('SELECT medical_history FROM patients WHERE patient_id = ?', (patient_id,))
+                patient_medical_history = cursor_pat.fetchone()
+                conn_pat.close()
+                
+                initial_medical_history = ""
+                if patient_medical_history and patient_medical_history[0]:
+                    initial_medical_history = patient_medical_history[0]
+                elif existing_data.get('medical_history'):
+                    initial_medical_history = existing_data.get('medical_history', '')
+                
                 medical_history = st.text_area(
                     "Medical History",
-                    value=existing_data.get('medical_history', ''),
+                    value=initial_medical_history,
                     placeholder="Chronic conditions, past illnesses...")
-
-            with col2:
+                
                 allergies = st.text_area(
                     "Allergies",
                     value=existing_data.get('allergies', ''),
                     placeholder="Drug allergies, food allergies...")
+
+            with col2:
                 current_medications = st.text_area(
                     "Current Medications",
                     value=existing_data.get('current_medications', ''),
@@ -4481,7 +4492,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
             # Submit button for consultation updates
             if st.form_submit_button("Update Consultation", type="primary"):
-                # Save consultation data to session state and database
+                # Save consultation data to session state and database (surgical history removed per user request)
                 consultation_key = f"consultation_data_{visit_id}"
                 st.session_state[consultation_key] = {
                     'doctor_name': doctor_name,
@@ -4490,23 +4501,22 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                     'diagnosis': diagnosis,
                     'treatment_plan': treatment_plan,
                     'notes': notes,
-                    'surgical_history': surgical_history,
                     'medical_history': medical_history,
                     'allergies': allergies,
                     'current_medications': current_medications
                 }
                 
-                # Update database with consultation details
+                # Update database with consultation details (surgical history removed)
                 conn = sqlite3.connect("clinic_database.db")
                 cursor = conn.cursor()
                 cursor.execute('''
                     UPDATE visits 
                     SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
-                        treatment_plan = ?, notes = ?, surgical_history = ?,
+                        treatment_plan = ?, notes = ?,
                         medical_history = ?, allergies = ?, current_medications = ?
                     WHERE visit_id = ?
                 ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                      surgical_history, medical_history, allergies, current_medications, visit_id))
+                      medical_history, allergies, current_medications, visit_id))
                 conn.commit()
                 conn.close()
                 
@@ -4862,17 +4872,17 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         db_conn.execute('BEGIN IMMEDIATE')
                         cursor = db_conn.cursor()
 
-                        # Save complete consultation state to visits table
+                        # Save complete consultation state to visits table (surgical history removed per user request)
                         cursor.execute('''
                             UPDATE visits 
                             SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
-                                treatment_plan = ?, notes = ?, surgical_history = ?,
+                                treatment_plan = ?, notes = ?, 
                                 medical_history = ?, allergies = ?, current_medications = ?,
                                 consultation_time = ?
                             WHERE visit_id = ?
                         ''', (current_chief_complaint, consultation_data.get('symptoms', ''), 
                               consultation_data.get('diagnosis', ''), consultation_data.get('treatment_plan', ''),
-                              consultation_data.get('notes', ''), consultation_data.get('surgical_history', ''),
+                              consultation_data.get('notes', ''), 
                               consultation_data.get('medical_history', ''), consultation_data.get('allergies', ''),
                               consultation_data.get('current_medications', ''), datetime.now().isoformat(), visit_id))
 
