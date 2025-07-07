@@ -1503,10 +1503,14 @@ class DatabaseManager:
         results = cursor.fetchall()
         conn.close()
 
-        columns = [
-            'id', 'medication_name', 'common_dosages', 'category',
-            'requires_lab', 'active'
-        ]
+        # Get all column names from the table to ensure we include new columns
+        temp_conn = sqlite3.connect(self.db_name)
+        temp_cursor = temp_conn.cursor()
+        temp_cursor.execute("PRAGMA table_info(preset_medications)")
+        column_info = temp_cursor.fetchall()
+        temp_conn.close()
+        
+        columns = [col[1] for col in column_info]
         return [dict(zip(columns, row)) for row in results]
 
     def order_lab_test(self, visit_id: str, test_type: str,
