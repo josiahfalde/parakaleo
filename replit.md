@@ -217,6 +217,8 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added "Teaching Pamphlets" medication category with Blood Pressure and Diabetes handouts
   - Created Location Management admin interface with full edit/delete capabilities for clinic locations
   - Enhanced medication categorization system to support educational materials and patient resources
+  - Implemented custom category ordering in prescription interface with Teaching Pamphlets positioned after Vitamin Medications
+  - Organized prescription workflow with logical medication category progression for improved clinical efficiency
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

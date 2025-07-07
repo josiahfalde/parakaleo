@@ -4789,7 +4789,24 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
         selected_medications = []
 
-        for category in sorted(med_categories):
+        # Define custom order for categories, with Teaching Pamphlets placed after Vitamin
+        category_order = [
+            "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", 
+            "Stomach", "Respiratory", "Vitamin", "Teaching Pamphlets",
+            "Steroid", "Diuretic", "Cholesterol", "UTI Antibiotic", "Other"
+        ]
+        
+        # Sort categories according to custom order, with unknown categories at the end
+        ordered_categories = []
+        for cat in category_order:
+            if cat in med_categories:
+                ordered_categories.append(cat)
+        # Add any categories not in our predefined order
+        for cat in sorted(med_categories):
+            if cat not in ordered_categories:
+                ordered_categories.append(cat)
+
+        for category in ordered_categories:
             with st.expander(f"{category} Medications"):
                 category_meds = [
                     med for med in deduplicated_meds
