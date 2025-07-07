@@ -4908,7 +4908,22 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         validation_errors.append(f"Missing dosage for {med['name']}")
                     if not med.get('frequency') or med.get('frequency').strip() == '':
                         validation_errors.append(f"Missing frequency for {med['name']}")
-                    if not med.get('indication') or med.get('indication').strip() == '':
+                    
+                    # Check if indication is required for this medication
+                    med_requires_indication = True
+                    if 'id' in med and med['id']:
+                        # Get medication details from database to check require_indication setting
+                        temp_conn = sqlite3.connect(db_manager.db_name)
+                        temp_cursor = temp_conn.cursor()
+                        temp_cursor.execute('SELECT require_indication FROM preset_medications WHERE id = ?', (med['id'],))
+                        require_result = temp_cursor.fetchone()
+                        temp_conn.close()
+                        
+                        if require_result and require_result[0] == 'no':
+                            med_requires_indication = False
+                    
+                    # Only validate indication if it's required for this medication
+                    if med_requires_indication and (not med.get('indication') or med.get('indication').strip() == ''):
                         validation_errors.append(f"Missing indication for {med['name']}")
                 
                 if validation_errors:
@@ -6957,6 +6972,9 @@ def medication_management():
                     "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic",
                     "Cholesterol", "UTI Antibiotic", "Other"
                 ])
+                require_indication = st.checkbox("Require indication when prescribing", 
+                                                value=True,
+                                                help="Uncheck for medications like vitamins that don't need specific indications")
                 indications = st.text_area("Clinical Indications",
                                          placeholder="e.g., Hypertension, Pain relief, Bacterial infections",
                                          height=100)
@@ -6965,11 +6983,17 @@ def medication_management():
                 if med_name:
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
+                    # First check if require_indication column exists, if not add it
+                    cursor.execute("PRAGMA table_info(preset_medications)")
+                    columns = [column[1] for column in cursor.fetchall()]
+                    if 'require_indication' not in columns:
+                        cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                    
                     cursor.execute(
                         '''
-                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (med_name, dosages, category, "no", amount, indications))
+                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications, require_indication)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (med_name, dosages, category, "no", amount, indications, "yes" if require_indication else "no"))
                     conn.commit()
                     conn.close()
                     st.success("Medication added!")
@@ -7021,6 +7045,9 @@ def medication_management():
                                 new_category = st.selectbox("Category",
                                                             categories,
                                                             index=cat_index)
+                                new_require_indication = st.checkbox("Require indication when prescribing",
+                                                                    value=med.get('require_indication', 'yes') == 'yes',
+                                                                    help="Uncheck for medications like vitamins that don't need specific indications")
                                 new_indications = st.text_area(
                                     "Clinical Indications",
                                     value=med.get('indications', ''),
@@ -7034,16 +7061,23 @@ def medication_management():
                                         conn = sqlite3.connect(
                                             "clinic_database.db")
                                         cursor = conn.cursor()
+                                        # Check if require_indication column exists, if not add it
+                                        cursor.execute("PRAGMA table_info(preset_medications)")
+                                        columns = [column[1] for column in cursor.fetchall()]
+                                        if 'require_indication' not in columns:
+                                            cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                                        
                                         cursor.execute(
                                             '''
                                             UPDATE preset_medications 
-                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?
+                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?, require_indication = ?
                                             WHERE id = ?
                                         ''',
                                             (new_name.strip(),
                                              new_dosages.strip() if new_dosages
                                              else "", new_category, new_amount.strip() if new_amount else "", 
-                                             new_indications.strip() if new_indications else "", med['id']))
+                                             new_indications.strip() if new_indications else "", 
+                                             "yes" if new_require_indication else "no", med['id']))
                                         conn.commit()
                                         conn.close()
                                         st.session_state[edit_key] = False
@@ -7067,6 +7101,10 @@ def medication_management():
                                 st.caption(f"Amount: {med['amount']}")
                             if med.get('indications'):
                                 st.caption(f"Indications: {med['indications']}")
+                            # Show indication requirement status
+                            indication_required = med.get('require_indication', 'yes') == 'yes'
+                            if not indication_required:
+                                st.caption("🏷️ Indication not required")
                         with col2:
                             st.write(f"{med['category']}")
                         with col3:

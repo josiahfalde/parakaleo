@@ -204,6 +204,10 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added auto-save success indicator showing consultation is continuously saved
   - Fixed all remaining surgical_history and allergies variable references causing database errors
   - Cleaned up database queries to remove references to deleted fields while preserving schema compatibility
+  - Added "require indication" toggle for medications in admin management section
+  - Enhanced prescription validation to only require indications for medications marked as needing them
+  - Vitamins and similar medications can now be prescribed without requiring specific indications
+  - Updated medication display to show when indications are not required with visual indicator
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking
