@@ -3821,10 +3821,11 @@ def vital_signs_form(visit_id: str):
                                      max_value=500.0,
                                      value=None,
                                      step=0.1)
-            height = st.number_input("Height (inches)",
-                                         min_value=70,
-                                         max_value=100,
-                                         value=98)
+            oxygen_sat = st.number_input("Oxygen Saturation (%)",
+                                        min_value=50,
+                                        max_value=100,
+                                        value=98,
+                                        step=1)
 
         if st.form_submit_button("Save Vital Signs", type="primary"):
             conn = sqlite3.connect(db.db_name)
