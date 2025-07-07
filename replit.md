@@ -189,6 +189,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added medical history field to both name registration and triage new patient pages
   - Made medical history editable on doctor consultation page while preserving data from earlier forms
   - Updated database queries to remove height from vital signs and surgical history from consultation records
+- July 7, 2025. Enhanced page refresh state preservation for doctor consultations
+  - Fixed critical page refresh issue where consultation data was lost and user redirected to home page
+  - Enhanced URL parameter system to preserve active consultation state (visit_id, patient_id, patient_name)
+  - Updated page state persistence to restore doctor login state and consultation context from URL
+  - Modified auto-rerun system to use gentle updates for consultation pages instead of full page reload
+  - Added consultation_form page handling in main routing logic to maintain consultation state on refresh
+  - Ensured consultation forms maintain all patient data and form state when browser page is refreshed
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

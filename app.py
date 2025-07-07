@@ -23,6 +23,18 @@ def preserve_page_state():
         if 'role' in query_params:
             st.session_state.user_role = query_params['role']
         
+        # Restore doctor login state
+        if 'doctor' in query_params:
+            st.session_state.doctor_name = query_params['doctor']
+        
+        # Restore consultation state from URL parameters
+        if all(param in query_params for param in ['visit_id', 'patient_id', 'patient_name']):
+            st.session_state.active_consultation = {
+                'visit_id': query_params['visit_id'],
+                'patient_id': query_params['patient_id'],
+                'patient_name': query_params['patient_name']
+            }
+        
         # Restore location state from URL parameters
         if 'location_city' in query_params and 'location_country' in query_params:
             st.session_state.clinic_location = {
@@ -43,6 +55,17 @@ def update_page_url(page_name: str):
         st.query_params['location_city'] = location['city']
         st.query_params['location_country'] = location['country_name']
         st.query_params['location_code'] = location['country_code']
+    
+    # Preserve consultation state in URL for doctor consultation forms
+    if 'active_consultation' in st.session_state and st.session_state.active_consultation:
+        consultation = st.session_state.active_consultation
+        st.query_params['visit_id'] = consultation['visit_id']
+        st.query_params['patient_id'] = consultation['patient_id']
+        st.query_params['patient_name'] = consultation['patient_name']
+    
+    # Preserve doctor login state
+    if 'doctor_name' in st.session_state and st.session_state.doctor_name:
+        st.query_params['doctor'] = st.session_state.doctor_name
 
 def check_for_updates():
     """Check if there are pending updates and trigger rerun"""
@@ -59,17 +82,33 @@ def check_for_updates():
                 window.streamlitUpdatePending = false;
                 console.log("Triggering automatic page update...");
                 
-                // Multiple methods to trigger rerun
+                // Check if we're in a consultation or form page - preserve state better
+                const url = new URL(window.location);
+                const isConsultationPage = url.searchParams.get('page') === 'consultation_form' || 
+                                          url.searchParams.get('visit_id') || 
+                                          url.searchParams.get('patient_id');
+                
                 try {
-                    // Method 1: Query parameter change
-                    const url = new URL(window.location);
-                    url.searchParams.set('_t', Date.now());
-                    window.history.replaceState({}, '', url);
-                    
-                    // Method 2: Force reload
-                    window.location.reload();
+                    if (isConsultationPage) {
+                        // For consultation pages, use gentle update instead of full reload
+                        console.log("Consultation page detected - using gentle update");
+                        url.searchParams.set('_refresh', Date.now());
+                        window.history.replaceState({}, '', url);
+                        
+                        // Try to trigger Streamlit rerun without losing form data
+                        if (window.parent && window.parent.postMessage) {
+                            window.parent.postMessage({type: 'streamlit:componentReady'}, '*');
+                        }
+                    } else {
+                        // For other pages, use full reload
+                        console.log("Non-consultation page - using full reload");
+                        window.location.reload();
+                    }
                 } catch (e) {
                     console.log("Auto-rerun error:", e);
+                    // Fallback: gentle update only
+                    url.searchParams.set('_refresh', Date.now());
+                    window.history.replaceState({}, '', url);
                 }
             }
         }, 3000);
@@ -4327,6 +4366,15 @@ def consultation_interface():
 
 
 def consultation_form(visit_id: str, patient_id: str, patient_name: str):
+    # Store active consultation state and update URL for proper page refresh behavior
+    st.session_state.active_consultation = {
+        'visit_id': visit_id,
+        'patient_id': patient_id,
+        'patient_name': patient_name
+    }
+    st.session_state.page = 'consultation_form'
+    update_page_url('consultation_form')
+    
     # Back button to return to consultation interface
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -4334,6 +4382,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             st.session_state.page = 'doctor'
             if 'active_consultation' in st.session_state:
                 del st.session_state.active_consultation
+            # Clear consultation URL parameters
+            if 'visit_id' in st.query_params:
+                del st.query_params['visit_id']
+            if 'patient_id' in st.query_params:
+                del st.query_params['patient_id']
+            if 'patient_name' in st.query_params:
+                del st.query_params['patient_name']
             # Update doctor status back to available
             db = get_db_manager()
             db.update_doctor_status(st.session_state.doctor_name, "available")
