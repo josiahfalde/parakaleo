@@ -4807,7 +4807,12 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                 ordered_categories.append(cat)
 
         for category in ordered_categories:
-            with st.expander(f"{category} Medications"):
+            # Special case for Teaching Pamphlets - don't add "Medications" suffix
+            if category == "Teaching Pamphlets":
+                expander_title = category
+            else:
+                expander_title = f"{category} Medications"
+            with st.expander(expander_title):
                 category_meds = [
                     med for med in deduplicated_meds
                     if med['category'] == category
