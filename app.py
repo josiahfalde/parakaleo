@@ -5840,6 +5840,20 @@ def pending_prescriptions():
         st.info("👨‍👩‍👧‍👦 **Family Consultation Complete** - Processing entire family prescriptions")
         family_data = st.session_state.family_pharmacy_workflow
         
+        # Add exit button for families
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("🏠 Exit Family Visit", type="secondary", help="Complete family visit and return to main menu"):
+                # Clear family workflow and session state
+                del st.session_state.family_pharmacy_workflow
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("🏠 Family visit ended - returning to main menu")
+                st.session_state.page = 'role_selection'
+                time.sleep(1)
+                st.rerun()
+        
         # Process all family members' prescriptions together
         for member in family_data:
             st.markdown(f"**{member['patient_name']} (ID: {member['patient_id']})**")
@@ -5865,36 +5879,59 @@ def pending_prescriptions():
             else:
                 st.markdown("• No prescriptions for this family member")
         
-        if st.button("Complete All Family Prescriptions", key="complete_family_pharmacy"):
-            # Mark all family prescriptions as filled
-            conn = sqlite3.connect(db.db_name)
-            cursor = conn.cursor()
-            
-            for member in family_data:
-                cursor.execute('''
-                    UPDATE prescriptions 
-                    SET status = 'filled', filled_time = ? 
-                    WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
-                ''', (datetime.now().isoformat(), member['visit_id']))
+        col_complete, col_skip = st.columns(2)
+        with col_complete:
+            if st.button("✅ Complete All Family Prescriptions", key="complete_family_pharmacy", type="primary"):
+                # Mark all family prescriptions as filled
+                conn = sqlite3.connect(db.db_name)
+                cursor = conn.cursor()
                 
-                cursor.execute('''
-                    UPDATE visits 
-                    SET pharmacy_time = ?, status = 'completed' 
-                    WHERE visit_id = ?
-                ''', (datetime.now().isoformat(), member['visit_id']))
-            
-            conn.commit()
-            conn.close()
-            
-            # Broadcast family prescription completion to all devices
-            family_names = [member['patient_name'] for member in family_data]
-            broadcast_to_clients(f"prescriptions_filled:family:{','.join(family_names)}:complete")
-            
-            # Clear family workflow
-            del st.session_state.family_pharmacy_workflow
-            
-            st.success("✅ All family prescriptions completed!")
-            st.rerun()
+                for member in family_data:
+                    cursor.execute('''
+                        UPDATE prescriptions 
+                        SET status = 'filled', filled_time = ? 
+                        WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
+                    ''', (datetime.now().isoformat(), member['visit_id']))
+                    
+                    cursor.execute('''
+                        UPDATE visits 
+                        SET pharmacy_time = ?, status = 'completed' 
+                        WHERE visit_id = ?
+                    ''', (datetime.now().isoformat(), member['visit_id']))
+                
+                conn.commit()
+                conn.close()
+                
+                # Broadcast family prescription completion to all devices
+                family_names = [member['patient_name'] for member in family_data]
+                broadcast_to_clients(f"prescriptions_filled:family:{','.join(family_names)}:complete")
+                
+                # Clear family workflow and session state
+                del st.session_state.family_pharmacy_workflow
+                
+                # Clear any remaining pharmacy session state
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("✅ All family prescriptions completed!")
+                st.success("🏠 Family visit complete - returning to main menu")
+                
+                # Force navigation back to role selection
+                st.session_state.page = 'role_selection'
+                time.sleep(2)
+                st.rerun()
+        
+        with col_skip:
+            if st.button("⏭️ Skip Prescriptions & Exit", key="skip_family_pharmacy", type="secondary"):
+                # Just clear family workflow without filling prescriptions
+                del st.session_state.family_pharmacy_workflow
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("🏠 Family visit ended without filling prescriptions")
+                st.session_state.page = 'role_selection'
+                time.sleep(1)
+                st.rerun()
         
         return
 

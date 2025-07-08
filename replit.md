@@ -206,6 +206,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added comprehensive connection status monitoring to LAN Status page with real-time WebSocket status display
   - Included iPad connection troubleshooting guide and live connection monitor for clinic staff
   - Optimized for Pi hotspot network (ParakaleoMed-Clinic WiFi) ensuring reliable multi-iPad synchronization offline
+- July 8, 2025. Fixed family registration pharmacy workflow issue
+  - Resolved problem where parent/guardian would get stuck in pharmacy/lab area after family consultation
+  - Added proper exit mechanisms for families completing pharmacy workflow
+  - Implemented "Exit Family Visit" button for early departure from pharmacy/lab
+  - Added "Skip Prescriptions & Exit" option alongside complete prescriptions workflow
+  - Enhanced family completion flow to properly clear session state and return to role selection
+  - Fixed family pharmacy workflow to prevent infinite loops and ensure proper navigation out of pharmacy area
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed
