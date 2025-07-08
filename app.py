@@ -6925,7 +6925,7 @@ def admin_interface():
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Patient Management", "Doctor Management", "Medication Management",
-        "Location Management", "Reports", "Settings"
+        "Edit Locations", "Reports", "Settings"
     ])
 
     with tab1:
