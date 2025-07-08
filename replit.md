@@ -213,6 +213,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added "Skip Prescriptions & Exit" option alongside complete prescriptions workflow
   - Enhanced family completion flow to properly clear session state and return to role selection
   - Fixed family pharmacy workflow to prevent infinite loops and ensure proper navigation out of pharmacy area
+- July 8, 2025. Simplified doctor login interface
+  - Redesigned doctor login to show clickable doctor names with status (Available/With Patient)
+  - Removed lengthy doctor status display and selection dropdown interface
+  - Implemented one-click login by touching doctor name buttons
+  - Streamlined interface to reduce scrolling and improve efficiency for multiple doctors
+  - Maintained consultation restoration functionality for doctors returning to active patients
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

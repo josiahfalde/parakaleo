@@ -2539,106 +2539,105 @@ def main():
 
 
 def doctor_login():
-    """Doctor login interface with real-time status display"""
-    st.markdown("### Doctor Login")
+    """Simplified doctor login interface - click your name to login"""
+    st.markdown("### Select Your Name")
 
     db = get_db_manager()
     doctors = db.get_doctors()
 
     if not doctors:
-        st.warning(
-            "No doctors available. Please contact admin to add doctors.")
+        st.warning("No doctors available. Please contact admin to add doctors.")
         if st.button("Back to Role Selection"):
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
             st.rerun()
         return
 
-    # Display current doctor status in real-time
-    st.markdown("#### Current Doctor Status")
+    # Get current doctor status
     doctor_status = db.get_all_doctor_status()
+    status_dict = {status['doctor_name']: status for status in doctor_status}
 
-    if doctor_status:
-        for status in doctor_status:
-            status_color = "🟢" if status[
-                'status'] == 'available' else "🟡" if status[
-                    'status'] == 'with_patient' else "🔴"
-            patient_info = f" - {status['current_patient_name']} ({status['current_patient_id']})" if status[
-                'current_patient_id'] else ""
-            st.write(
-                f"{status_color} **{status['doctor_name']}** - {status['status'].replace('_', ' ').title()}{patient_info}"
-            )
-
-    st.markdown("---")
-
-    # Doctor selection
-    st.markdown("#### Select Your Name")
-    doctor_names = [doc['name'] for doc in doctors]
-    selected_doctor = st.selectbox("Choose your name:", [""] + doctor_names)
-
-    if selected_doctor and st.button("Login as Doctor", type="primary"):
-        try:
-            st.session_state.doctor_name = selected_doctor
-            
-            # Check if doctor was in middle of consultation
-            conn = sqlite3.connect("clinic_database.db")
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT current_patient_id, current_patient_name, status
-                FROM doctor_status 
-                WHERE doctor_name = ?
-            ''', (selected_doctor,))
-            doctor_status = cursor.fetchone()
-            conn.close()
-            
-            if doctor_status and doctor_status[0] and doctor_status[2] == 'with_patient':
-                # Doctor was with a patient - restore consultation
-                st.session_state.current_consultation = {
-                    'patient_id': doctor_status[0],
-                    'patient_name': doctor_status[1]
-                }
-                # Don't set active_consultation to boolean - it should only be a dict or None
-                st.success(f"Logged in as {selected_doctor} - Returning to consultation with {doctor_status[1]}")
-            else:
-                # Update doctor status to available
-                db.update_doctor_status(selected_doctor, "available")
-                st.success(f"Logged in as {selected_doctor}")
-            
-            st.rerun()
-        except Exception as e:
-            st.error(f"Login error: {str(e)}")
-            # Try to fix the issue by ensuring the doctor exists in status table
+    st.markdown("Choose your name:")
+    
+    # Create clickable doctor buttons with status
+    for doctor in doctors:
+        doctor_name = doctor['name']
+        status_info = status_dict.get(doctor_name, {'status': 'available'})
+        
+        # Determine status display
+        if status_info['status'] == 'available':
+            status_text = "Available"
+            button_type = "secondary"
+        elif status_info['status'] == 'with_patient':
+            status_text = f"With Patient"
+            button_type = "primary"
+        else:
+            status_text = "Busy"
+            button_type = "secondary"
+        
+        # Create button for each doctor
+        if st.button(f"Dr. {doctor_name} - {status_text}", 
+                    key=f"login_{doctor_name}", 
+                    type=button_type, 
+                    use_container_width=True):
+            # Login logic for selected doctor
             try:
-                # Check if doctor exists in the doctors table first
-                doctors_list = db.get_doctors()
-                doctor_exists = any(doc['name'] == selected_doctor
-                                    for doc in doctors_list)
-
-                if doctor_exists:
-                    # Force create status entry
-                    conn = sqlite3.connect("clinic_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        'DELETE FROM doctor_status WHERE doctor_name = ?',
-                        (selected_doctor, ))
-                    cursor.execute(
-                        '''
-                        INSERT INTO doctor_status (doctor_name, status, last_updated)
-                        VALUES (?, ?, ?)
-                    ''', (selected_doctor, "available",
-                          datetime.now().isoformat()))
-                    conn.commit()
-                    conn.close()
-
-                    st.session_state.doctor_name = selected_doctor
-                    st.success(f"Logged in as {selected_doctor}")
-                    st.rerun()
+                st.session_state.doctor_name = doctor_name
+                
+                # Check if doctor was in middle of consultation
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT current_patient_id, current_patient_name, status
+                    FROM doctor_status 
+                    WHERE doctor_name = ?
+                ''', (doctor_name,))
+                doctor_status = cursor.fetchone()
+                conn.close()
+                
+                if doctor_status and doctor_status[0] and doctor_status[2] == 'with_patient':
+                    # Doctor was with a patient - restore consultation
+                    st.session_state.current_consultation = {
+                        'patient_id': doctor_status[0],
+                        'patient_name': doctor_status[1]
+                    }
+                    st.success(f"Logged in as Dr. {doctor_name} - Returning to consultation with {doctor_status[1]}")
                 else:
-                    st.error(f"Doctor {selected_doctor} not found in system")
-            except Exception as e2:
-                st.error(f"Could not fix login issue: {str(e2)}")
+                    # Update doctor status to available
+                    db.update_doctor_status(doctor_name, "available")
+                    st.success(f"Logged in as Dr. {doctor_name}")
+                
+                st.rerun()
+            except Exception as e:
+                st.error(f"Login error: {str(e)}")
+                # Try to fix the issue by ensuring the doctor exists in status table
+                try:
+                    # Check if doctor exists in the doctors table first
+                    doctors_list = db.get_doctors()
+                    doctor_exists = any(doc['name'] == doctor_name for doc in doctors_list)
 
-    if st.button("Back to Role Selection"):
+                    if doctor_exists:
+                        # Force create status entry
+                        conn = sqlite3.connect("clinic_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO doctor_status 
+                            (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                            VALUES (?, 'available', '', '', ?)
+                        ''', (doctor_name, datetime.now().isoformat()))
+                        conn.commit()
+                        conn.close()
+                        st.session_state.doctor_name = doctor_name
+                        st.success(f"Logged in as Dr. {doctor_name} (status fixed)")
+                        st.rerun()
+                    else:
+                        st.error(f"Doctor {doctor_name} not found in system")
+                except Exception as fix_error:
+                    st.error(f"Could not fix login issue: {str(fix_error)}")
+    
+    # Back button at bottom
+    st.markdown("---")
+    if st.button("Back to Role Selection", use_container_width=True):
         if 'user_role' in st.session_state:
             del st.session_state.user_role
         st.rerun()
