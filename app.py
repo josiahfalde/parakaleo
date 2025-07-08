@@ -2816,7 +2816,7 @@ def location_setup():
             st.info("No locations found. Please add a new location below.")
 
     with tab2:
-        st.markdown("### Edit Existing Locations")
+        st.markdown('<p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Manage Locations</p>', unsafe_allow_html=True)
         
         # Add Location button at the top
         add_key = "show_add_location_form"
@@ -2828,7 +2828,7 @@ def location_setup():
         # Add location form (shown when button clicked)
         if st.session_state.get(add_key, False):
             with st.form("add_new_location_setup"):
-                st.markdown("**Add New Location:**")
+                st.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 8px;">Add New Location</p>', unsafe_allow_html=True)
                 col1, col2 = st.columns(2)
                 with col1:
                     add_country = st.selectbox("Country",
@@ -2870,7 +2870,7 @@ def location_setup():
         
         if locations:
             for location in locations:
-                with st.expander(f"Edit: {location['city']}, {location['country_name']}", expanded=False):
+                with st.expander(f"{location['city']}, {location['country_name']}", expanded=False):
                     edit_key = f"edit_setup_{location['id']}"
                     
                     if st.session_state.get(edit_key, False):
@@ -2915,14 +2915,14 @@ def location_setup():
                         # Display mode with edit button
                         col1, col2 = st.columns([3, 1])
                         with col1:
-                            st.write(f"**Country:** {location['country_name']} ({location['country_code']})")
-                            st.write(f"**City:** {location['city']}")
+                            st.markdown(f'<p style="font-size: 14px; margin: 2px 0;"><strong>Country:</strong> {location["country_name"]} ({location["country_code"]})</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size: 14px; margin: 2px 0;"><strong>City:</strong> {location["city"]}</p>', unsafe_allow_html=True)
                         with col2:
                             if st.button("✏️ Edit", key=f"edit_setup_btn_{location['id']}"):
                                 st.session_state[edit_key] = True
                                 st.rerun()
         else:
-            st.info("No locations found. Add your first location using the button above.")
+            st.markdown('<p style="font-size: 14px; color: #666; text-align: center; padding: 20px;">No locations found. Add your first location using the button above.</p>', unsafe_allow_html=True)
 
 
 def family_vital_signs_collection():
