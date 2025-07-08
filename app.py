@@ -2666,12 +2666,7 @@ def doctor_login():
                 except Exception as fix_error:
                     st.error(f"Could not fix login issue: {str(fix_error)}")
     
-    # Back button at bottom
-    st.markdown("---")
-    if st.button("Back to Role Selection", use_container_width=True):
-        if 'user_role' in st.session_state:
-            del st.session_state.user_role
-        st.rerun()
+
 
 
 def show_lan_status_page():
