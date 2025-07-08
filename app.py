@@ -2872,8 +2872,61 @@ def location_setup():
                             if st.button("✏️ Edit", key=f"edit_setup_btn_{location['id']}"):
                                 st.session_state[edit_key] = True
                                 st.rerun()
+        
+        # Add Location section
+        st.markdown("---")
+        st.markdown("### Add New Location")
+        
+        # Check if add form should be shown
+        add_key = "show_add_location_form"
+        if st.session_state.get(add_key, False):
+            # Add location form
+            with st.form("add_new_location_setup"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    add_country = st.selectbox("Country",
+                                             ["Dominican Republic", "Haiti"],
+                                             key="add_country_setup")
+                    add_country_code = "DR" if add_country == "Dominican Republic" else "H"
+                with col2:
+                    add_city = st.text_input("City/Town",
+                                           placeholder="Enter clinic city",
+                                           key="add_city_setup")
+                
+                col_add, col_cancel_add = st.columns(2)
+                with col_add:
+                    if st.form_submit_button("Add Location", type="primary"):
+                        if add_city.strip():
+                            location_id = db.add_location(add_country_code, add_country, add_city.strip())
+                            st.success(f"Location '{add_city.strip()}, {add_country}' added successfully!")
+                            
+                            # Auto-select the new location
+                            new_location = {
+                                'id': location_id,
+                                'country_code': add_country_code,
+                                'country_name': add_country,
+                                'city': add_city.strip(),
+                                'created_date': datetime.now().isoformat()
+                            }
+                            st.session_state.clinic_location = new_location
+                            st.session_state[add_key] = False
+                            update_page_url("role_selection")
+                            st.rerun()
+                        else:
+                            st.error("Please enter a city name.")
+                
+                with col_cancel_add:
+                    if st.form_submit_button("Cancel"):
+                        st.session_state[add_key] = False
+                        st.rerun()
         else:
-            st.info("No locations found. Please contact administrator to set up locations.")
+            # Show add location button
+            if st.button("➕ Add Location", type="secondary"):
+                st.session_state[add_key] = True
+                st.rerun()
+            
+            if not locations:
+                st.info("No locations found. Add your first location above.")
 
 
 def family_vital_signs_collection():
