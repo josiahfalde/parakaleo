@@ -3790,7 +3790,12 @@ def new_patient_form():
                                            max_value=10,
                                            value=1)
 
+            # Pre-populate children data structure to ensure proper form handling
             children_data = []
+            child_names = []
+            child_ages = []
+            child_genders = []
+            
             if num_children > 0:
                 for i in range(num_children):
                     st.markdown(f"**Child {i+1}**")
@@ -3809,11 +3814,10 @@ def new_patient_form():
                     with col2:
                         st.write("")  # Placeholder for layout
 
-                    children_data.append({
-                        'name': child_name,
-                        'age': child_age,
-                        'gender': child_gender
-                    })
+                    # Store each child's data in separate lists
+                    child_names.append(child_name)
+                    child_ages.append(child_age)
+                    child_genders.append(child_gender)
 
             st.markdown("---")
             family_submitted = st.form_submit_button("Create Family File",
@@ -3822,12 +3826,27 @@ def new_patient_form():
 
             if family_submitted:
                 if family_name.strip() and parent_name.strip():
+                    # Build children data from form inputs
+                    children_data = []
+                    for i in range(num_children):
+                        if i < len(child_names) and child_names[i]:
+                            children_data.append({
+                                'name': child_names[i],
+                                'age': child_ages[i] if i < len(child_ages) else None,
+                                'gender': child_genders[i] if i < len(child_genders) else ""
+                            })
+                    
                     # Validate children data
                     valid_children = [
                         child for child in children_data
-                        if child['name'].strip()
+                        if child['name'] and child['name'].strip()
                     ]
 
+                    # Debug information
+                    st.write(f"**Debug Info:** Total children entered: {num_children}, Valid children: {len(valid_children)}")
+                    for i, child in enumerate(valid_children):
+                        st.write(f"Child {i+1}: {child['name']}, Age: {child['age']}, Gender: {child['gender']}")
+                    
                     if len(valid_children) > 0 or num_children == 0:
                         location_code = st.session_state.clinic_location[
                             'country_code']
@@ -3857,25 +3876,26 @@ def new_patient_form():
                             'relationship': 'parent'
                         }]
 
-                        for child in valid_children:
-                            child_id = db.add_family_member(
-                                family_id=family_id,
-                                location_code=location_code,
-                                relationship="child",
-                                parent_id=parent_id,
-                                name=child['name'].strip(),
-                                age=child['age'],
-                                gender=child['gender']
-                                if child['gender'] else None)
+                        for i, child in enumerate(valid_children):
+                            try:
+                                child_id = db.add_family_member(
+                                    family_id=family_id,
+                                    location_code=location_code,
+                                    relationship="child",
+                                    parent_id=parent_id,
+                                    name=child['name'].strip(),
+                                    age=child['age'],
+                                    gender=child['gender'] if child['gender'] else None)
 
-                            family_members.append({
-                                'patient_id':
-                                child_id,
-                                'patient_name':
-                                child['name'].strip(),
-                                'relationship':
-                                'child'
-                            })
+                                family_members.append({
+                                    'patient_id': child_id,
+                                    'patient_name': child['name'].strip(),
+                                    'relationship': 'child'
+                                })
+                                st.write(f"✅ Child {i+1} ({child['name']}) added successfully with ID: {child_id}")
+                            except Exception as e:
+                                st.error(f"Error adding child {i+1} ({child['name']}): {str(e)}")
+                                continue
 
                         # Create visits for all family members
                         family_visits = []
@@ -3912,8 +3932,12 @@ def new_patient_form():
 
                     else:
                         st.error(
-                            "Please provide at least one child's name, or set number of children to 0."
+                            f"Please provide at least one child's name, or set number of children to 0. Currently: {num_children} children expected, {len(valid_children)} valid children found."
                         )
+                        # Show which children are missing names
+                        for i, child in enumerate(children_data):
+                            if not child['name'] or not child['name'].strip():
+                                st.warning(f"Child {i+1}: Missing name")
                 else:
                     st.error(
                         "Please provide family name and parent/guardian name.")
