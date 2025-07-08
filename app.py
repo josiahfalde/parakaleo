@@ -7043,42 +7043,57 @@ def location_management():
     db = get_db_manager()
     locations = db.get_locations()
     
-    # Add new location
-    with st.expander("Add New Location"):
-        with st.form("new_location"):
-            col1, col2 = st.columns(2)
-            with col1:
-                country_code = st.text_input("Country Code", 
-                                           placeholder="e.g., DR, H", 
-                                           max_chars=5,
-                                           help="Short code for patient ID prefix")
-                country_name = st.text_input("Country Name", 
-                                           placeholder="e.g., Dominican Republic, Haiti")
-            with col2:
-                city = st.text_input("City/Location", 
-                                   placeholder="e.g., Santiago, Port-au-Prince")
-            
-            if st.form_submit_button("Add Location"):
-                if country_code and country_name and city:
-                    # Check if location already exists
-                    existing = any(
-                        loc['country_code'] == country_code.upper() and 
-                        loc['city'].lower() == city.lower() 
-                        for loc in locations
-                    )
-                    
-                    if not existing:
-                        location_id = db.add_location(country_code.upper(), country_name, city)
-                        st.success(f"Location added: {country_name} - {city}")
-                        st.rerun()
-                    else:
-                        st.error("Location already exists!")
-                else:
-                    st.error("Please fill in all fields")
-    
-    # Display existing locations
+    # Check for duplicate locations
     if locations:
-        st.markdown("### Existing Locations")
+        # Group locations by country code and city to find duplicates
+        location_groups = {}
+        for loc in locations:
+            key = (loc['country_code'].upper(), loc['city'].lower())
+            if key not in location_groups:
+                location_groups[key] = []
+            location_groups[key].append(loc)
+        
+        # Find duplicates
+        duplicates = {k: v for k, v in location_groups.items() if len(v) > 1}
+        
+        if duplicates:
+            st.warning(f"⚠️ Found {len(duplicates)} duplicate location groups")
+            with st.expander("🔗 Merge Duplicate Locations", expanded=True):
+                for (country_code, city), duplicate_locs in duplicates.items():
+                    st.markdown(f"**Duplicates for {country_code} - {city.title()}:**")
+                    
+                    # Show all duplicates
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        for i, dup_loc in enumerate(duplicate_locs):
+                            st.write(f"  {i+1}. {dup_loc['country_name']} - {dup_loc['city']} (ID: {dup_loc['id']})")
+                    
+                    with col2:
+                        merge_key = f"merge_{country_code}_{city}"
+                        if st.button(f"Merge All", key=merge_key, type="primary"):
+                            # Keep the first location, delete the rest
+                            primary_location = duplicate_locs[0]
+                            locations_to_delete = duplicate_locs[1:]
+                            
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            
+                            # Delete duplicate locations
+                            for dup_loc in locations_to_delete:
+                                cursor.execute('DELETE FROM locations WHERE id = ?', (dup_loc['id'],))
+                            
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"Merged {len(locations_to_delete)} duplicate locations into {primary_location['country_name']} - {primary_location['city']}")
+                            st.rerun()
+                    
+                    st.markdown("---")
+    
+    # Display existing locations for editing
+    if locations:
+        st.markdown("### Edit Locations")
+        st.info("💡 You can edit location names to fix typos or update information. Use the merge feature above to combine duplicate locations.")
         for location in locations:
             with st.expander(f"{location['country_name']} - {location['city']}", expanded=True):
                 col1, col2, col3 = st.columns([2, 1, 1])
@@ -7091,7 +7106,7 @@ def location_management():
                 with col2:
                     # Edit button
                     edit_key = f"edit_location_{location['id']}"
-                    if st.button("✏️ Edit", key=f"edit_btn_{location['id']}"):
+                    if st.button("✏️ Edit Name", key=f"edit_btn_{location['id']}", help="Edit location names and details"):
                         st.session_state[edit_key] = True
                         st.rerun()
                 
@@ -7170,7 +7185,7 @@ def location_management():
                             st.session_state[delete_key] = False
                             st.rerun()
     else:
-        st.info("No locations configured yet.")
+        st.info("No locations configured yet. Locations are typically set up during initial clinic setup.")
 
 
 def medication_management():

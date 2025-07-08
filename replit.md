@@ -215,7 +215,7 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added vital signs display to consultation form for doctors to review during patient assessment
   - Enhanced doctor interface with prominent patient vital signs metrics display
   - Added "Teaching Pamphlets" medication category with Blood Pressure and Diabetes handouts
-  - Created Location Management admin interface with full edit/delete capabilities for clinic locations
+  - Created Location Management admin interface with edit capabilities and duplicate location merging functionality
   - Enhanced medication categorization system to support educational materials and patient resources
   - Implemented custom category ordering in prescription interface with Teaching Pamphlets positioned after Vitamin Medications
   - Organized prescription workflow with logical medication category progression for improved clinical efficiency
