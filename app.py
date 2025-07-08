@@ -2660,7 +2660,7 @@ def location_setup():
     # Get existing locations
     locations = db.get_locations()
 
-    tab1, tab2 = st.tabs(["Select Location", "Add New Location"])
+    tab1, tab2 = st.tabs(["Select Location", "Edit Locations"])
 
     with tab1:
         if locations:
@@ -2680,36 +2680,64 @@ def location_setup():
             st.info("No locations found. Please add a new location below.")
 
     with tab2:
-        st.markdown("### Add New Clinic Location")
-        with st.form("new_location"):
-            col1, col2 = st.columns(2)
-            with col1:
-                country = st.selectbox("Country",
-                                       ["Dominican Republic", "Haiti"])
-                country_code = "DR" if country == "Dominican Republic" else "H"
-            with col2:
-                city = st.text_input("City/Town",
-                                     placeholder="Enter clinic city")
-
-            if st.form_submit_button("Add Location", type="primary"):
-                if city.strip():
-                    location_id = db.add_location(country_code, country,
-                                                  city.strip())
-                    st.success(f"Location added successfully!")
-
-                    # Auto-select the new location
-                    new_location = {
-                        'id': location_id,
-                        'country_code': country_code,
-                        'country_name': country,
-                        'city': city.strip(),
-                        'created_date': datetime.now().isoformat()
-                    }
-                    st.session_state.clinic_location = new_location
-                    update_page_url("role_selection")
-                    st.rerun()
-                else:
-                    st.error("Please enter a city name.")
+        st.markdown("### Edit Existing Locations")
+        if locations:
+            st.info("💡 Edit location names to fix typos or update information.")
+            
+            for location in locations:
+                with st.expander(f"Edit: {location['city']}, {location['country_name']}", expanded=False):
+                    edit_key = f"edit_setup_{location['id']}"
+                    
+                    if st.session_state.get(edit_key, False):
+                        # Edit form
+                        with st.form(f"edit_location_setup_{location['id']}"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                new_country = st.selectbox("Country",
+                                                         ["Dominican Republic", "Haiti"],
+                                                         index=0 if location['country_name'] == "Dominican Republic" else 1)
+                                new_country_code = "DR" if new_country == "Dominican Republic" else "H"
+                            with col2:
+                                new_city = st.text_input("City/Town",
+                                                        value=location['city'])
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("Save Changes", type="primary"):
+                                    if new_city.strip():
+                                        # Update location in database
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE locations 
+                                            SET country_code = ?, country_name = ?, city = ?
+                                            WHERE id = ?
+                                        ''', (new_country_code, new_country, new_city.strip(), location['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("Location updated successfully!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Please enter a city name.")
+                            
+                            with col_cancel:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode with edit button
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"**Country:** {location['country_name']} ({location['country_code']})")
+                            st.write(f"**City:** {location['city']}")
+                        with col2:
+                            if st.button("✏️ Edit", key=f"edit_setup_btn_{location['id']}"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
+        else:
+            st.info("No locations found. Please contact administrator to set up locations.")
 
 
 def family_vital_signs_collection():
@@ -7106,7 +7134,7 @@ def location_management():
                 with col2:
                     # Edit button
                     edit_key = f"edit_location_{location['id']}"
-                    if st.button("✏️ Edit Name", key=f"edit_btn_{location['id']}", help="Edit location names and details"):
+                    if st.button("✏️ Edit Name", key=f"admin_edit_btn_{location['id']}", help="Edit location names and details"):
                         st.session_state[edit_key] = True
                         st.rerun()
                 
