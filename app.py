@@ -2559,27 +2559,58 @@ def doctor_login():
 
     st.markdown("Choose your name:")
     
-    # Create clickable doctor buttons with status
+    # Add CSS to make buttons look like plain text
+    st.markdown("""
+    <style>
+    .stButton > button {
+        background: transparent !important;
+        border: none !important;
+        color: inherit !important;
+        text-align: left !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        font-weight: normal !important;
+        text-decoration: none !important;
+    }
+    .stButton > button:hover {
+        background: transparent !important;
+        border: none !important;
+        text-decoration: underline !important;
+        color: #0066cc !important;
+    }
+    .stButton > button:active {
+        background: transparent !important;
+        border: none !important;
+    }
+    .stButton > button:focus {
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Create clickable doctor text with status
     for doctor in doctors:
         doctor_name = doctor['name']
         status_info = status_dict.get(doctor_name, {'status': 'available'})
         
-        # Determine status display
+        # Determine status display and color
         if status_info['status'] == 'available':
             status_text = "Available"
-            button_type = "secondary"
+            status_color = "🟢"
         elif status_info['status'] == 'with_patient':
             status_text = f"With Patient"
-            button_type = "primary"
+            status_color = "🟡"
         else:
             status_text = "Busy"
-            button_type = "secondary"
+            status_color = "🔴"
         
-        # Create button for each doctor
-        if st.button(f"Dr. {doctor_name} - {status_text}", 
-                    key=f"login_{doctor_name}", 
-                    type=button_type, 
-                    use_container_width=True):
+        # Display doctor status as clickable text that looks like plain text
+        doctor_text = f"{status_color} Dr. {doctor_name} - {status_text}"
+        
+        if st.button(doctor_text, key=f"login_{doctor_name}"):
             # Login logic for selected doctor
             try:
                 st.session_state.doctor_name = doctor_name
