@@ -2608,7 +2608,7 @@ def doctor_login():
             status_color = "🔴"
         
         # Display doctor status as clickable text that looks like plain text
-        doctor_text = f"{status_color} Dr. {doctor_name} - {status_text}"
+        doctor_text = f"{status_color} {doctor_name} - {status_text}"
         
         if st.button(doctor_text, key=f"login_{doctor_name}"):
             # Login logic for selected doctor
