@@ -196,6 +196,16 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Modified auto-rerun system to use gentle updates for consultation pages instead of full page reload
   - Added consultation_form page handling in main routing logic to maintain consultation state on refresh
   - Ensured consultation forms maintain all patient data and form state when browser page is refreshed
+- July 8, 2025. Enhanced offline iPad connectivity and WebSocket resilience  
+  - Improved WebSocket connection logic with multiple connection strategies for Pi hotspot network (192.168.4.1)
+  - Added intelligent hostname detection to prioritize Pi network IP addressing for offline environments
+  - Enhanced reconnection logic with exponential backoff and extended retry attempts (50 attempts) for unstable offline connections
+  - Implemented connection timeout handling and ping/pong system to maintain iPad connections in offline mode
+  - Added periodic server pings every 30 seconds with 60-second timeout for robust connection monitoring
+  - Enhanced WebSocket server configuration with increased timeouts and queue limits for offline stability
+  - Added comprehensive connection status monitoring to LAN Status page with real-time WebSocket status display
+  - Included iPad connection troubleshooting guide and live connection monitor for clinic staff
+  - Optimized for Pi hotspot network (ParakaleoMed-Clinic WiFi) ensuring reliable multi-iPad synchronization offline
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

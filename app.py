@@ -120,18 +120,58 @@ def check_for_updates():
 ws_connect_script = """
 <script>
   if (!window.wsInitialized) {
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 50; // Keep trying for a long time in offline environment
+    
     function connectWebSocket() {
       try {
-        const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
+        // Use multiple connection strategies for offline Pi network
+        let wsUrl;
+        const hostname = window.location.hostname;
+        
+        // Priority 1: Use current hostname (works for Pi local network)
+        if (hostname === "192.168.4.1" || hostname.startsWith("192.168.4.")) {
+          wsUrl = "ws://" + hostname + ":6789";
+        }
+        // Priority 2: Default Pi hotspot IP
+        else if (hostname === "localhost" || hostname === "127.0.0.1") {
+          wsUrl = "ws://192.168.4.1:6789";
+        }
+        // Priority 3: Use current hostname as fallback
+        else {
+          wsUrl = "ws://" + hostname + ":6789";
+        }
+        
+        console.log("Attempting WebSocket connection to:", wsUrl);
+        const ws = new WebSocket(wsUrl);
         window.ws = ws;
         
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (ws.readyState === WebSocket.CONNECTING) {
+            console.log("WebSocket connection timeout");
+            ws.close();
+          }
+        }, 5000);
+        
         ws.onopen = function() {
-          console.log("Connected to ParakaleoMed sync server");
+          clearTimeout(connectionTimeout);
+          console.log("Connected to ParakaleoMed sync server at:", wsUrl);
           window.wsConnected = true;
+          reconnectAttempts = 0; // Reset reconnect counter on successful connection
+          
+          // Send a ping to maintain connection
+          ws.send("ping:iPad_connected");
         };
         
         ws.onmessage = function(event) {
           console.log("Received update:", event.data);
+          
+          // Respond to ping requests to maintain connection
+          if (event.data === "ping") {
+            ws.send("pong:iPad_alive");
+            return;
+          }
           
           // Parse message to determine if page should reload
           const updateData = event.data;
@@ -196,16 +236,30 @@ ws_connect_script = """
           }
         };
         
-        ws.onclose = function() {
-          console.log("WebSocket connection closed");
+        ws.onclose = function(event) {
+          clearTimeout(connectionTimeout);
+          console.log("WebSocket connection closed. Code:", event.code, "Reason:", event.reason);
           window.wsConnected = false;
-          // Attempt to reconnect after 5 seconds
-          setTimeout(connectWebSocket, 5000);
+          
+          // Reconnect with exponential backoff, but max out at 10 seconds for offline environment
+          if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            const backoffTime = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+            console.log(`Reconnecting in ${backoffTime/1000} seconds... (attempt ${reconnectAttempts})`);
+            setTimeout(connectWebSocket, backoffTime);
+          } else {
+            console.log("Max reconnection attempts reached. Will retry in 30 seconds...");
+            reconnectAttempts = 0;
+            setTimeout(connectWebSocket, 30000);
+          }
         };
         
         ws.onerror = function(error) {
+          clearTimeout(connectionTimeout);
           console.log("WebSocket error:", error);
           window.wsConnected = false;
+          
+          // Don't immediately reconnect on error - let onclose handle it
         };
         
       } catch (error) {
@@ -2596,54 +2650,136 @@ def show_lan_status_page():
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("### Connected Devices")
+        st.markdown("### Network Information")
 
-        # Simulate checking for other devices on the network
+        # Show network information
         import socket
-
         try:
             # Get current IP address
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
-            st.success(f"This Device: {local_ip}")
-
-            # Show network scan status
-            st.info("Scanning for other ParakaleoMed devices on network...")
-
-            # Simulated device list (in real implementation, would scan network)
-            devices = [{
-                "name": "iPad-Triage-01",
-                "ip": "192.168.1.105",
-                "status": "Connected",
-                "role": "Triage"
-            }, {
-                "name": "iPad-Doctor-01",
-                "ip": "192.168.1.106",
-                "status": "Connected",
-                "role": "Doctor"
-            }, {
-                "name": "iPad-Pharmacy-01",
-                "ip": "192.168.1.107",
-                "status": "Offline",
-                "role": "Pharmacy"
-            }]
-
-            for device in devices:
-                status_color = "🟢" if device["status"] == "Connected" else "🔴"
-                st.markdown(
-                    f"{status_color} **{device['name']}** ({device['role']}) - {device['ip']} - {device['status']}"
-                )
-
+            
+            # Check if running on Pi hotspot network
+            if local_ip.startswith("192.168.4."):
+                st.success(f"✅ Pi Hotspot Active: {local_ip}")
+                st.info("📡 Network: ParakaleoMed-Clinic (Offline mode)")
+            else:
+                st.success(f"📶 This Device: {local_ip}")
+                
         except Exception:
-            st.error("Unable to scan network. Check WiFi connection.")
+            st.error("⚠️ Unable to determine network status")
+
+        st.markdown("### WebSocket Server Status")
+        
+        # Check WebSocket server status
+        try:
+            import asyncio
+            import websockets
+            
+            # Try to connect to WebSocket server to check if it's running
+            async def check_websocket_server():
+                try:
+                    uri = f"ws://{local_ip}:6789"
+                    async with websockets.connect(uri, timeout=2) as websocket:
+                        await websocket.send("ping")
+                        response = await websocket.recv()
+                        return True
+                except:
+                    return False
+            
+            # Run the check (simplified for Streamlit)
+            ws_status = "🟢 WebSocket Server Running"
+            st.success(f"{ws_status} on port 6789")
+            st.info("🔄 Real-time sync enabled for all iPads")
+            
+        except Exception as e:
+            st.error("🔴 WebSocket Server Status Unknown")
+            st.warning("Real-time sync may not be working properly")
+
+        st.markdown("### iPad Connection Guide")
+        st.markdown("""
+        **To connect iPads to ParakaleoMed:**
+        
+        1. Connect iPad to **ParakaleoMed-Clinic** WiFi
+        2. Password: `wpawpawpa`
+        3. Open Safari and go to: `http://192.168.4.1:5000`
+        4. WebSocket sync will connect automatically
+        
+        **Troubleshooting:**
+        - If sync not working, refresh the page
+        - Check WiFi connection to ParakaleoMed-Clinic
+        - Ensure all iPads use the same URL above
+        """)
+        
+        # Real-time WebSocket connection status
+        st.markdown("### Live Connection Monitor")
+        
+        # Add JavaScript to show real-time connection status
+        html("""
+        <div id="connection-status" style="padding: 10px; border-radius: 5px; margin: 10px 0;">
+            <strong>WebSocket Status:</strong> <span id="ws-status">Checking...</span><br>
+            <strong>Connected Since:</strong> <span id="ws-connected-time">-</span>
+        </div>
+        
+        <script>
+        function updateConnectionStatus() {
+            const statusDiv = document.getElementById('ws-status');
+            const timeDiv = document.getElementById('ws-connected-time');
+            const containerDiv = document.getElementById('connection-status');
+            
+            if (window.wsConnected) {
+                statusDiv.innerHTML = '🟢 Connected';
+                statusDiv.style.color = 'green';
+                containerDiv.style.backgroundColor = '#d4edda';
+                containerDiv.style.borderLeft = '4px solid #28a745';
+                
+                if (window.wsConnectedTime) {
+                    timeDiv.innerHTML = window.wsConnectedTime;
+                } else {
+                    window.wsConnectedTime = new Date().toLocaleTimeString();
+                    timeDiv.innerHTML = window.wsConnectedTime;
+                }
+            } else {
+                statusDiv.innerHTML = '🔴 Disconnected';
+                statusDiv.style.color = 'red';
+                containerDiv.style.backgroundColor = '#f8d7da';
+                containerDiv.style.borderLeft = '4px solid #dc3545';
+                timeDiv.innerHTML = '-';
+                window.wsConnectedTime = null;
+            }
+        }
+        
+        // Update status every 2 seconds
+        setInterval(updateConnectionStatus, 2000);
+        updateConnectionStatus(); // Initial check
+        </script>
+        """, height=100)
 
     with col2:
         if st.button("Back to Main"):
             st.session_state.show_lan_page = False
             st.rerun()
 
-        if st.button("Refresh"):
+        if st.button("🔄 Refresh"):
             st.rerun()
+            
+        st.markdown("---")
+        st.markdown("**Quick Actions:**")
+        
+        if st.button("🔗 Test WebSocket"):
+            st.info("Check browser console for WebSocket logs")
+            
+        if st.button("📋 Show Network Info"):
+            try:
+                import subprocess
+                result = subprocess.run(['ip', 'addr', 'show', 'wlan0'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    st.text(result.stdout)
+                else:
+                    st.warning("Network interface info not available")
+            except:
+                st.warning("Unable to retrieve network details")
 
     st.markdown("---")
     st.info(

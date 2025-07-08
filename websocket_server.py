@@ -23,11 +23,39 @@ async def handle_client(websocket):
     client_ip = websocket.remote_address[0] if websocket.remote_address else "unknown"
     logger.info(f"New client connected from {client_ip}. Total clients: {len(connected_clients)}")
     
+    # Send periodic pings to maintain connection
+    async def send_periodic_ping():
+        try:
+            while websocket in connected_clients:
+                await asyncio.sleep(30)  # Ping every 30 seconds
+                if websocket in connected_clients:
+                    try:
+                        await websocket.send("ping")
+                        logger.debug(f"Sent ping to {client_ip}")
+                    except:
+                        break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug(f"Ping task error for {client_ip}: {e}")
+    
+    # Start ping task
+    ping_task = asyncio.create_task(send_periodic_ping())
+    
     try:
         # Send welcome message
         await websocket.send(f"welcome:ParakaleoMed_sync_server")
         
         async for message in websocket:
+            # Handle ping/pong messages
+            if message.startswith("ping:") or message == "ping":
+                await websocket.send("pong")
+                logger.debug(f"Responded to ping from {client_ip}")
+                continue
+            elif message.startswith("pong:") or message == "pong":
+                logger.debug(f"Received pong from {client_ip}")
+                continue
+            
             # Broadcast message to all other connected clients
             if connected_clients:
                 # Parse message and add timestamp
@@ -56,6 +84,13 @@ async def handle_client(websocket):
     except Exception as e:
         logger.error(f"Error handling client {client_ip}: {e}")
     finally:
+        # Cancel ping task
+        ping_task.cancel()
+        try:
+            await ping_task
+        except asyncio.CancelledError:
+            pass
+        
         connected_clients.discard(websocket)
         logger.info(f"Client {client_ip} disconnected. Total clients: {len(connected_clients)}")
 
@@ -75,8 +110,24 @@ async def broadcast_to_all(message):
 async def start_server():
     """Start the WebSocket server"""
     logger.info("Starting ParakaleoMed WebSocket server on port 6789...")
-    server = await websockets.serve(handle_client, "0.0.0.0", 6789)
+    
+    # Enhanced server configuration for offline stability
+    server = await websockets.serve(
+        handle_client, 
+        "0.0.0.0", 
+        6789,
+        # Increase timeouts for offline/slow connections
+        ping_timeout=60,  # Wait 60 seconds for ping response
+        ping_interval=30,  # Send ping every 30 seconds
+        close_timeout=10,  # Wait 10 seconds for close handshake
+        # Keep connections alive longer in offline environment
+        max_size=2**20,   # 1MB max message size
+        max_queue=32,     # Queue up to 32 messages per client
+    )
+    
     logger.info("ParakaleoMed WebSocket server running on ws://0.0.0.0:6789")
+    logger.info("Enhanced for offline iPad connectivity on Pi hotspot network")
+    logger.info("Server configuration: ping_interval=30s, ping_timeout=60s")
     logger.info("Ready to sync clinic iPads in real-time!")
     return server
 
