@@ -4789,11 +4789,11 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
         selected_medications = []
 
-        # Define custom order for categories, with Teaching Pamphlets placed after Vitamin
+        # Define custom order for categories, with Teaching Pamphlets placed after UTI Antibiotic
         category_order = [
             "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", 
-            "Stomach", "Respiratory", "Vitamin", "Teaching Pamphlets",
-            "Steroid", "Diuretic", "Cholesterol", "UTI Antibiotic", "Other"
+            "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic", 
+            "Cholesterol", "UTI Antibiotic", "Teaching Pamphlets", "Other"
         ]
         
         # Sort categories according to custom order, with unknown categories at the end
