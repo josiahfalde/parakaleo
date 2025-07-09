@@ -536,6 +536,29 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add require_indication column to preset_medications if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT 'no'")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add preset_duration column to preset_medications if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add amount and indication columns to preset_medications if they don't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN amount TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN indication TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Add oxygen saturation column if it doesn't exist
         try:
             cursor.execute(
