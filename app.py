@@ -2591,26 +2591,12 @@ def doctor_login():
     </style>
     """, unsafe_allow_html=True)
     
-    # Create clickable doctor text with status
+    # Create clickable doctor text without status indicators
     for doctor in doctors:
         doctor_name = doctor['name']
-        status_info = status_dict.get(doctor_name, {'status': 'available'})
         
-        # Determine status display and color
-        if status_info['status'] == 'available':
-            status_text = "Available"
-            status_color = "🟢"
-        elif status_info['status'] == 'with_patient':
-            status_text = f"With Patient"
-            status_color = "🟡"
-        else:
-            status_text = "Busy"
-            status_color = "🔴"
-        
-        # Display doctor status as clickable text that looks like plain text
-        doctor_text = f"{status_color} {doctor_name} - {status_text}"
-        
-        if st.button(doctor_text, key=f"login_{doctor_name}"):
+        # Display doctor name as clickable text
+        if st.button(doctor_name, key=f"login_{doctor_name}"):
             # Login logic for selected doctor
             try:
                 st.session_state.doctor_name = doctor_name
