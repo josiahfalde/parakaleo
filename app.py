@@ -6626,7 +6626,7 @@ def awaiting_lab_prescriptions():
                                     st.markdown("**Physical Parameters:**")
                                     color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"edit_color_{lab['id']}")
                                     clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"edit_clarity_{lab['id']}")
-                                    specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005, key=f"edit_sg_{lab['id']}")
+                                    specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.100, value=1.020, step=0.001, format="%.3f", key=f"edit_sg_{lab['id']}")
                                     ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"edit_ph_{lab['id']}")
                                     protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"edit_protein_{lab['id']}")
                                 
@@ -6914,7 +6914,7 @@ def lab_results_input():
                             st.markdown("**Physical Parameters:**")
                             color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"color_{test_id}")
                             clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"clarity_{test_id}")
-                            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005, key=f"sg_{test_id}")
+                            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.100, value=1.020, step=0.001, format="%.3f", key=f"sg_{test_id}")
                             ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"ph_{test_id}")
                             protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"protein_{test_id}")
                         
@@ -7398,9 +7398,10 @@ def urinalysis_form(test_id: int):
                 "Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"])
             specific_gravity = st.number_input("Specific Gravity",
                                                min_value=1.000,
-                                               max_value=1.050,
+                                               max_value=1.100,
                                                value=1.020,
-                                               step=0.005)
+                                               step=0.001,
+                                               format="%.3f")
             ph = st.number_input("pH",
                                  min_value=4.0,
                                  max_value=9.0,
