@@ -5027,7 +5027,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         for test_type, results, completed_time in lab_results:
             with st.expander(f"🔬 {test_type} Results - {completed_time[:16].replace('T', ' ')}", expanded=True):
                 if test_type.lower() == 'urinalysis':
-                    st.markdown("**Standard 10-Parameter Urinalysis:**")
+                    st.markdown("**Standard 11-Parameter Urinalysis:**")
                     st.code(results, language=None)
                 elif test_type.lower() == 'glucose':
                     st.markdown(f"**Blood Glucose:** {results}")
@@ -6567,6 +6567,7 @@ def awaiting_lab_prescriptions():
                                     blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_blood_{lab['id']}")
                                     leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_leuk_{lab['id']}")
                                     nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"edit_nitrites_{lab['id']}")
+                                    bilirubin = st.selectbox("Bilirubin", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_bilirubin_{lab['id']}")
                                 
                                 col_save, col_cancel = st.columns(2)
                                 with col_save:
@@ -6584,7 +6585,8 @@ Chemical Parameters:
 - Ketones: {ketones}
 - Blood: {blood}
 - Leukocyte Esterase: {leukocyte_esterase}
-- Nitrites: {nitrites}"""
+- Nitrites: {nitrites}
+- Bilirubin: {bilirubin}"""
                                         
                                         conn = sqlite3.connect(db.db_name)
                                         cursor = conn.cursor()
@@ -6736,7 +6738,7 @@ Chemical Parameters:
                     else:
                         # Display mode for lab results
                         if lab['test_type'].lower() == 'urinalysis':
-                            st.markdown("**Standard 10-Parameter Urinalysis:**")
+                            st.markdown("**Standard 11-Parameter Urinalysis:**")
                             results = lab['results']
                             
                             # Create a structured display for UA results
@@ -6747,6 +6749,7 @@ Chemical Parameters:
                                 - Color
                                 - Clarity
                                 - Specific Gravity
+                                - pH
                                 """)
                             with col2:
                                 st.markdown("""
@@ -6757,7 +6760,7 @@ Chemical Parameters:
                                 - Glucose
                                 - Ketones
                                 - Blood
-                                - pH
+                                - Bilirubin
                                 """)
                             
                             with st.container():
@@ -6832,7 +6835,7 @@ def lab_results_input():
                 
                 # Different input forms based on test type
                 if test_type.lower() == 'urinalysis':
-                    st.markdown("#### 10-Parameter Urinalysis Input")
+                    st.markdown("#### 11-Parameter Urinalysis Input")
                     
                     with st.form(f"urinalysis_{test_id}"):
                         col1, col2 = st.columns(2)
@@ -6852,6 +6855,7 @@ def lab_results_input():
                             blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"blood_{test_id}")
                             leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"leuk_{test_id}")
                             nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"nitrites_{test_id}")
+                            bilirubin = st.selectbox("Bilirubin", ["Negative", "Trace", "+1", "+2", "+3"], key=f"bilirubin_{test_id}")
                         
                         if st.form_submit_button("Complete Urinalysis", type="primary"):
                             results = f"""URINALYSIS RESULTS:
@@ -6867,7 +6871,8 @@ Chemical Parameters:
 - Ketones: {ketones}
 - Blood: {blood}
 - Leukocyte Esterase: {leukocyte_esterase}
-- Nitrites: {nitrites}"""
+- Nitrites: {nitrites}
+- Bilirubin: {bilirubin}"""
                             
                             # Save results to database
                             conn = sqlite3.connect(db.db_name)

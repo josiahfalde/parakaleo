@@ -268,6 +268,11 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Improved WebSocket server logging to track message reception and broadcast counts
   - Enhanced client-side debugging with clear console messages for registration updates
   - Added connection troubleshooting to resolve iPad synchronization problems
+- July 9, 2025. Enhanced urinalysis with bilirubin parameter
+  - Added bilirubin as 11th parameter to urinalysis lab tests
+  - Updated all urinalysis forms (input, editing, and display) to include bilirubin
+  - Enhanced lab workflow with comprehensive 11-parameter urinalysis panel
+  - Updated urinalysis headings from "10-Parameter" to "11-Parameter" throughout system
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed
