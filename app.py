@@ -3347,15 +3347,165 @@ def name_registration_interface():
                 with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
                     for member in members:
                         col1, col2, col3 = st.columns([3, 1, 1])
+                        edit_key = f"edit_family_{member['id']}"
+                        
                         with col1:
-                            icon = "👨" if member['relationship'] == 'parent' else "👶"
-                            st.write(f"{icon} **{member['name']}** ({member['relationship']})")
-                            if member['age']:
-                                st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
-                            if member['notes']:
-                                st.caption(f"Notes: {member['notes']}")
+                            # Check if this member is in edit mode
+                            if st.session_state.get(edit_key, False):
+                                # Edit form for family member
+                                with st.form(f"edit_form_{member['id']}"):
+                                    new_name = st.text_input("Name", value=member['name'], key=f"edit_name_{member['id']}")
+                                    col_age, col_gender = st.columns(2)
+                                    with col_age:
+                                        new_age = st.number_input("Age", value=member['age'] if member['age'] else 0, min_value=0, max_value=120, key=f"edit_age_{member['id']}")
+                                    with col_gender:
+                                        gender_options = ["", "Male", "Female"]
+                                        gender_index = gender_options.index(member['gender']) if member['gender'] in gender_options else 0
+                                        new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_gender_{member['id']}")
+                                    new_notes = st.text_area("Notes", value=member['notes'] if member['notes'] else "", key=f"edit_notes_{member['id']}")
+                                    
+                                    col_save, col_cancel = st.columns(2)
+                                    with col_save:
+                                        if st.form_submit_button("Save", type="primary"):
+                                            if new_name.strip():
+                                                conn = sqlite3.connect(db.db_name)
+                                                cursor = conn.cursor()
+                                                cursor.execute('''
+                                                    UPDATE patient_names_queue 
+                                                    SET name = ?, age = ?, gender = ?, notes = ?
+                                                    WHERE id = ?
+                                                ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                                     new_gender if new_gender else None, new_notes.strip() if new_notes else None, member['id']))
+                                                conn.commit()
+                                                conn.close()
+                                                
+                                                # Broadcast update to all connected devices
+                                                broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                                
+                                                st.session_state[edit_key] = False
+                                                st.success(f"Updated {new_name}")
+                                                st.rerun()
+                                            else:
+                                                st.error("Name cannot be empty")
+                                    with col_cancel:
+                                        if st.form_submit_button("Cancel"):
+                                            st.session_state[edit_key] = False
+                                            st.rerun()
+                            else:
+                                # Display mode for family member
+                                icon = "👨" if member['relationship'] == 'parent' else "👶"
+                                st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                                if member['age']:
+                                    st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                                if member['notes']:
+                                    st.caption(f"Notes: {member['notes']}")
+                        
                         with col2:
-                            if st.button("Start Vitals", key=f"vitals_{member['id']}", type="secondary"):
+                            if not st.session_state.get(edit_key, False):
+                                col_vitals, col_edit = st.columns(2)
+                                with col_vitals:
+                                    if st.button("Start Vitals", key=f"vitals_{member['id']}", type="secondary"):
+                                        # Mark as processing and redirect to triage
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE patient_names_queue 
+                                            SET status = 'processing_vitals', processed_by = ?
+                                            WHERE id = ?
+                                        ''', (st.session_state.get('user_name', 'Triage Staff'), member['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"new_patient_vitals:{member['name']}")
+                                        
+                                        # Store patient info for triage
+                                        st.session_state.preregistered_patient = {
+                                            'id': member['id'],
+                                            'name': member['name'],
+                                            'age': member['age'],
+                                            'gender': member['gender'],
+                                            'family_group_id': family_id,
+                                            'relationship': member['relationship'],
+                                            'notes': member['notes']
+                                        }
+                                        st.session_state.user_role = "triage"
+                                        st.rerun()
+                                with col_edit:
+                                    if st.button("✏️", key=f"edit_{member['id']}", type="secondary", help="Edit patient details"):
+                                        st.session_state[edit_key] = True
+                                        st.rerun()
+                        
+                        with col3:
+                            if not st.session_state.get(edit_key, False):
+                                if st.button("Remove", key=f"remove_{member['id']}", type="secondary"):
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (member['id'],))
+                                    conn.commit()
+                                    conn.close()
+                                    st.rerun()
+            
+            # Display individuals
+            for individual in individuals:
+                edit_key = f"edit_individual_{individual['id']}"
+                
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    # Check if this individual is in edit mode
+                    if st.session_state.get(edit_key, False):
+                        # Edit form for individual
+                        with st.form(f"edit_form_{individual['id']}"):
+                            new_name = st.text_input("Name", value=individual['name'], key=f"edit_name_{individual['id']}")
+                            col_age, col_gender = st.columns(2)
+                            with col_age:
+                                new_age = st.number_input("Age", value=individual['age'] if individual['age'] else 0, min_value=0, max_value=120, key=f"edit_age_{individual['id']}")
+                            with col_gender:
+                                gender_options = ["", "Male", "Female"]
+                                gender_index = gender_options.index(individual['gender']) if individual['gender'] in gender_options else 0
+                                new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_gender_{individual['id']}")
+                            new_notes = st.text_area("Notes", value=individual['notes'] if individual['notes'] else "", key=f"edit_notes_{individual['id']}")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("Save", type="primary"):
+                                    if new_name.strip():
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE patient_names_queue 
+                                            SET name = ?, age = ?, gender = ?, notes = ?
+                                            WHERE id = ?
+                                        ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                             new_gender if new_gender else None, new_notes.strip() if new_notes else None, individual['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success(f"Updated {new_name}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Name cannot be empty")
+                            with col_cancel:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode for individual
+                        st.write(f"👤 **{individual['name']}**")
+                        if individual['age']:
+                            st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                        if individual['notes']:
+                            st.caption(f"Notes: {individual['notes']}")
+                
+                with col2:
+                    if not st.session_state.get(edit_key, False):
+                        col_vitals, col_edit = st.columns(2)
+                        with col_vitals:
+                            if st.button("Start Vitals", key=f"vitals_{individual['id']}", type="secondary"):
                                 # Mark as processing and redirect to triage
                                 conn = sqlite3.connect(db.db_name)
                                 cursor = conn.cursor()
@@ -3363,76 +3513,36 @@ def name_registration_interface():
                                     UPDATE patient_names_queue 
                                     SET status = 'processing_vitals', processed_by = ?
                                     WHERE id = ?
-                                ''', (st.session_state.get('user_name', 'Triage Staff'), member['id']))
+                                ''', (st.session_state.get('user_name', 'Triage Staff'), individual['id']))
                                 conn.commit()
                                 conn.close()
-                                
-                                # Broadcast update to all connected devices
-                                broadcast_to_clients(f"new_patient_vitals:{member['name']}")
                                 
                                 # Store patient info for triage
                                 st.session_state.preregistered_patient = {
-                                    'id': member['id'],
-                                    'name': member['name'],
-                                    'age': member['age'],
-                                    'gender': member['gender'],
-                                    'family_group_id': family_id,
-                                    'relationship': member['relationship'],
-                                    'notes': member['notes']
+                                    'id': individual['id'],
+                                    'name': individual['name'],
+                                    'age': individual['age'],
+                                    'gender': individual['gender'],
+                                    'family_group_id': None,
+                                    'relationship': individual['relationship'],
+                                    'notes': individual['notes']
                                 }
                                 st.session_state.user_role = "triage"
                                 st.rerun()
-                        with col3:
-                            if st.button("Remove", key=f"remove_{member['id']}", type="secondary"):
-                                conn = sqlite3.connect(db.db_name)
-                                cursor = conn.cursor()
-                                cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (member['id'],))
-                                conn.commit()
-                                conn.close()
+                        with col_edit:
+                            if st.button("✏️", key=f"edit_{individual['id']}", type="secondary", help="Edit patient details"):
+                                st.session_state[edit_key] = True
                                 st.rerun()
-            
-            # Display individuals
-            for individual in individuals:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"👤 **{individual['name']}**")
-                    if individual['age']:
-                        st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
-                    if individual['notes']:
-                        st.caption(f"Notes: {individual['notes']}")
-                with col2:
-                    if st.button("Start Vitals", key=f"vitals_{individual['id']}", type="secondary"):
-                        # Mark as processing and redirect to triage
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                            UPDATE patient_names_queue 
-                            SET status = 'processing_vitals', processed_by = ?
-                            WHERE id = ?
-                        ''', (st.session_state.get('user_name', 'Triage Staff'), individual['id']))
-                        conn.commit()
-                        conn.close()
-                        
-                        # Store patient info for triage
-                        st.session_state.preregistered_patient = {
-                            'id': individual['id'],
-                            'name': individual['name'],
-                            'age': individual['age'],
-                            'gender': individual['gender'],
-                            'family_group_id': None,
-                            'relationship': individual['relationship'],
-                            'notes': individual['notes']
-                        }
-                        st.session_state.user_role = "triage"
-                        st.rerun()
+                
                 with col3:
-                    if st.button("Remove", key=f"remove_{individual['id']}", type="secondary"):
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (individual['id'],))
-                        conn.commit()
-                        conn.close()
-                        st.rerun()
+                    if not st.session_state.get(edit_key, False):
+                        if st.button("Remove", key=f"remove_{individual['id']}", type="secondary"):
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (individual['id'],))
+                            conn.commit()
+                            conn.close()
+                            st.rerun()
         else:
             st.info("No names in registration queue. Add names in the 'Register Names' tab.")
 
@@ -3516,24 +3626,169 @@ def preregistered_queue_view():
         for family_id, members in families.items():
             with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
                 for member in members:
-                    col1, col2 = st.columns([4, 1])
+                    edit_key = f"edit_preregistered_family_{member['id']}"
+                    
+                    col1, col2 = st.columns([3, 2])
                     with col1:
-                        icon = "👨" if member['relationship'] == 'parent' else "👶"
-                        st.write(f"{icon} **{member['name']}** ({member['relationship']})")
-                        if member['age']:
-                            st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
-                        if member['notes']:
-                            st.caption(f"Notes: {member['notes']}")
+                        # Check if this member is in edit mode
+                        if st.session_state.get(edit_key, False):
+                            # Edit form for family member
+                            with st.form(f"edit_preregistered_form_{member['id']}"):
+                                new_name = st.text_input("Name", value=member['name'], key=f"edit_preregistered_name_{member['id']}")
+                                col_age, col_gender = st.columns(2)
+                                with col_age:
+                                    new_age = st.number_input("Age", value=member['age'] if member['age'] else 0, min_value=0, max_value=120, key=f"edit_preregistered_age_{member['id']}")
+                                with col_gender:
+                                    gender_options = ["", "Male", "Female"]
+                                    gender_index = gender_options.index(member['gender']) if member['gender'] in gender_options else 0
+                                    new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_preregistered_gender_{member['id']}")
+                                new_notes = st.text_area("Notes", value=member['notes'] if member['notes'] else "", key=f"edit_preregistered_notes_{member['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("Save", type="primary"):
+                                        if new_name.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE patient_names_queue 
+                                                SET name = ?, age = ?, gender = ?, notes = ?
+                                                WHERE id = ?
+                                            ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                                 new_gender if new_gender else None, new_notes.strip() if new_notes else None, member['id']))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"Updated {new_name}")
+                                            st.rerun()
+                                        else:
+                                            st.error("Name cannot be empty")
+                                with col_cancel:
+                                    if st.form_submit_button("Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        else:
+                            # Display mode for family member
+                            icon = "👨" if member['relationship'] == 'parent' else "👶"
+                            st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                            if member['age']:
+                                st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                            if member['notes']:
+                                st.caption(f"Notes: {member['notes']}")
+                    
                     with col2:
-                        if st.button("Start Vitals", key=f"start_vitals_{member['id']}", type="primary"):
+                        if not st.session_state.get(edit_key, False):
+                            col_vitals, col_edit = st.columns(2)
+                            with col_vitals:
+                                if st.button("Start Vitals", key=f"start_vitals_{member['id']}", type="primary"):
+                                    # Create patient record and start vital signs workflow
+                                    patient_data = {
+                                        'name': member['name'],
+                                        'age': member['age'],
+                                        'gender': member['gender'],
+                                        'phone': None,
+                                        'emergency_contact': None,
+                                        'medical_history': member['notes'],
+                                        'allergies': None
+                                    }
+                                    
+                                    # Register patient in the main system
+                                    patient_id = db.add_patient(location_code, **patient_data)
+                                    visit_id = db.create_visit(patient_id)
+                                    
+                                    # Mark as processing in queue
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE patient_names_queue 
+                                        SET status = 'completed'
+                                        WHERE id = ?
+                                    ''', (member['id'],))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    # Set up vital signs workflow
+                                    st.session_state.pending_vitals = visit_id
+                                    st.session_state.patient_name = member['name']
+                                    st.success(f"Patient {member['name']} registered! Patient ID: {patient_id}")
+                                    st.rerun()
+                            with col_edit:
+                                if st.button("✏️", key=f"edit_preregistered_{member['id']}", type="secondary", help="Edit patient details"):
+                                    st.session_state[edit_key] = True
+                                    st.rerun()
+        
+        # Display individuals
+        for individual in individuals:
+            edit_key = f"edit_preregistered_individual_{individual['id']}"
+            
+            col1, col2 = st.columns([3, 2])
+            with col1:
+                # Check if this individual is in edit mode
+                if st.session_state.get(edit_key, False):
+                    # Edit form for individual
+                    with st.form(f"edit_preregistered_form_{individual['id']}"):
+                        new_name = st.text_input("Name", value=individual['name'], key=f"edit_preregistered_name_{individual['id']}")
+                        col_age, col_gender = st.columns(2)
+                        with col_age:
+                            new_age = st.number_input("Age", value=individual['age'] if individual['age'] else 0, min_value=0, max_value=120, key=f"edit_preregistered_age_{individual['id']}")
+                        with col_gender:
+                            gender_options = ["", "Male", "Female"]
+                            gender_index = gender_options.index(individual['gender']) if individual['gender'] in gender_options else 0
+                            new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_preregistered_gender_{individual['id']}")
+                        new_notes = st.text_area("Notes", value=individual['notes'] if individual['notes'] else "", key=f"edit_preregistered_notes_{individual['id']}")
+                        
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.form_submit_button("Save", type="primary"):
+                                if new_name.strip():
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE patient_names_queue 
+                                        SET name = ?, age = ?, gender = ?, notes = ?
+                                        WHERE id = ?
+                                    ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                         new_gender if new_gender else None, new_notes.strip() if new_notes else None, individual['id']))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    # Broadcast update to all connected devices
+                                    broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                    
+                                    st.session_state[edit_key] = False
+                                    st.success(f"Updated {new_name}")
+                                    st.rerun()
+                                else:
+                                    st.error("Name cannot be empty")
+                        with col_cancel:
+                            if st.form_submit_button("Cancel"):
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                else:
+                    # Display mode for individual
+                    st.write(f"👤 **{individual['name']}**")
+                    if individual['age']:
+                        st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                    if individual['notes']:
+                        st.caption(f"Notes: {individual['notes']}")
+            
+            with col2:
+                if not st.session_state.get(edit_key, False):
+                    col_vitals, col_edit = st.columns(2)
+                    with col_vitals:
+                        if st.button("Start Vitals", key=f"start_vitals_{individual['id']}", type="primary"):
                             # Create patient record and start vital signs workflow
                             patient_data = {
-                                'name': member['name'],
-                                'age': member['age'],
-                                'gender': member['gender'],
+                                'name': individual['name'],
+                                'age': individual['age'],
+                                'gender': individual['gender'],
                                 'phone': None,
                                 'emergency_contact': None,
-                                'medical_history': member['notes'],
+                                'medical_history': individual['notes'],
                                 'allergies': None
                             }
                             
@@ -3548,58 +3803,19 @@ def preregistered_queue_view():
                                 UPDATE patient_names_queue 
                                 SET status = 'completed'
                                 WHERE id = ?
-                            ''', (member['id'],))
+                            ''', (individual['id'],))
                             conn.commit()
                             conn.close()
                             
                             # Set up vital signs workflow
                             st.session_state.pending_vitals = visit_id
-                            st.session_state.patient_name = member['name']
-                            st.success(f"Patient {member['name']} registered! Patient ID: {patient_id}")
+                            st.session_state.patient_name = individual['name']
+                            st.success(f"Patient {individual['name']} registered! Patient ID: {patient_id}")
                             st.rerun()
-        
-        # Display individuals
-        for individual in individuals:
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.write(f"👤 **{individual['name']}**")
-                if individual['age']:
-                    st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
-                if individual['notes']:
-                    st.caption(f"Notes: {individual['notes']}")
-            with col2:
-                if st.button("Start Vitals", key=f"start_vitals_{individual['id']}", type="primary"):
-                    # Create patient record and start vital signs workflow
-                    patient_data = {
-                        'name': individual['name'],
-                        'age': individual['age'],
-                        'gender': individual['gender'],
-                        'phone': None,
-                        'emergency_contact': None,
-                        'medical_history': individual['notes'],
-                        'allergies': None
-                    }
-                    
-                    # Register patient in the main system
-                    patient_id = db.add_patient(location_code, **patient_data)
-                    visit_id = db.create_visit(patient_id)
-                    
-                    # Mark as processing in queue
-                    conn = sqlite3.connect(db.db_name)
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE patient_names_queue 
-                        SET status = 'completed'
-                        WHERE id = ?
-                    ''', (individual['id'],))
-                    conn.commit()
-                    conn.close()
-                    
-                    # Set up vital signs workflow
-                    st.session_state.pending_vitals = visit_id
-                    st.session_state.patient_name = individual['name']
-                    st.success(f"Patient {individual['name']} registered! Patient ID: {patient_id}")
-                    st.rerun()
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_preregistered_{individual['id']}", type="secondary", help="Edit patient details"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
     else:
         st.info("No pre-registered patients waiting for vital signs. Check the Name Registration station.")
 

@@ -238,6 +238,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Enhanced processing logic to handle N/A entries by storing them as NULL in database
   - Updated both individual patient and family vital signs workflows with N/A support
   - Improved vital signs flexibility for situations where equipment is broken or children won't cooperate
+- July 9, 2025. Added patient name editing functionality for pre-registered patients
+  - Added edit buttons (✏️) to Name Registration Queue for correcting registration typos
+  - Added edit functionality to Pre-Registered Queue in triage station for patient details correction
+  - Implemented inline editing forms for patient name, age, gender, and notes modification
+  - Added save/cancel functionality with proper validation and error handling
+  - Enhanced both family and individual patient editing workflows across registration areas
+  - Improved workflow efficiency by allowing corrections before vital signs collection
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed
