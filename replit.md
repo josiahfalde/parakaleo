@@ -245,6 +245,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Added save/cancel functionality with proper validation and error handling
   - Enhanced both family and individual patient editing workflows across registration areas
   - Improved workflow efficiency by allowing corrections before vital signs collection
+- July 9, 2025. Added prescription editing functionality for pharmacy station
+  - Added edit buttons (✏️) to individual prescription cards in "Ready to Fill" tab
+  - Added prescription editing for family consultation prescriptions workflow
+  - Implemented inline editing forms for dosage, frequency, duration, and instructions modification
+  - Added save/cancel functionality with proper validation requiring all core fields
+  - Enhanced prescription workflow to support doctor-pharmacy collaboration on dosage adjustments
+  - Improved system editability throughout prescription management processes
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

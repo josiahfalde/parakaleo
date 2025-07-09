@@ -6157,7 +6157,58 @@ def pending_prescriptions():
             
             if member_prescriptions:
                 for prescription in member_prescriptions:
-                    st.markdown(f"• {prescription[2]} - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                    edit_key = f"edit_family_prescription_{prescription[0]}"
+                    
+                    if st.session_state.get(edit_key, False):
+                        # Edit form for family prescription
+                        with st.form(f"edit_family_prescription_form_{prescription[0]}"):
+                            st.markdown(f"**💊 {prescription[2]}** (Editing)")
+                            
+                            col_dosage, col_frequency = st.columns(2)
+                            with col_dosage:
+                                new_dosage = st.text_input("Dosage", value=prescription[3], key=f"edit_family_dosage_{prescription[0]}")
+                            with col_frequency:
+                                new_frequency = st.text_input("Frequency", value=prescription[4], key=f"edit_family_frequency_{prescription[0]}")
+                            
+                            new_duration = st.text_input("Duration", value=prescription[5], key=f"edit_family_duration_{prescription[0]}")
+                            new_instructions = st.text_area("Instructions", value=prescription[6] if prescription[6] else "", key=f"edit_family_instructions_{prescription[0]}")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("💾 Save Changes", type="primary"):
+                                    if new_dosage.strip() and new_frequency.strip() and new_duration.strip():
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE prescriptions 
+                                            SET dosage = ?, frequency = ?, duration = ?, instructions = ?
+                                            WHERE id = ?
+                                        ''', (new_dosage.strip(), new_frequency.strip(), new_duration.strip(), 
+                                             new_instructions.strip() if new_instructions else None, prescription[0]))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"prescription_updated:{prescription[2]}:{member['patient_name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success(f"✅ Updated prescription for {prescription[2]}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Dosage, frequency, and duration are required")
+                            with col_cancel:
+                                if st.form_submit_button("❌ Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode for family prescription
+                        col_prescription, col_edit = st.columns([4, 1])
+                        with col_prescription:
+                            st.markdown(f"• {prescription[2]} - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                        with col_edit:
+                            if st.button("✏️", key=f"edit_family_prescription_{prescription[0]}", type="secondary", help="Edit prescription"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
             else:
                 st.markdown("• No prescriptions for this family member")
         
@@ -6266,28 +6317,82 @@ def pending_prescriptions():
 
                 for prescription in patient_data['prescriptions']:
                     prescription_ids.append(prescription[0])
-
+                    edit_key = f"edit_prescription_{prescription[0]}"
+                    
                     col1, col2 = st.columns([3, 1])
 
                     with col1:
-                        st.markdown(f"""
-                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <h5 style="color: #1f2937; margin: 0 0 12px 0; font-size: 16px;">💊 {prescription[2]}</h5>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
-                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                        # Check if this prescription is in edit mode
+                        if st.session_state.get(edit_key, False):
+                            # Edit form for prescription
+                            with st.form(f"edit_prescription_form_{prescription[0]}"):
+                                st.markdown(f"**💊 {prescription[2]}** (Editing)")
+                                
+                                col_dosage, col_frequency = st.columns(2)
+                                with col_dosage:
+                                    new_dosage = st.text_input("Dosage", value=prescription[3], key=f"edit_dosage_{prescription[0]}")
+                                with col_frequency:
+                                    new_frequency = st.text_input("Frequency", value=prescription[4], key=f"edit_frequency_{prescription[0]}")
+                                
+                                new_duration = st.text_input("Duration", value=prescription[5], key=f"edit_duration_{prescription[0]}")
+                                new_instructions = st.text_area("Instructions", value=prescription[6] if prescription[6] else "", key=f"edit_instructions_{prescription[0]}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        if new_dosage.strip() and new_frequency.strip() and new_duration.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE prescriptions 
+                                                SET dosage = ?, frequency = ?, duration = ?, instructions = ?
+                                                WHERE id = ?
+                                            ''', (new_dosage.strip(), new_frequency.strip(), new_duration.strip(), 
+                                                 new_instructions.strip() if new_instructions else None, prescription[0]))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"prescription_updated:{prescription[2]}:{patient_data['name']}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"✅ Updated prescription for {prescription[2]}")
+                                            st.rerun()
+                                        else:
+                                            st.error("Dosage, frequency, and duration are required")
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        else:
+                            # Display mode for prescription
+                            st.markdown(f"""
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <h5 style="color: #1f2937; margin: 0 0 12px 0; font-size: 16px;">💊 {prescription[2]}</h5>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                    <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
+                                    <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                                </div>
+                                <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
+                                {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                                {f'<p style="margin: 0; color: #6b7280; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
                             </div>
-                            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
-                            {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
-                            {f'<p style="margin: 0; color: #6b7280; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
-                        </div>
-                        """,
-                                    unsafe_allow_html=True)
+                            """,
+                                        unsafe_allow_html=True)
 
                     with col2:
-                        if st.checkbox(f"Filled",
-                                       key=f"filled_{prescription[0]}"):
-                            pass
+                        if not st.session_state.get(edit_key, False):
+                            col_filled, col_edit = st.columns([1, 1])
+                            with col_filled:
+                                if st.checkbox(f"Filled",
+                                               key=f"filled_{prescription[0]}"):
+                                    pass
+                                else:
+                                    all_filled = False
+                            with col_edit:
+                                if st.button("✏️", key=f"edit_prescription_{prescription[0]}", type="secondary", help="Edit prescription details"):
+                                    st.session_state[edit_key] = True
+                                    st.rerun()
                         else:
                             all_filled = False
 
