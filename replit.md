@@ -183,6 +183,147 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented automatic page reloading across all iPads when updates are received from other devices
   - Added intelligent update detection that triggers immediate data refresh without manual intervention
   - Eliminated need for manual page refreshes to see new patients, completed consultations, or lab results
+- July 7, 2025. Triage page modifications and medical history restructuring
+  - Removed height option from triage vital signs forms per user request
+  - Eliminated surgical history fields from consultation forms
+  - Added medical history field to both name registration and triage new patient pages
+  - Made medical history editable on doctor consultation page while preserving data from earlier forms
+  - Updated database queries to remove height from vital signs and surgical history from consultation records
+- July 7, 2025. Enhanced page refresh state preservation for doctor consultations
+  - Fixed critical page refresh issue where consultation data was lost and user redirected to home page
+  - Enhanced URL parameter system to preserve active consultation state (visit_id, patient_id, patient_name)
+  - Updated page state persistence to restore doctor login state and consultation context from URL
+  - Modified auto-rerun system to use gentle updates for consultation pages instead of full page reload
+  - Added consultation_form page handling in main routing logic to maintain consultation state on refresh
+  - Ensured consultation forms maintain all patient data and form state when browser page is refreshed
+- July 8, 2025. Enhanced offline iPad connectivity and WebSocket resilience  
+  - Improved WebSocket connection logic with multiple connection strategies for Pi hotspot network (192.168.4.1)
+  - Added intelligent hostname detection to prioritize Pi network IP addressing for offline environments
+  - Enhanced reconnection logic with exponential backoff and extended retry attempts (50 attempts) for unstable offline connections
+  - Implemented connection timeout handling and ping/pong system to maintain iPad connections in offline mode
+  - Added periodic server pings every 30 seconds with 60-second timeout for robust connection monitoring
+  - Enhanced WebSocket server configuration with increased timeouts and queue limits for offline stability
+  - Added comprehensive connection status monitoring to LAN Status page with real-time WebSocket status display
+  - Included iPad connection troubleshooting guide and live connection monitor for clinic staff
+  - Optimized for Pi hotspot network (ParakaleoMed-Clinic WiFi) ensuring reliable multi-iPad synchronization offline
+- July 8, 2025. Fixed family registration pharmacy workflow issue
+  - Resolved problem where parent/guardian would get stuck in pharmacy/lab area after family consultation
+  - Added proper exit mechanisms for families completing pharmacy workflow
+  - Implemented "Exit Family Visit" button for early departure from pharmacy/lab
+  - Added "Skip Prescriptions & Exit" option alongside complete prescriptions workflow
+  - Enhanced family completion flow to properly clear session state and return to role selection
+  - Fixed family pharmacy workflow to prevent infinite loops and ensure proper navigation out of pharmacy area
+- July 8, 2025. Simplified doctor login interface
+  - Redesigned doctor login to show clickable doctor names with status (Available/With Patient)
+  - Removed lengthy doctor status display and selection dropdown interface
+  - Implemented one-click login by touching doctor name buttons
+  - Streamlined interface to reduce scrolling and improve efficiency for multiple doctors
+  - Maintained consultation restoration functionality for doctors returning to active patients
+- July 9, 2025. Fixed doctor management duplicate error issues
+  - Enhanced add_doctor function to properly handle reactivating previously removed doctors
+  - Fixed duplicate error when trying to re-add a doctor that was previously removed
+  - Added proper cleanup of doctor_status records when removing doctors
+  - Improved doctor management interface with clear messaging for reactivation vs new additions
+  - Added automatic status entry creation when adding/reactivating doctors to prevent login issues
+- July 9, 2025. Fixed triage section family registration and consultation issues
+  - Removed debugging code from family registration form that was cluttering the interface
+  - Enhanced children validation to properly handle multiple children entries with clear error messages
+  - Fixed family consultation completion workflow by removing conflicting duplicate logic
+  - Improved family exit workflow to prevent parents remaining in system after consultation
+  - Added proper validation error handling for family registration with early return to prevent incomplete submissions
+  - Streamlined family workflow to ensure proper progression from registration through consultation to pharmacy completion
+- July 9, 2025. Enhanced vital signs collection with N/A support
+  - Converted all vital signs forms from number inputs to text inputs to allow "N/A" entries
+  - Added helpful tip messages explaining how to use N/A for unavailable measurements
+  - Enhanced processing logic to handle N/A entries by storing them as NULL in database
+  - Updated both individual patient and family vital signs workflows with N/A support
+  - Improved vital signs flexibility for situations where equipment is broken or children won't cooperate
+- July 9, 2025. Added patient name editing functionality for pre-registered patients
+  - Added edit buttons (✏️) to Name Registration Queue for correcting registration typos
+  - Added edit functionality to Pre-Registered Queue in triage station for patient details correction
+  - Implemented inline editing forms for patient name, age, gender, and notes modification
+  - Added save/cancel functionality with proper validation and error handling
+  - Enhanced both family and individual patient editing workflows across registration areas
+  - Improved workflow efficiency by allowing corrections before vital signs collection
+- July 9, 2025. Added prescription editing functionality for pharmacy station
+  - Added edit buttons (✏️) to individual prescription cards in "Ready to Fill" tab
+  - Added prescription editing for family consultation prescriptions workflow
+  - Implemented inline editing forms for dosage, frequency, duration, and instructions modification
+  - Added save/cancel functionality with proper validation requiring all core fields
+  - Enhanced prescription workflow to support doctor-pharmacy collaboration on dosage adjustments
+  - Improved system editability throughout prescription management processes
+- July 9, 2025. Added lab results editing functionality for doctors
+  - Added edit buttons (✏️) to lab results display in "Lab Results & Patient Review" tab
+  - Implemented specialized edit forms for urinalysis, glucose, and pregnancy tests
+  - Added generic lab result editing for other test types
+  - Enhanced urinalysis editing with full 10-parameter form (color, clarity, specific gravity, pH, protein, glucose, ketones, blood, leukocyte esterase, nitrites)
+  - Added glucose test editing with value input, units selection, and automatic interpretation
+  - Implemented pregnancy test editing with result selection and optional notes
+  - Added save/cancel functionality with proper validation and real-time WebSocket updates
+  - Enhanced lab workflow to support error correction when results are input incorrectly
+- July 9, 2025. Enhanced WebSocket synchronization debugging
+  - Added visual connection status indicators when iPads connect to sync server
+  - Enhanced console logging to track patient registration message flow
+  - Added detailed broadcast debugging to identify synchronization issues
+  - Improved WebSocket server logging to track message reception and broadcast counts
+  - Enhanced client-side debugging with clear console messages for registration updates
+  - Added connection troubleshooting to resolve iPad synchronization problems
+- July 9, 2025. Enhanced urinalysis with bilirubin parameter
+  - Added bilirubin as 11th parameter to urinalysis lab tests
+  - Updated all urinalysis forms (input, editing, and display) to include bilirubin
+  - Enhanced lab workflow with comprehensive 11-parameter urinalysis panel
+  - Updated urinalysis headings from "10-Parameter" to "11-Parameter" throughout system
+- July 9, 2025. Implemented medication teaching workflow
+  - Added "Awaiting Teaching" tab to pharmacy interface between Lab Input and Filled Prescriptions
+  - Created two-stage prescription workflow: Fill prescriptions → Teach medications → Complete visit
+  - Modified prescription filling to change status from 'filled' to 'awaiting_teaching'
+  - Added awaiting_teaching() function for medication education documentation
+  - Enhanced prescriptions table with teaching_completed and teaching_notes columns
+  - Implemented teaching completion workflow that marks prescriptions as fully 'filled' and visits as 'completed'
+  - Added WebSocket notifications for teaching completion across all devices
+  - Created visual medication cards showing dosage, frequency, duration, and indications for teaching
+- July 9, 2025. Added prescribing doctor tracking for lab/pharmacy visibility
+  - Added prescribed_by column to prescriptions table for tracking which doctor ordered each medication
+  - Enhanced consultation form to save prescribing doctor name with each prescription
+  - Updated pharmacy interface displays to show "👨‍⚕️ Prescribed by: Dr. [Name]" on all prescription cards
+  - Enhanced "Ready to Fill", "Awaiting Teaching", and family prescription displays with prescribing doctor information
+  - Improved prescription workflow transparency for multi-doctor clinic operations
+- July 9, 2025. Comprehensive patient chart enhancement with complete medical record display
+  - Completely redesigned patient history view to show comprehensive medical chart when clicking "View Patient History"
+  - Added beautiful gradient styling with color-coded sections for different medical data types
+  - Enhanced patient demographics display with grid layout showing all registration information
+  - Added family information display including family name, head of household, and family status
+  - Comprehensive visit timeline showing triage, consultation, pharmacy, and completion times
+  - Color-coded vital signs cards with full blood pressure, heart rate, temperature, and weight history
+  - Detailed consultation records with doctor, chief complaint, symptoms, diagnosis, and treatment plans
+  - Complete laboratory test results including detailed parameter-by-parameter urinalysis displays
+  - Enhanced prescription tracking showing dosage, frequency, duration, prescribing doctor, and fill status
+  - Added patient photo documentation listing with timestamps for symptom documentation
+  - Summary statistics showing total visits, prescriptions, lab tests, photos, and last visit date
+  - Professional medical chart layout with proper medical record formatting and organization
+- July 7, 2025. Consultation form improvements and auto-save implementation
+  - Removed allergies field from doctor consultation page per user request
+  - Implemented auto-save functionality for consultations - no manual save button needed
+  - Consultation data now automatically saves to database as user enters information
+  - Enhanced consultation workflow to eliminate need for "Update Consultation" button clicks
+  - Added auto-save success indicator showing consultation is continuously saved
+  - Fixed all remaining surgical_history and allergies variable references causing database errors
+  - Cleaned up database queries to remove references to deleted fields while preserving schema compatibility
+  - Added "require indication" toggle for medications in admin management section
+  - Enhanced prescription validation to only require indications for medications marked as needing them
+  - Vitamins and similar medications can now be prescribed without requiring specific indications
+  - Updated medication display to show when indications are not required with visual indicator
+  - Added preset duration field to medications for automatic duration population when prescribing
+  - Enhanced consultation interface to use preset durations as defaults (e.g., vitamins default to 30 days)
+  - Updated medication display to show default duration settings in admin interface
+  - Fixed preset duration format matching to handle both number-only and full duration entries
+  - Added vital signs display to consultation form for doctors to review during patient assessment
+  - Enhanced doctor interface with prominent patient vital signs metrics display
+  - Added "Teaching Pamphlets" medication category with Blood Pressure and Diabetes handouts
+  - Created Location Management admin interface with edit capabilities and duplicate location merging functionality
+  - Enhanced medication categorization system to support educational materials and patient resources
+  - Implemented custom category ordering in prescription interface with Teaching Pamphlets positioned after Vitamin Medications
+  - Organized prescription workflow with logical medication category progression for improved clinical efficiency
 - June 15, 2025. Family structure redesign and navigation improvements
   - Completely redesigned family registration to create proper family units instead of individual patient records
   - Added families table with family_id, family_name, head_of_household, and address tracking

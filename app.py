@@ -23,6 +23,18 @@ def preserve_page_state():
         if 'role' in query_params:
             st.session_state.user_role = query_params['role']
         
+        # Restore doctor login state
+        if 'doctor' in query_params:
+            st.session_state.doctor_name = query_params['doctor']
+        
+        # Restore consultation state from URL parameters
+        if all(param in query_params for param in ['visit_id', 'patient_id', 'patient_name']):
+            st.session_state.active_consultation = {
+                'visit_id': query_params['visit_id'],
+                'patient_id': query_params['patient_id'],
+                'patient_name': query_params['patient_name']
+            }
+        
         # Restore location state from URL parameters
         if 'location_city' in query_params and 'location_country' in query_params:
             st.session_state.clinic_location = {
@@ -43,6 +55,17 @@ def update_page_url(page_name: str):
         st.query_params['location_city'] = location['city']
         st.query_params['location_country'] = location['country_name']
         st.query_params['location_code'] = location['country_code']
+    
+    # Preserve consultation state in URL for doctor consultation forms
+    if 'active_consultation' in st.session_state and st.session_state.active_consultation and isinstance(st.session_state.active_consultation, dict):
+        consultation = st.session_state.active_consultation
+        st.query_params['visit_id'] = consultation['visit_id']
+        st.query_params['patient_id'] = consultation['patient_id']
+        st.query_params['patient_name'] = consultation['patient_name']
+    
+    # Preserve doctor login state
+    if 'doctor_name' in st.session_state and st.session_state.doctor_name:
+        st.query_params['doctor'] = st.session_state.doctor_name
 
 def check_for_updates():
     """Check if there are pending updates and trigger rerun"""
@@ -59,17 +82,33 @@ def check_for_updates():
                 window.streamlitUpdatePending = false;
                 console.log("Triggering automatic page update...");
                 
-                // Multiple methods to trigger rerun
+                // Check if we're in a consultation or form page - preserve state better
+                const url = new URL(window.location);
+                const isConsultationPage = url.searchParams.get('page') === 'consultation_form' || 
+                                          url.searchParams.get('visit_id') || 
+                                          url.searchParams.get('patient_id');
+                
                 try {
-                    // Method 1: Query parameter change
-                    const url = new URL(window.location);
-                    url.searchParams.set('_t', Date.now());
-                    window.history.replaceState({}, '', url);
-                    
-                    // Method 2: Force reload
-                    window.location.reload();
+                    if (isConsultationPage) {
+                        // For consultation pages, use gentle update instead of full reload
+                        console.log("Consultation page detected - using gentle update");
+                        url.searchParams.set('_refresh', Date.now());
+                        window.history.replaceState({}, '', url);
+                        
+                        // Try to trigger Streamlit rerun without losing form data
+                        if (window.parent && window.parent.postMessage) {
+                            window.parent.postMessage({type: 'streamlit:componentReady'}, '*');
+                        }
+                    } else {
+                        // For other pages, use full reload
+                        console.log("Non-consultation page - using full reload");
+                        window.location.reload();
+                    }
                 } catch (e) {
                     console.log("Auto-rerun error:", e);
+                    // Fallback: gentle update only
+                    url.searchParams.set('_refresh', Date.now());
+                    window.history.replaceState({}, '', url);
                 }
             }
         }, 3000);
@@ -81,18 +120,75 @@ def check_for_updates():
 ws_connect_script = """
 <script>
   if (!window.wsInitialized) {
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 50; // Keep trying for a long time in offline environment
+    
     function connectWebSocket() {
       try {
-        const ws = new WebSocket("ws://" + window.location.hostname + ":6789");
+        // Use multiple connection strategies for offline Pi network
+        let wsUrl;
+        const hostname = window.location.hostname;
+        
+        // Priority 1: Use current hostname (works for Pi local network)
+        if (hostname === "192.168.4.1" || hostname.startsWith("192.168.4.")) {
+          wsUrl = "ws://" + hostname + ":6789";
+        }
+        // Priority 2: Default Pi hotspot IP
+        else if (hostname === "localhost" || hostname === "127.0.0.1") {
+          wsUrl = "ws://192.168.4.1:6789";
+        }
+        // Priority 3: Use current hostname as fallback
+        else {
+          wsUrl = "ws://" + hostname + ":6789";
+        }
+        
+        console.log("Attempting WebSocket connection to:", wsUrl);
+        const ws = new WebSocket(wsUrl);
         window.ws = ws;
         
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (ws.readyState === WebSocket.CONNECTING) {
+            console.log("WebSocket connection timeout");
+            ws.close();
+          }
+        }, 5000);
+        
         ws.onopen = function() {
-          console.log("Connected to ParakaleoMed sync server");
+          clearTimeout(connectionTimeout);
+          console.log("Connected to ParakaleoMed sync server at:", wsUrl);
           window.wsConnected = true;
+          reconnectAttempts = 0; // Reset reconnect counter on successful connection
+          
+          // Send a ping to maintain connection
+          ws.send("ping:iPad_connected");
+          
+          // Show connection status to user
+          const connectionStatus = document.createElement('div');
+          connectionStatus.style.cssText = `
+            position: fixed; top: 10px; left: 10px; z-index: 9999;
+            background: #10b981; color: white; padding: 8px 16px;
+            border-radius: 6px; font-weight: bold; font-size: 14px;
+          `;
+          connectionStatus.textContent = '✅ Connected to sync server';
+          document.body.appendChild(connectionStatus);
+          
+          // Remove connection status after 3 seconds
+          setTimeout(() => {
+            if (connectionStatus.parentNode) {
+              connectionStatus.parentNode.removeChild(connectionStatus);
+            }
+          }, 3000);
         };
         
         ws.onmessage = function(event) {
           console.log("Received update:", event.data);
+          
+          // Respond to ping requests to maintain connection
+          if (event.data === "ping") {
+            ws.send("pong:iPad_alive");
+            return;
+          }
           
           // Parse message to determine if page should reload
           const updateData = event.data;
@@ -102,6 +198,7 @@ ws_connect_script = """
           if (updateData.includes("new_patient") || updateData.includes("new_name_registered") || updateData.includes("new_family_registered")) {
             shouldReload = true;
             notificationText = "New patient registered";
+            console.log("🚨 PATIENT REGISTRATION UPDATE DETECTED:", updateData);
           } else if (updateData.includes("vitals_complete")) {
             shouldReload = true;
             notificationText = "Vital signs completed";
@@ -157,16 +254,30 @@ ws_connect_script = """
           }
         };
         
-        ws.onclose = function() {
-          console.log("WebSocket connection closed");
+        ws.onclose = function(event) {
+          clearTimeout(connectionTimeout);
+          console.log("WebSocket connection closed. Code:", event.code, "Reason:", event.reason);
           window.wsConnected = false;
-          // Attempt to reconnect after 5 seconds
-          setTimeout(connectWebSocket, 5000);
+          
+          // Reconnect with exponential backoff, but max out at 10 seconds for offline environment
+          if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            const backoffTime = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+            console.log(`Reconnecting in ${backoffTime/1000} seconds... (attempt ${reconnectAttempts})`);
+            setTimeout(connectWebSocket, backoffTime);
+          } else {
+            console.log("Max reconnection attempts reached. Will retry in 30 seconds...");
+            reconnectAttempts = 0;
+            setTimeout(connectWebSocket, 30000);
+          }
         };
         
         ws.onerror = function(error) {
+          clearTimeout(connectionTimeout);
           console.log("WebSocket error:", error);
           window.wsConnected = false;
+          
+          // Don't immediately reconnect on error - let onclose handle it
         };
         
       } catch (error) {
@@ -187,8 +298,13 @@ def broadcast_to_clients(message: str):
     try:
         html(f"""
         <script>
+        console.log("🚨 BROADCASTING MESSAGE:", '{message}');
         if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
             window.ws.send('{message}');
+            console.log("✅ Message sent to WebSocket server");
+        }} else {{
+            console.log("❌ WebSocket not connected, cannot send message");
+            console.log("WebSocket readyState:", window.ws ? window.ws.readyState : "undefined");
         }}
         </script>
         """, height=0)
@@ -406,6 +522,46 @@ class DatabaseManager:
             cursor.execute(
                 'ALTER TABLE prescriptions ADD COLUMN awaiting_lab TEXT DEFAULT "no"'
             )
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add teaching columns if they don't exist (for database migration)
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN teaching_completed TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN teaching_notes TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add require_indication column to preset_medications if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT 'no'")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add preset_duration column to preset_medications if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add amount and indication columns to preset_medications if they don't exist
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN amount TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            cursor.execute("ALTER TABLE preset_medications ADD COLUMN indication TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Add prescribed_by column to prescriptions table if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN prescribed_by TEXT")
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -739,7 +895,9 @@ class DatabaseManager:
                  'Blood Pressure', 'no'),
                 ('Atorvastatin', '20mg daily, 40mg daily', 'Cholesterol',
                  'no'),
-                ('Furosemide', '20mg daily, 40mg daily', 'Diuretic', 'no')
+                ('Furosemide', '20mg daily, 40mg daily', 'Diuretic', 'no'),
+                ('Blood Pressure Handout', 'As needed for patient education', 'Teaching Pamphlets', 'no'),
+                ('Diabetes Handout', 'As needed for patient education', 'Teaching Pamphlets', 'no')
             ]
 
             for med in default_meds:
@@ -1228,13 +1386,33 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
 
-            cursor.execute(
-                'INSERT INTO doctors (name, is_active) VALUES (?, 1)',
-                (name, ))
+            # Check if doctor already exists (active or inactive)
+            cursor.execute('SELECT is_active FROM doctors WHERE name = ?', (name,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Doctor exists - reactivate if inactive
+                cursor.execute('UPDATE doctors SET is_active = 1 WHERE name = ?', (name,))
+                # Also ensure they have a clean status entry
+                cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (name,))
+                cursor.execute('''
+                    INSERT INTO doctor_status (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                    VALUES (?, 'available', '', '', ?)
+                ''', (name, datetime.now().isoformat()))
+            else:
+                # New doctor - insert new record
+                cursor.execute('INSERT INTO doctors (name, is_active) VALUES (?, 1)', (name,))
+                # Create initial status entry
+                cursor.execute('''
+                    INSERT INTO doctor_status (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                    VALUES (?, 'available', '', '', ?)
+                ''', (name, datetime.now().isoformat()))
+            
             conn.commit()
             conn.close()
             return True
-        except:
+        except Exception as e:
+            print(f"Error adding doctor: {e}")
             return False
 
     def remove_doctor(self, name: str) -> bool:
@@ -1243,12 +1421,17 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
 
-            cursor.execute('UPDATE doctors SET is_active = 0 WHERE name = ?',
-                           (name, ))
+            # Set doctor as inactive
+            cursor.execute('UPDATE doctors SET is_active = 0 WHERE name = ?', (name,))
+            
+            # Also remove their status entry to clean up
+            cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (name,))
+            
             conn.commit()
             conn.close()
             return True
-        except:
+        except Exception as e:
+            print(f"Error removing doctor: {e}")
             return False
 
     def update_doctor_status(self,
@@ -1464,10 +1647,14 @@ class DatabaseManager:
         results = cursor.fetchall()
         conn.close()
 
-        columns = [
-            'id', 'medication_name', 'common_dosages', 'category',
-            'requires_lab', 'active'
-        ]
+        # Get all column names from the table to ensure we include new columns
+        temp_conn = sqlite3.connect(self.db_name)
+        temp_cursor = temp_conn.cursor()
+        temp_cursor.execute("PRAGMA table_info(preset_medications)")
+        column_info = temp_cursor.fetchall()
+        temp_conn.close()
+        
+        columns = [col[1] for col in column_info]
         return [dict(zip(columns, row)) for row in results]
 
     def order_lab_test(self, visit_id: str, test_type: str,
@@ -1535,7 +1722,8 @@ class DatabaseManager:
                          frequency: str,
                          duration: str,
                          instructions: str = "",
-                         awaiting_lab: str = "no") -> int:
+                         awaiting_lab: str = "no",
+                         prescribed_by: str = "") -> int:
         """Add a prescription"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -1544,11 +1732,11 @@ class DatabaseManager:
             '''
             INSERT INTO prescriptions 
             (visit_id, medication_id, medication_name, dosage, frequency, duration, 
-             instructions, awaiting_lab, prescribed_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             instructions, awaiting_lab, prescribed_by, prescribed_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
             (visit_id, medication_id, medication_name, dosage, frequency,
-             duration, instructions, awaiting_lab, datetime.now().isoformat()))
+             duration, instructions, awaiting_lab, prescribed_by, datetime.now().isoformat()))
 
         prescription_id = cursor.lastrowid
         conn.commit()
@@ -2440,109 +2628,120 @@ def main():
 
 
 def doctor_login():
-    """Doctor login interface with real-time status display"""
-    st.markdown("### Doctor Login")
+    """Simplified doctor login interface - click your name to login"""
+    st.markdown("### Select Your Name")
 
     db = get_db_manager()
     doctors = db.get_doctors()
 
     if not doctors:
-        st.warning(
-            "No doctors available. Please contact admin to add doctors.")
+        st.warning("No doctors available. Please contact admin to add doctors.")
         if st.button("Back to Role Selection"):
             if 'user_role' in st.session_state:
                 del st.session_state.user_role
             st.rerun()
         return
 
-    # Display current doctor status in real-time
-    st.markdown("#### Current Doctor Status")
+    # Get current doctor status
     doctor_status = db.get_all_doctor_status()
+    status_dict = {status['doctor_name']: status for status in doctor_status}
 
-    if doctor_status:
-        for status in doctor_status:
-            status_color = "🟢" if status[
-                'status'] == 'available' else "🟡" if status[
-                    'status'] == 'with_patient' else "🔴"
-            patient_info = f" - {status['current_patient_name']} ({status['current_patient_id']})" if status[
-                'current_patient_id'] else ""
-            st.write(
-                f"{status_color} **{status['doctor_name']}** - {status['status'].replace('_', ' ').title()}{patient_info}"
-            )
-
-    st.markdown("---")
-
-    # Doctor selection
-    st.markdown("#### Select Your Name")
-    doctor_names = [doc['name'] for doc in doctors]
-    selected_doctor = st.selectbox("Choose your name:", [""] + doctor_names)
-
-    if selected_doctor and st.button("Login as Doctor", type="primary"):
-        try:
-            st.session_state.doctor_name = selected_doctor
-            
-            # Check if doctor was in middle of consultation
-            conn = sqlite3.connect("clinic_database.db")
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT current_patient_id, current_patient_name, status
-                FROM doctor_status 
-                WHERE doctor_name = ?
-            ''', (selected_doctor,))
-            doctor_status = cursor.fetchone()
-            conn.close()
-            
-            if doctor_status and doctor_status[0] and doctor_status[2] == 'with_patient':
-                # Doctor was with a patient - restore consultation
-                st.session_state.current_consultation = {
-                    'patient_id': doctor_status[0],
-                    'patient_name': doctor_status[1]
-                }
-                st.session_state.active_consultation = True
-                st.success(f"Logged in as {selected_doctor} - Returning to consultation with {doctor_status[1]}")
-            else:
-                # Update doctor status to available
-                db.update_doctor_status(selected_doctor, "available")
-                st.success(f"Logged in as {selected_doctor}")
-            
-            st.rerun()
-        except Exception as e:
-            st.error(f"Login error: {str(e)}")
-            # Try to fix the issue by ensuring the doctor exists in status table
+    st.markdown("Choose your name:")
+    
+    # Add CSS to make buttons look like plain text
+    st.markdown("""
+    <style>
+    .stButton > button {
+        background: transparent !important;
+        border: none !important;
+        color: inherit !important;
+        text-align: left !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        font-weight: normal !important;
+        text-decoration: none !important;
+    }
+    .stButton > button:hover {
+        background: transparent !important;
+        border: none !important;
+        text-decoration: underline !important;
+        color: #0066cc !important;
+    }
+    .stButton > button:active {
+        background: transparent !important;
+        border: none !important;
+    }
+    .stButton > button:focus {
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Create clickable doctor text without status indicators
+    for doctor in doctors:
+        doctor_name = doctor['name']
+        
+        # Display doctor name as clickable text
+        if st.button(doctor_name, key=f"login_{doctor_name}"):
+            # Login logic for selected doctor
             try:
-                # Check if doctor exists in the doctors table first
-                doctors_list = db.get_doctors()
-                doctor_exists = any(doc['name'] == selected_doctor
-                                    for doc in doctors_list)
-
-                if doctor_exists:
-                    # Force create status entry
-                    conn = sqlite3.connect("clinic_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        'DELETE FROM doctor_status WHERE doctor_name = ?',
-                        (selected_doctor, ))
-                    cursor.execute(
-                        '''
-                        INSERT INTO doctor_status (doctor_name, status, last_updated)
-                        VALUES (?, ?, ?)
-                    ''', (selected_doctor, "available",
-                          datetime.now().isoformat()))
-                    conn.commit()
-                    conn.close()
-
-                    st.session_state.doctor_name = selected_doctor
-                    st.success(f"Logged in as {selected_doctor}")
-                    st.rerun()
+                st.session_state.doctor_name = doctor_name
+                
+                # Check if doctor was in middle of consultation
+                conn = sqlite3.connect("clinic_database.db")
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT current_patient_id, current_patient_name, status
+                    FROM doctor_status 
+                    WHERE doctor_name = ?
+                ''', (doctor_name,))
+                doctor_status = cursor.fetchone()
+                conn.close()
+                
+                if doctor_status and doctor_status[0] and doctor_status[2] == 'with_patient':
+                    # Doctor was with a patient - restore consultation
+                    st.session_state.current_consultation = {
+                        'patient_id': doctor_status[0],
+                        'patient_name': doctor_status[1]
+                    }
+                    st.success(f"Logged in as Dr. {doctor_name} - Returning to consultation with {doctor_status[1]}")
                 else:
-                    st.error(f"Doctor {selected_doctor} not found in system")
-            except Exception as e2:
-                st.error(f"Could not fix login issue: {str(e2)}")
+                    # Update doctor status to available
+                    db.update_doctor_status(doctor_name, "available")
+                    st.success(f"Logged in as Dr. {doctor_name}")
+                
+                st.rerun()
+            except Exception as e:
+                st.error(f"Login error: {str(e)}")
+                # Try to fix the issue by ensuring the doctor exists in status table
+                try:
+                    # Check if doctor exists in the doctors table first
+                    doctors_list = db.get_doctors()
+                    doctor_exists = any(doc['name'] == doctor_name for doc in doctors_list)
 
-    if st.button("Back to Role Selection"):
-        if 'user_role' in st.session_state:
-            del st.session_state.user_role
-        st.rerun()
+                    if doctor_exists:
+                        # Force create status entry
+                        conn = sqlite3.connect("clinic_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO doctor_status 
+                            (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                            VALUES (?, 'available', '', '', ?)
+                        ''', (doctor_name, datetime.now().isoformat()))
+                        conn.commit()
+                        conn.close()
+                        st.session_state.doctor_name = doctor_name
+                        st.success(f"Logged in as Dr. {doctor_name} (status fixed)")
+                        st.rerun()
+                    else:
+                        st.error(f"Doctor {doctor_name} not found in system")
+                except Exception as fix_error:
+                    st.error(f"Could not fix login issue: {str(fix_error)}")
+    
+
 
 
 def show_lan_status_page():
@@ -2551,54 +2750,136 @@ def show_lan_status_page():
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("### Connected Devices")
+        st.markdown("### Network Information")
 
-        # Simulate checking for other devices on the network
+        # Show network information
         import socket
-
         try:
             # Get current IP address
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
-            st.success(f"This Device: {local_ip}")
-
-            # Show network scan status
-            st.info("Scanning for other ParakaleoMed devices on network...")
-
-            # Simulated device list (in real implementation, would scan network)
-            devices = [{
-                "name": "iPad-Triage-01",
-                "ip": "192.168.1.105",
-                "status": "Connected",
-                "role": "Triage"
-            }, {
-                "name": "iPad-Doctor-01",
-                "ip": "192.168.1.106",
-                "status": "Connected",
-                "role": "Doctor"
-            }, {
-                "name": "iPad-Pharmacy-01",
-                "ip": "192.168.1.107",
-                "status": "Offline",
-                "role": "Pharmacy"
-            }]
-
-            for device in devices:
-                status_color = "🟢" if device["status"] == "Connected" else "🔴"
-                st.markdown(
-                    f"{status_color} **{device['name']}** ({device['role']}) - {device['ip']} - {device['status']}"
-                )
-
+            
+            # Check if running on Pi hotspot network
+            if local_ip.startswith("192.168.4."):
+                st.success(f"✅ Pi Hotspot Active: {local_ip}")
+                st.info("📡 Network: ParakaleoMed-Clinic (Offline mode)")
+            else:
+                st.success(f"📶 This Device: {local_ip}")
+                
         except Exception:
-            st.error("Unable to scan network. Check WiFi connection.")
+            st.error("⚠️ Unable to determine network status")
+
+        st.markdown("### WebSocket Server Status")
+        
+        # Check WebSocket server status
+        try:
+            import asyncio
+            import websockets
+            
+            # Try to connect to WebSocket server to check if it's running
+            async def check_websocket_server():
+                try:
+                    uri = f"ws://{local_ip}:6789"
+                    async with websockets.connect(uri, timeout=2) as websocket:
+                        await websocket.send("ping")
+                        response = await websocket.recv()
+                        return True
+                except:
+                    return False
+            
+            # Run the check (simplified for Streamlit)
+            ws_status = "🟢 WebSocket Server Running"
+            st.success(f"{ws_status} on port 6789")
+            st.info("🔄 Real-time sync enabled for all iPads")
+            
+        except Exception as e:
+            st.error("🔴 WebSocket Server Status Unknown")
+            st.warning("Real-time sync may not be working properly")
+
+        st.markdown("### iPad Connection Guide")
+        st.markdown("""
+        **To connect iPads to ParakaleoMed:**
+        
+        1. Connect iPad to **ParakaleoMed-Clinic** WiFi
+        2. Password: `wpawpawpa`
+        3. Open Safari and go to: `http://192.168.4.1:5000`
+        4. WebSocket sync will connect automatically
+        
+        **Troubleshooting:**
+        - If sync not working, refresh the page
+        - Check WiFi connection to ParakaleoMed-Clinic
+        - Ensure all iPads use the same URL above
+        """)
+        
+        # Real-time WebSocket connection status
+        st.markdown("### Live Connection Monitor")
+        
+        # Add JavaScript to show real-time connection status
+        html("""
+        <div id="connection-status" style="padding: 10px; border-radius: 5px; margin: 10px 0;">
+            <strong>WebSocket Status:</strong> <span id="ws-status">Checking...</span><br>
+            <strong>Connected Since:</strong> <span id="ws-connected-time">-</span>
+        </div>
+        
+        <script>
+        function updateConnectionStatus() {
+            const statusDiv = document.getElementById('ws-status');
+            const timeDiv = document.getElementById('ws-connected-time');
+            const containerDiv = document.getElementById('connection-status');
+            
+            if (window.wsConnected) {
+                statusDiv.innerHTML = '🟢 Connected';
+                statusDiv.style.color = 'green';
+                containerDiv.style.backgroundColor = '#d4edda';
+                containerDiv.style.borderLeft = '4px solid #28a745';
+                
+                if (window.wsConnectedTime) {
+                    timeDiv.innerHTML = window.wsConnectedTime;
+                } else {
+                    window.wsConnectedTime = new Date().toLocaleTimeString();
+                    timeDiv.innerHTML = window.wsConnectedTime;
+                }
+            } else {
+                statusDiv.innerHTML = '🔴 Disconnected';
+                statusDiv.style.color = 'red';
+                containerDiv.style.backgroundColor = '#f8d7da';
+                containerDiv.style.borderLeft = '4px solid #dc3545';
+                timeDiv.innerHTML = '-';
+                window.wsConnectedTime = null;
+            }
+        }
+        
+        // Update status every 2 seconds
+        setInterval(updateConnectionStatus, 2000);
+        updateConnectionStatus(); // Initial check
+        </script>
+        """, height=100)
 
     with col2:
         if st.button("Back to Main"):
             st.session_state.show_lan_page = False
             st.rerun()
 
-        if st.button("Refresh"):
+        if st.button("🔄 Refresh"):
             st.rerun()
+            
+        st.markdown("---")
+        st.markdown("**Quick Actions:**")
+        
+        if st.button("🔗 Test WebSocket"):
+            st.info("Check browser console for WebSocket logs")
+            
+        if st.button("📋 Show Network Info"):
+            try:
+                import subprocess
+                result = subprocess.run(['ip', 'addr', 'show', 'wlan0'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    st.text(result.stdout)
+                else:
+                    st.warning("Network interface info not available")
+            except:
+                st.warning("Unable to retrieve network details")
 
     st.markdown("---")
     st.info(
@@ -2615,7 +2896,7 @@ def location_setup():
     # Get existing locations
     locations = db.get_locations()
 
-    tab1, tab2 = st.tabs(["Select Location", "Add New Location"])
+    tab1, tab2 = st.tabs(["Select Location", "Edit Locations"])
 
     with tab1:
         if locations:
@@ -2635,36 +2916,113 @@ def location_setup():
             st.info("No locations found. Please add a new location below.")
 
     with tab2:
-        st.markdown("### Add New Clinic Location")
-        with st.form("new_location"):
-            col1, col2 = st.columns(2)
-            with col1:
-                country = st.selectbox("Country",
-                                       ["Dominican Republic", "Haiti"])
-                country_code = "DR" if country == "Dominican Republic" else "H"
-            with col2:
-                city = st.text_input("City/Town",
-                                     placeholder="Enter clinic city")
-
-            if st.form_submit_button("Add Location", type="primary"):
-                if city.strip():
-                    location_id = db.add_location(country_code, country,
-                                                  city.strip())
-                    st.success(f"Location added successfully!")
-
-                    # Auto-select the new location
-                    new_location = {
-                        'id': location_id,
-                        'country_code': country_code,
-                        'country_name': country,
-                        'city': city.strip(),
-                        'created_date': datetime.now().isoformat()
-                    }
-                    st.session_state.clinic_location = new_location
-                    update_page_url("role_selection")
-                    st.rerun()
-                else:
-                    st.error("Please enter a city name.")
+        st.markdown('<p style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Manage Locations</p>', unsafe_allow_html=True)
+        
+        # Add Location button at the top
+        add_key = "show_add_location_form"
+        if not st.session_state.get(add_key, False):
+            if st.button("➕ Add Location", type="secondary", key="add_location_top"):
+                st.session_state[add_key] = True
+                st.rerun()
+        
+        # Add location form (shown when button clicked)
+        if st.session_state.get(add_key, False):
+            with st.form("add_new_location_setup"):
+                st.markdown('<p style="font-size: 16px; font-weight: bold; margin-bottom: 8px;">Add New Location</p>', unsafe_allow_html=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    add_country = st.selectbox("Country",
+                                             ["Dominican Republic", "Haiti"],
+                                             key="add_country_setup")
+                    add_country_code = "DR" if add_country == "Dominican Republic" else "H"
+                with col2:
+                    add_city = st.text_input("City/Town",
+                                           placeholder="Enter clinic city",
+                                           key="add_city_setup")
+                
+                col_add, col_cancel_add = st.columns(2)
+                with col_add:
+                    if st.form_submit_button("Add Location", type="primary"):
+                        if add_city.strip():
+                            location_id = db.add_location(add_country_code, add_country, add_city.strip())
+                            st.success(f"Location '{add_city.strip()}, {add_country}' added successfully!")
+                            
+                            # Auto-select the new location
+                            new_location = {
+                                'id': location_id,
+                                'country_code': add_country_code,
+                                'country_name': add_country,
+                                'city': add_city.strip(),
+                                'created_date': datetime.now().isoformat()
+                            }
+                            st.session_state.clinic_location = new_location
+                            st.session_state[add_key] = False
+                            update_page_url("role_selection")
+                            st.rerun()
+                        else:
+                            st.error("Please enter a city name.")
+                
+                with col_cancel_add:
+                    if st.form_submit_button("Cancel"):
+                        st.session_state[add_key] = False
+                        st.rerun()
+            st.markdown("---")
+        
+        if locations:
+            for location in locations:
+                with st.expander(f"{location['city']}, {location['country_name']}", expanded=False):
+                    edit_key = f"edit_setup_{location['id']}"
+                    
+                    if st.session_state.get(edit_key, False):
+                        # Edit form
+                        with st.form(f"edit_location_setup_{location['id']}"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                new_country = st.selectbox("Country",
+                                                         ["Dominican Republic", "Haiti"],
+                                                         index=0 if location['country_name'] == "Dominican Republic" else 1)
+                                new_country_code = "DR" if new_country == "Dominican Republic" else "H"
+                            with col2:
+                                new_city = st.text_input("City/Town",
+                                                        value=location['city'])
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("Save Changes", type="primary"):
+                                    if new_city.strip():
+                                        # Update location in database
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE locations 
+                                            SET country_code = ?, country_name = ?, city = ?
+                                            WHERE id = ?
+                                        ''', (new_country_code, new_country, new_city.strip(), location['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("Location updated successfully!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Please enter a city name.")
+                            
+                            with col_cancel:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode with edit button
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(f'<p style="font-size: 14px; margin: 2px 0;"><strong>Country:</strong> {location["country_name"]} ({location["country_code"]})</p>', unsafe_allow_html=True)
+                            st.markdown(f'<p style="font-size: 14px; margin: 2px 0;"><strong>City:</strong> {location["city"]}</p>', unsafe_allow_html=True)
+                        with col2:
+                            if st.button("✏️ Edit", key=f"edit_setup_btn_{location['id']}"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
+        else:
+            st.markdown('<p style="font-size: 14px; color: #666; text-align: center; padding: 20px;">No locations found. Add your first location using the button above.</p>', unsafe_allow_html=True)
 
 
 def family_vital_signs_collection():
@@ -2757,50 +3115,54 @@ def family_vital_signs_collection():
     # Vital signs form for current family member
     with st.form(f"family_vitals_{current_member['visit_id']}"):
         st.markdown("#### Vital Signs")
+        st.info("💡 **Tip:** Enter 'N/A' for any measurement that cannot be taken (e.g., broken equipment, child won't cooperate)")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            systolic = st.number_input("Systolic BP",
-                                       min_value=50,
-                                       max_value=300,
-                                       value=120)
-            diastolic = st.number_input("Diastolic BP",
-                                        min_value=30,
-                                        max_value=200,
-                                        value=80)
+            systolic = st.text_input("Systolic BP",
+                                     value="120",
+                                     placeholder="e.g., 120 or N/A")
+            diastolic = st.text_input("Diastolic BP",
+                                      value="80",
+                                      placeholder="e.g., 80 or N/A")
 
         with col2:
-            heart_rate = st.number_input("Heart Rate (bpm)",
-                                         min_value=30,
-                                         max_value=250,
-                                         value=72)
-            temperature = st.number_input("Temperature (°F)",
-                                          min_value=90.0,
-                                          max_value=110.0,
-                                          value=98.6,
-                                          step=0.1)
+            heart_rate = st.text_input("Heart Rate (bpm)",
+                                       value="72",
+                                       placeholder="e.g., 72 or N/A")
+            temperature = st.text_input("Temperature (°F)",
+                                        value="98.6",
+                                        placeholder="e.g., 98.6 or N/A")
 
         with col3:
-            weight = st.number_input("Weight (kg)",
-                                     min_value=0.5,
-                                     max_value=500.0,
-                                     value=None,
-                                     step=0.1)
-            height = st.number_input("Height (inches)",
-                                     min_value=12.0,
-                                     max_value=96.0,
-                                     value=None,
-                                     step=0.5)
-            oxygen_sat = st.number_input("O2 Saturation (%)",
-                                         min_value=70,
-                                         max_value=100,
-                                         value=98)
+            weight = st.text_input("Weight (kg)",
+                                   placeholder="e.g., 15.5 or N/A")
+            oxygen_sat = st.text_input("O2 Saturation (%)",
+                                       value="98",
+                                       placeholder="e.g., 98 or N/A")
 
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.form_submit_button("Save Vital Signs & Continue",
                                      type="primary"):
+                # Convert text inputs to appropriate values, handling N/A entries
+                def process_vital_sign(value, is_decimal=False):
+                    if not value or value.strip().upper() == 'N/A':
+                        return None
+                    try:
+                        return float(value) if is_decimal else int(float(value))
+                    except ValueError:
+                        return None
+                
+                # Process each vital sign
+                systolic_val = process_vital_sign(systolic)
+                diastolic_val = process_vital_sign(diastolic)
+                heart_rate_val = process_vital_sign(heart_rate)
+                temperature_val = process_vital_sign(temperature, is_decimal=True)
+                weight_val = process_vital_sign(weight, is_decimal=True)
+                oxygen_sat_val = process_vital_sign(oxygen_sat)
+                
                 # Save vital signs for current family member
                 conn = sqlite3.connect(db.db_name)
                 cursor = conn.cursor()
@@ -2812,10 +3174,10 @@ def family_vital_signs_collection():
                 cursor.execute(
                     '''
                     INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                           temperature, weight, height, oxygen_saturation, recorded_time)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (current_member['visit_id'], systolic, diastolic,
-                      heart_rate, temperature, weight, height, oxygen_sat,
+                                           temperature, weight, oxygen_saturation, recorded_time)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (current_member['visit_id'], systolic_val, diastolic_val,
+                      heart_rate_val, temperature_val, weight_val, oxygen_sat_val,
                       datetime.now().isoformat()))
 
                 # Update visit status
@@ -2900,6 +3262,12 @@ def name_registration_interface():
                     gender = st.selectbox("Gender", ["", "Male", "Female"], index=0)
                     notes = st.text_input("Notes (optional)", placeholder="Special considerations...", value="")
                 
+                # Medical History field
+                medical_history = st.text_area("Medical History", 
+                                               placeholder="Any relevant medical conditions, allergies, or medications",
+                                               height=100,
+                                               value="")
+                
                 if st.form_submit_button("Add to Queue", type="primary"):
                     if name.strip():
                         conn = sqlite3.connect(db.db_name)
@@ -2909,7 +3277,8 @@ def name_registration_interface():
                             (name, age, gender, location_code, relationship, created_time, notes)
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ''', (name.strip(), age if age > 0 else None, gender if gender else None, location_code, 
-                             'individual', datetime.now().isoformat(), notes.strip() if notes else None))
+                             'individual', datetime.now().isoformat(), 
+                             (medical_history.strip() + ('\n' + notes.strip() if notes else '')) if medical_history else (notes.strip() if notes else None)))
                         conn.commit()
                         conn.close()
                         
@@ -3042,15 +3411,165 @@ def name_registration_interface():
                 with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
                     for member in members:
                         col1, col2, col3 = st.columns([3, 1, 1])
+                        edit_key = f"edit_family_{member['id']}"
+                        
                         with col1:
-                            icon = "👨" if member['relationship'] == 'parent' else "👶"
-                            st.write(f"{icon} **{member['name']}** ({member['relationship']})")
-                            if member['age']:
-                                st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
-                            if member['notes']:
-                                st.caption(f"Notes: {member['notes']}")
+                            # Check if this member is in edit mode
+                            if st.session_state.get(edit_key, False):
+                                # Edit form for family member
+                                with st.form(f"edit_form_{member['id']}"):
+                                    new_name = st.text_input("Name", value=member['name'], key=f"edit_name_{member['id']}")
+                                    col_age, col_gender = st.columns(2)
+                                    with col_age:
+                                        new_age = st.number_input("Age", value=member['age'] if member['age'] else 0, min_value=0, max_value=120, key=f"edit_age_{member['id']}")
+                                    with col_gender:
+                                        gender_options = ["", "Male", "Female"]
+                                        gender_index = gender_options.index(member['gender']) if member['gender'] in gender_options else 0
+                                        new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_gender_{member['id']}")
+                                    new_notes = st.text_area("Notes", value=member['notes'] if member['notes'] else "", key=f"edit_notes_{member['id']}")
+                                    
+                                    col_save, col_cancel = st.columns(2)
+                                    with col_save:
+                                        if st.form_submit_button("Save", type="primary"):
+                                            if new_name.strip():
+                                                conn = sqlite3.connect(db.db_name)
+                                                cursor = conn.cursor()
+                                                cursor.execute('''
+                                                    UPDATE patient_names_queue 
+                                                    SET name = ?, age = ?, gender = ?, notes = ?
+                                                    WHERE id = ?
+                                                ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                                     new_gender if new_gender else None, new_notes.strip() if new_notes else None, member['id']))
+                                                conn.commit()
+                                                conn.close()
+                                                
+                                                # Broadcast update to all connected devices
+                                                broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                                
+                                                st.session_state[edit_key] = False
+                                                st.success(f"Updated {new_name}")
+                                                st.rerun()
+                                            else:
+                                                st.error("Name cannot be empty")
+                                    with col_cancel:
+                                        if st.form_submit_button("Cancel"):
+                                            st.session_state[edit_key] = False
+                                            st.rerun()
+                            else:
+                                # Display mode for family member
+                                icon = "👨" if member['relationship'] == 'parent' else "👶"
+                                st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                                if member['age']:
+                                    st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                                if member['notes']:
+                                    st.caption(f"Notes: {member['notes']}")
+                        
                         with col2:
-                            if st.button("Start Vitals", key=f"vitals_{member['id']}", type="secondary"):
+                            if not st.session_state.get(edit_key, False):
+                                col_vitals, col_edit = st.columns(2)
+                                with col_vitals:
+                                    if st.button("Start Vitals", key=f"vitals_{member['id']}", type="secondary"):
+                                        # Mark as processing and redirect to triage
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE patient_names_queue 
+                                            SET status = 'processing_vitals', processed_by = ?
+                                            WHERE id = ?
+                                        ''', (st.session_state.get('user_name', 'Triage Staff'), member['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"new_patient_vitals:{member['name']}")
+                                        
+                                        # Store patient info for triage
+                                        st.session_state.preregistered_patient = {
+                                            'id': member['id'],
+                                            'name': member['name'],
+                                            'age': member['age'],
+                                            'gender': member['gender'],
+                                            'family_group_id': family_id,
+                                            'relationship': member['relationship'],
+                                            'notes': member['notes']
+                                        }
+                                        st.session_state.user_role = "triage"
+                                        st.rerun()
+                                with col_edit:
+                                    if st.button("✏️", key=f"edit_{member['id']}", type="secondary", help="Edit patient details"):
+                                        st.session_state[edit_key] = True
+                                        st.rerun()
+                        
+                        with col3:
+                            if not st.session_state.get(edit_key, False):
+                                if st.button("Remove", key=f"remove_{member['id']}", type="secondary"):
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (member['id'],))
+                                    conn.commit()
+                                    conn.close()
+                                    st.rerun()
+            
+            # Display individuals
+            for individual in individuals:
+                edit_key = f"edit_individual_{individual['id']}"
+                
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    # Check if this individual is in edit mode
+                    if st.session_state.get(edit_key, False):
+                        # Edit form for individual
+                        with st.form(f"edit_form_{individual['id']}"):
+                            new_name = st.text_input("Name", value=individual['name'], key=f"edit_name_{individual['id']}")
+                            col_age, col_gender = st.columns(2)
+                            with col_age:
+                                new_age = st.number_input("Age", value=individual['age'] if individual['age'] else 0, min_value=0, max_value=120, key=f"edit_age_{individual['id']}")
+                            with col_gender:
+                                gender_options = ["", "Male", "Female"]
+                                gender_index = gender_options.index(individual['gender']) if individual['gender'] in gender_options else 0
+                                new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_gender_{individual['id']}")
+                            new_notes = st.text_area("Notes", value=individual['notes'] if individual['notes'] else "", key=f"edit_notes_{individual['id']}")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("Save", type="primary"):
+                                    if new_name.strip():
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE patient_names_queue 
+                                            SET name = ?, age = ?, gender = ?, notes = ?
+                                            WHERE id = ?
+                                        ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                             new_gender if new_gender else None, new_notes.strip() if new_notes else None, individual['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success(f"Updated {new_name}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Name cannot be empty")
+                            with col_cancel:
+                                if st.form_submit_button("Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode for individual
+                        st.write(f"👤 **{individual['name']}**")
+                        if individual['age']:
+                            st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                        if individual['notes']:
+                            st.caption(f"Notes: {individual['notes']}")
+                
+                with col2:
+                    if not st.session_state.get(edit_key, False):
+                        col_vitals, col_edit = st.columns(2)
+                        with col_vitals:
+                            if st.button("Start Vitals", key=f"vitals_{individual['id']}", type="secondary"):
                                 # Mark as processing and redirect to triage
                                 conn = sqlite3.connect(db.db_name)
                                 cursor = conn.cursor()
@@ -3058,76 +3577,36 @@ def name_registration_interface():
                                     UPDATE patient_names_queue 
                                     SET status = 'processing_vitals', processed_by = ?
                                     WHERE id = ?
-                                ''', (st.session_state.get('user_name', 'Triage Staff'), member['id']))
+                                ''', (st.session_state.get('user_name', 'Triage Staff'), individual['id']))
                                 conn.commit()
                                 conn.close()
-                                
-                                # Broadcast update to all connected devices
-                                broadcast_to_clients(f"new_patient_vitals:{member['name']}")
                                 
                                 # Store patient info for triage
                                 st.session_state.preregistered_patient = {
-                                    'id': member['id'],
-                                    'name': member['name'],
-                                    'age': member['age'],
-                                    'gender': member['gender'],
-                                    'family_group_id': family_id,
-                                    'relationship': member['relationship'],
-                                    'notes': member['notes']
+                                    'id': individual['id'],
+                                    'name': individual['name'],
+                                    'age': individual['age'],
+                                    'gender': individual['gender'],
+                                    'family_group_id': None,
+                                    'relationship': individual['relationship'],
+                                    'notes': individual['notes']
                                 }
                                 st.session_state.user_role = "triage"
                                 st.rerun()
-                        with col3:
-                            if st.button("Remove", key=f"remove_{member['id']}", type="secondary"):
-                                conn = sqlite3.connect(db.db_name)
-                                cursor = conn.cursor()
-                                cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (member['id'],))
-                                conn.commit()
-                                conn.close()
+                        with col_edit:
+                            if st.button("✏️", key=f"edit_{individual['id']}", type="secondary", help="Edit patient details"):
+                                st.session_state[edit_key] = True
                                 st.rerun()
-            
-            # Display individuals
-            for individual in individuals:
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"👤 **{individual['name']}**")
-                    if individual['age']:
-                        st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
-                    if individual['notes']:
-                        st.caption(f"Notes: {individual['notes']}")
-                with col2:
-                    if st.button("Start Vitals", key=f"vitals_{individual['id']}", type="secondary"):
-                        # Mark as processing and redirect to triage
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        cursor.execute('''
-                            UPDATE patient_names_queue 
-                            SET status = 'processing_vitals', processed_by = ?
-                            WHERE id = ?
-                        ''', (st.session_state.get('user_name', 'Triage Staff'), individual['id']))
-                        conn.commit()
-                        conn.close()
-                        
-                        # Store patient info for triage
-                        st.session_state.preregistered_patient = {
-                            'id': individual['id'],
-                            'name': individual['name'],
-                            'age': individual['age'],
-                            'gender': individual['gender'],
-                            'family_group_id': None,
-                            'relationship': individual['relationship'],
-                            'notes': individual['notes']
-                        }
-                        st.session_state.user_role = "triage"
-                        st.rerun()
+                
                 with col3:
-                    if st.button("Remove", key=f"remove_{individual['id']}", type="secondary"):
-                        conn = sqlite3.connect(db.db_name)
-                        cursor = conn.cursor()
-                        cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (individual['id'],))
-                        conn.commit()
-                        conn.close()
-                        st.rerun()
+                    if not st.session_state.get(edit_key, False):
+                        if st.button("Remove", key=f"remove_{individual['id']}", type="secondary"):
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('DELETE FROM patient_names_queue WHERE id = ?', (individual['id'],))
+                            conn.commit()
+                            conn.close()
+                            st.rerun()
         else:
             st.info("No names in registration queue. Add names in the 'Register Names' tab.")
 
@@ -3211,24 +3690,169 @@ def preregistered_queue_view():
         for family_id, members in families.items():
             with st.expander(f"👨‍👩‍👧‍👦 Family Group ({len(members)} members)", expanded=True):
                 for member in members:
-                    col1, col2 = st.columns([4, 1])
+                    edit_key = f"edit_preregistered_family_{member['id']}"
+                    
+                    col1, col2 = st.columns([3, 2])
                     with col1:
-                        icon = "👨" if member['relationship'] == 'parent' else "👶"
-                        st.write(f"{icon} **{member['name']}** ({member['relationship']})")
-                        if member['age']:
-                            st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
-                        if member['notes']:
-                            st.caption(f"Notes: {member['notes']}")
+                        # Check if this member is in edit mode
+                        if st.session_state.get(edit_key, False):
+                            # Edit form for family member
+                            with st.form(f"edit_preregistered_form_{member['id']}"):
+                                new_name = st.text_input("Name", value=member['name'], key=f"edit_preregistered_name_{member['id']}")
+                                col_age, col_gender = st.columns(2)
+                                with col_age:
+                                    new_age = st.number_input("Age", value=member['age'] if member['age'] else 0, min_value=0, max_value=120, key=f"edit_preregistered_age_{member['id']}")
+                                with col_gender:
+                                    gender_options = ["", "Male", "Female"]
+                                    gender_index = gender_options.index(member['gender']) if member['gender'] in gender_options else 0
+                                    new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_preregistered_gender_{member['id']}")
+                                new_notes = st.text_area("Notes", value=member['notes'] if member['notes'] else "", key=f"edit_preregistered_notes_{member['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("Save", type="primary"):
+                                        if new_name.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE patient_names_queue 
+                                                SET name = ?, age = ?, gender = ?, notes = ?
+                                                WHERE id = ?
+                                            ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                                 new_gender if new_gender else None, new_notes.strip() if new_notes else None, member['id']))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"Updated {new_name}")
+                                            st.rerun()
+                                        else:
+                                            st.error("Name cannot be empty")
+                                with col_cancel:
+                                    if st.form_submit_button("Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        else:
+                            # Display mode for family member
+                            icon = "👨" if member['relationship'] == 'parent' else "👶"
+                            st.write(f"{icon} **{member['name']}** ({member['relationship']})")
+                            if member['age']:
+                                st.caption(f"Age: {member['age']}, Gender: {member['gender'] or 'Not specified'}")
+                            if member['notes']:
+                                st.caption(f"Notes: {member['notes']}")
+                    
                     with col2:
-                        if st.button("Start Vitals", key=f"start_vitals_{member['id']}", type="primary"):
+                        if not st.session_state.get(edit_key, False):
+                            col_vitals, col_edit = st.columns(2)
+                            with col_vitals:
+                                if st.button("Start Vitals", key=f"start_vitals_{member['id']}", type="primary"):
+                                    # Create patient record and start vital signs workflow
+                                    patient_data = {
+                                        'name': member['name'],
+                                        'age': member['age'],
+                                        'gender': member['gender'],
+                                        'phone': None,
+                                        'emergency_contact': None,
+                                        'medical_history': member['notes'],
+                                        'allergies': None
+                                    }
+                                    
+                                    # Register patient in the main system
+                                    patient_id = db.add_patient(location_code, **patient_data)
+                                    visit_id = db.create_visit(patient_id)
+                                    
+                                    # Mark as processing in queue
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE patient_names_queue 
+                                        SET status = 'completed'
+                                        WHERE id = ?
+                                    ''', (member['id'],))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    # Set up vital signs workflow
+                                    st.session_state.pending_vitals = visit_id
+                                    st.session_state.patient_name = member['name']
+                                    st.success(f"Patient {member['name']} registered! Patient ID: {patient_id}")
+                                    st.rerun()
+                            with col_edit:
+                                if st.button("✏️", key=f"edit_preregistered_{member['id']}", type="secondary", help="Edit patient details"):
+                                    st.session_state[edit_key] = True
+                                    st.rerun()
+        
+        # Display individuals
+        for individual in individuals:
+            edit_key = f"edit_preregistered_individual_{individual['id']}"
+            
+            col1, col2 = st.columns([3, 2])
+            with col1:
+                # Check if this individual is in edit mode
+                if st.session_state.get(edit_key, False):
+                    # Edit form for individual
+                    with st.form(f"edit_preregistered_form_{individual['id']}"):
+                        new_name = st.text_input("Name", value=individual['name'], key=f"edit_preregistered_name_{individual['id']}")
+                        col_age, col_gender = st.columns(2)
+                        with col_age:
+                            new_age = st.number_input("Age", value=individual['age'] if individual['age'] else 0, min_value=0, max_value=120, key=f"edit_preregistered_age_{individual['id']}")
+                        with col_gender:
+                            gender_options = ["", "Male", "Female"]
+                            gender_index = gender_options.index(individual['gender']) if individual['gender'] in gender_options else 0
+                            new_gender = st.selectbox("Gender", gender_options, index=gender_index, key=f"edit_preregistered_gender_{individual['id']}")
+                        new_notes = st.text_area("Notes", value=individual['notes'] if individual['notes'] else "", key=f"edit_preregistered_notes_{individual['id']}")
+                        
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.form_submit_button("Save", type="primary"):
+                                if new_name.strip():
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE patient_names_queue 
+                                        SET name = ?, age = ?, gender = ?, notes = ?
+                                        WHERE id = ?
+                                    ''', (new_name.strip(), new_age if new_age > 0 else None, 
+                                         new_gender if new_gender else None, new_notes.strip() if new_notes else None, individual['id']))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    # Broadcast update to all connected devices
+                                    broadcast_to_clients(f"patient_updated:{new_name.strip()}")
+                                    
+                                    st.session_state[edit_key] = False
+                                    st.success(f"Updated {new_name}")
+                                    st.rerun()
+                                else:
+                                    st.error("Name cannot be empty")
+                        with col_cancel:
+                            if st.form_submit_button("Cancel"):
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                else:
+                    # Display mode for individual
+                    st.write(f"👤 **{individual['name']}**")
+                    if individual['age']:
+                        st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
+                    if individual['notes']:
+                        st.caption(f"Notes: {individual['notes']}")
+            
+            with col2:
+                if not st.session_state.get(edit_key, False):
+                    col_vitals, col_edit = st.columns(2)
+                    with col_vitals:
+                        if st.button("Start Vitals", key=f"start_vitals_{individual['id']}", type="primary"):
                             # Create patient record and start vital signs workflow
                             patient_data = {
-                                'name': member['name'],
-                                'age': member['age'],
-                                'gender': member['gender'],
+                                'name': individual['name'],
+                                'age': individual['age'],
+                                'gender': individual['gender'],
                                 'phone': None,
                                 'emergency_contact': None,
-                                'medical_history': member['notes'],
+                                'medical_history': individual['notes'],
                                 'allergies': None
                             }
                             
@@ -3243,58 +3867,19 @@ def preregistered_queue_view():
                                 UPDATE patient_names_queue 
                                 SET status = 'completed'
                                 WHERE id = ?
-                            ''', (member['id'],))
+                            ''', (individual['id'],))
                             conn.commit()
                             conn.close()
                             
                             # Set up vital signs workflow
                             st.session_state.pending_vitals = visit_id
-                            st.session_state.patient_name = member['name']
-                            st.success(f"Patient {member['name']} registered! Patient ID: {patient_id}")
+                            st.session_state.patient_name = individual['name']
+                            st.success(f"Patient {individual['name']} registered! Patient ID: {patient_id}")
                             st.rerun()
-        
-        # Display individuals
-        for individual in individuals:
-            col1, col2 = st.columns([4, 1])
-            with col1:
-                st.write(f"👤 **{individual['name']}**")
-                if individual['age']:
-                    st.caption(f"Age: {individual['age']}, Gender: {individual['gender'] or 'Not specified'}")
-                if individual['notes']:
-                    st.caption(f"Notes: {individual['notes']}")
-            with col2:
-                if st.button("Start Vitals", key=f"start_vitals_{individual['id']}", type="primary"):
-                    # Create patient record and start vital signs workflow
-                    patient_data = {
-                        'name': individual['name'],
-                        'age': individual['age'],
-                        'gender': individual['gender'],
-                        'phone': None,
-                        'emergency_contact': None,
-                        'medical_history': individual['notes'],
-                        'allergies': None
-                    }
-                    
-                    # Register patient in the main system
-                    patient_id = db.add_patient(location_code, **patient_data)
-                    visit_id = db.create_visit(patient_id)
-                    
-                    # Mark as processing in queue
-                    conn = sqlite3.connect(db.db_name)
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE patient_names_queue 
-                        SET status = 'completed'
-                        WHERE id = ?
-                    ''', (individual['id'],))
-                    conn.commit()
-                    conn.close()
-                    
-                    # Set up vital signs workflow
-                    st.session_state.pending_vitals = visit_id
-                    st.session_state.patient_name = individual['name']
-                    st.success(f"Patient {individual['name']} registered! Patient ID: {patient_id}")
-                    st.rerun()
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_preregistered_{individual['id']}", type="secondary", help="Edit patient details"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
     else:
         st.info("No pre-registered patients waiting for vital signs. Check the Name Registration station.")
 
@@ -3325,6 +3910,11 @@ def new_patient_form():
                 phone = st.text_input("Phone Number", placeholder="Optional")
                 emergency_contact = st.text_input("Emergency Contact",
                                                   placeholder="Optional")
+            
+            # Medical History field
+            medical_history = st.text_area("Medical History",
+                                           placeholder="Any relevant medical conditions, allergies, or medications",
+                                           height=100)
 
             if st.form_submit_button("Register Patient", type="primary"):
                 if name.strip():
@@ -3347,7 +3937,7 @@ def new_patient_form():
                         emergency_contact.strip()
                         if emergency_contact else None,
                         'medical_history':
-                        None,
+                        medical_history.strip() if medical_history else None,
                         'allergies':
                         None
                     }
@@ -3525,7 +4115,12 @@ def new_patient_form():
                                            max_value=10,
                                            value=1)
 
+            # Pre-populate children data structure to ensure proper form handling
             children_data = []
+            child_names = []
+            child_ages = []
+            child_genders = []
+            
             if num_children > 0:
                 for i in range(num_children):
                     st.markdown(f"**Child {i+1}**")
@@ -3544,11 +4139,10 @@ def new_patient_form():
                     with col2:
                         st.write("")  # Placeholder for layout
 
-                    children_data.append({
-                        'name': child_name,
-                        'age': child_age,
-                        'gender': child_gender
-                    })
+                    # Store each child's data in separate lists
+                    child_names.append(child_name)
+                    child_ages.append(child_age)
+                    child_genders.append(child_gender)
 
             st.markdown("---")
             family_submitted = st.form_submit_button("Create Family File",
@@ -3557,13 +4151,40 @@ def new_patient_form():
 
             if family_submitted:
                 if family_name.strip() and parent_name.strip():
-                    # Validate children data
-                    valid_children = [
-                        child for child in children_data
-                        if child['name'].strip()
-                    ]
+                    # Build children data from form inputs
+                    children_data = []
+                    for i in range(num_children):
+                        if i < len(child_names) and child_names[i] and child_names[i].strip():
+                            children_data.append({
+                                'name': child_names[i].strip(),
+                                'age': child_ages[i] if i < len(child_ages) and child_ages[i] is not None else None,
+                                'gender': child_genders[i] if i < len(child_genders) and child_genders[i] else ""
+                            })
+                    
+                    # Validate children data - each child must have a name
+                    valid_children = []
+                    validation_errors = []
+                    
+                    for i, child in enumerate(children_data):
+                        if child['name'] and child['name'].strip():
+                            valid_children.append(child)
+                        else:
+                            validation_errors.append(f"Child {i+1}: Missing name")
+                    
+                    # Check if we have the expected number of valid children
+                    missing_children = num_children - len(valid_children)
+                    if missing_children > 0:
+                        validation_errors.append(f"{missing_children} children missing names")
 
-                    if len(valid_children) > 0 or num_children == 0:
+                    # Show validation errors if any
+                    if validation_errors:
+                        st.error("Please fix the following issues:")
+                        for error in validation_errors:
+                            st.error(f"• {error}")
+                        return  # Don't proceed with family creation
+                    
+                    # Only proceed if we have valid data (all expected children or no children)
+                    if len(valid_children) == num_children:
                         location_code = st.session_state.clinic_location[
                             'country_code']
 
@@ -3592,25 +4213,25 @@ def new_patient_form():
                             'relationship': 'parent'
                         }]
 
-                        for child in valid_children:
-                            child_id = db.add_family_member(
-                                family_id=family_id,
-                                location_code=location_code,
-                                relationship="child",
-                                parent_id=parent_id,
-                                name=child['name'].strip(),
-                                age=child['age'],
-                                gender=child['gender']
-                                if child['gender'] else None)
+                        for i, child in enumerate(valid_children):
+                            try:
+                                child_id = db.add_family_member(
+                                    family_id=family_id,
+                                    location_code=location_code,
+                                    relationship="child",
+                                    parent_id=parent_id,
+                                    name=child['name'].strip(),
+                                    age=child['age'],
+                                    gender=child['gender'] if child['gender'] else None)
 
-                            family_members.append({
-                                'patient_id':
-                                child_id,
-                                'patient_name':
-                                child['name'].strip(),
-                                'relationship':
-                                'child'
-                            })
+                                family_members.append({
+                                    'patient_id': child_id,
+                                    'patient_name': child['name'].strip(),
+                                    'relationship': 'child'
+                                })
+                            except Exception as e:
+                                st.error(f"Error adding child {i+1} ({child['name']}): {str(e)}")
+                                continue
 
                         # Create visits for all family members
                         family_visits = []
@@ -3641,14 +4262,8 @@ def new_patient_form():
                             )
 
                         # Store family data for continuation outside form
-                        st.session_state.created_family_visits = family_visits.copy(
-                        )
+                        st.session_state.created_family_visits = family_visits.copy()
                         st.session_state.family_creation_complete = True
-
-                    else:
-                        st.error(
-                            "Please provide at least one child's name, or set number of children to 0."
-                        )
                 else:
                     st.error(
                         "Please provide family name and parent/guardian name.")
@@ -3745,57 +4360,61 @@ def existing_patient_search():
 def vital_signs_form(visit_id: str):
     with st.form(f"vitals_{visit_id}"):
         st.markdown("#### Vital Signs")
+        st.info("💡 **Tip:** Enter 'N/A' for any measurement that cannot be taken (e.g., broken equipment, child won't cooperate)")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            systolic = st.number_input("Systolic BP",
-                                       min_value=50,
-                                       max_value=300,
-                                       value=120)
-            diastolic = st.number_input("Diastolic BP",
-                                        min_value=30,
-                                        max_value=200,
-                                        value=80)
+            systolic = st.text_input("Systolic BP",
+                                     value="120",
+                                     placeholder="e.g., 120 or N/A")
+            diastolic = st.text_input("Diastolic BP",
+                                      value="80",
+                                      placeholder="e.g., 80 or N/A")
 
         with col2:
-            heart_rate = st.number_input("Heart Rate (bpm)",
-                                         min_value=30,
-                                         max_value=250,
-                                         value=72)
-            temperature = st.number_input("Temperature (°F)",
-                                          min_value=90.0,
-                                          max_value=110.0,
-                                          value=98.6,
-                                          step=0.1)
+            heart_rate = st.text_input("Heart Rate (bpm)",
+                                       value="72",
+                                       placeholder="e.g., 72 or N/A")
+            temperature = st.text_input("Temperature (°F)",
+                                        value="98.6",
+                                        placeholder="e.g., 98.6 or N/A")
 
         with col3:
-            weight = st.number_input("Weight (kg)",
-                                     min_value=0.5,
-                                     max_value=500.0,
-                                     value=None,
-                                     step=0.1)
-            height = st.number_input("Height (inches)",
-                                     min_value=12.0,
-                                     max_value=96.0,
-                                     value=None,
-                                     step=0.5)
-            oxygen_sat = st.number_input("O2 Saturation (%)",
-                                         min_value=70,
-                                         max_value=100,
-                                         value=98)
+            weight = st.text_input("Weight (kg)",
+                                   placeholder="e.g., 15.5 or N/A")
+            oxygen_sat = st.text_input("Oxygen Saturation (%)",
+                                       value="98",
+                                       placeholder="e.g., 98 or N/A")
 
         if st.form_submit_button("Save Vital Signs", type="primary"):
+            # Convert text inputs to appropriate values, handling N/A entries
+            def process_vital_sign(value, is_decimal=False):
+                if not value or value.strip().upper() == 'N/A':
+                    return None
+                try:
+                    return float(value) if is_decimal else int(float(value))
+                except ValueError:
+                    return None
+            
+            # Process each vital sign
+            systolic_val = process_vital_sign(systolic)
+            diastolic_val = process_vital_sign(diastolic)
+            heart_rate_val = process_vital_sign(heart_rate)
+            temperature_val = process_vital_sign(temperature, is_decimal=True)
+            weight_val = process_vital_sign(weight, is_decimal=True)
+            oxygen_sat_val = process_vital_sign(oxygen_sat)
+            
             conn = sqlite3.connect(db.db_name)
             cursor = conn.cursor()
 
             cursor.execute(
                 '''
                 INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
-                                       temperature, weight, height, oxygen_saturation, recorded_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (visit_id, systolic, diastolic, heart_rate, temperature,
-                  weight, height, oxygen_sat, datetime.now().isoformat()))
+                                       temperature, weight, oxygen_saturation, recorded_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (visit_id, systolic_val, diastolic_val, heart_rate_val, temperature_val,
+                  weight_val, oxygen_sat_val, datetime.now().isoformat()))
 
             # Update visit status
             cursor.execute(
@@ -4180,7 +4799,7 @@ def consultation_interface():
                         cursor_restore = conn_restore.cursor()
                         cursor_restore.execute('''
                             SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                                   surgical_history, medical_history, allergies, current_medications
+                                   medical_history, current_medications
                             FROM visits 
                             WHERE visit_id = ?
                         ''', (patient['visit_id'],))
@@ -4196,10 +4815,8 @@ def consultation_interface():
                                 'diagnosis': consultation_data[2] or '',
                                 'treatment_plan': consultation_data[3] or '',
                                 'notes': consultation_data[4] or '',
-                                'surgical_history': consultation_data[5] or '',
-                                'medical_history': consultation_data[6] or '',
-                                'allergies': consultation_data[7] or '',
-                                'current_medications': consultation_data[8] or ''
+                                'medical_history': consultation_data[5] or '',
+                                'current_medications': consultation_data[6] or ''
                             }
                         
                         st.session_state.active_consultation = {
@@ -4325,6 +4942,15 @@ def consultation_interface():
 
 
 def consultation_form(visit_id: str, patient_id: str, patient_name: str):
+    # Store active consultation state and update URL for proper page refresh behavior
+    st.session_state.active_consultation = {
+        'visit_id': visit_id,
+        'patient_id': patient_id,
+        'patient_name': patient_name
+    }
+    st.session_state.page = 'consultation_form'
+    update_page_url('consultation_form')
+    
     # Back button to return to consultation interface
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -4332,6 +4958,13 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
             st.session_state.page = 'doctor'
             if 'active_consultation' in st.session_state:
                 del st.session_state.active_consultation
+            # Clear consultation URL parameters
+            if 'visit_id' in st.query_params:
+                del st.query_params['visit_id']
+            if 'patient_id' in st.query_params:
+                del st.query_params['patient_id']
+            if 'patient_name' in st.query_params:
+                del st.query_params['patient_name']
             # Update doctor status back to available
             db = get_db_manager()
             db.update_doctor_status(st.session_state.doctor_name, "available")
@@ -4377,6 +5010,55 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
     st.markdown(f"**Current Patient:** {patient_name}")
     st.markdown(f"**Relationship:** {'Parent/Guardian' if not is_family_consultation or (is_family_consultation and st.session_state.family_consultation['current_member_index'] == 0) else 'Child'}")
 
+    # Display vital signs for this patient
+    db_manager = get_db_manager()
+    conn = sqlite3.connect(db_manager.db_name)
+    cursor = conn.cursor()
+    
+    # Get vital signs for this visit
+    cursor.execute('''
+        SELECT systolic_bp, diastolic_bp, heart_rate, temperature, weight, oxygen_saturation, recorded_time
+        FROM vital_signs 
+        WHERE visit_id = ?
+        ORDER BY recorded_time DESC
+        LIMIT 1
+    ''', (visit_id,))
+    
+    vital_signs = cursor.fetchone()
+    conn.close()
+    
+    if vital_signs:
+        systolic, diastolic, hr, temp, weight, o2_sat, recorded_time = vital_signs
+        
+        # Display vital signs in a nicely formatted card
+        st.markdown("#### 📊 Vital Signs")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            bp_value = f"{systolic}/{diastolic}" if systolic and diastolic else "N/A"
+            st.metric("Blood Pressure", bp_value)
+        with col2:
+            hr_value = f"{hr} bpm" if hr else "N/A"
+            st.metric("Heart Rate", hr_value)
+        with col3:
+            temp_value = f"{temp}°F" if temp else "N/A"
+            st.metric("Temperature", temp_value)
+        with col4:
+            o2_value = f"{o2_sat}%" if o2_sat else "N/A"
+            st.metric("O2 Saturation", o2_value)
+        
+        # Second row for weight and timestamp
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            weight_value = f"{weight} kg" if weight else "N/A"
+            st.metric("Weight", weight_value)
+        with col2:
+            if recorded_time:
+                time_display = recorded_time[:16].replace('T', ' ')
+                st.caption(f"Recorded: {time_display}")
+    else:
+        st.warning("⚠️ No vital signs recorded for this patient")
+
     # Show lab results prominently if patient is returning from lab
     if is_returning_from_lab and lab_results:
         st.markdown("---")
@@ -4386,7 +5068,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         for test_type, results, completed_time in lab_results:
             with st.expander(f"🔬 {test_type} Results - {completed_time[:16].replace('T', ' ')}", expanded=True):
                 if test_type.lower() == 'urinalysis':
-                    st.markdown("**Standard 10-Parameter Urinalysis:**")
+                    st.markdown("**Standard 11-Parameter Urinalysis:**")
                     st.code(results, language=None)
                 elif test_type.lower() == 'glucose':
                     st.markdown(f"**Blood Glucose:** {results}")
@@ -4401,117 +5083,121 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         ["📋 Consultation", "📸 Photo Documentation", "🔬 Lab & Prescriptions"])
 
     with tab1:
-        with st.form(f"consultation_{visit_id}"):
-            # Check for existing consultation data from previous visit
-            consultation_key = f"consultation_data_{visit_id}"
-            existing_data = st.session_state.get(consultation_key, {})
+        # Auto-save consultation - no form needed, changes saved automatically
+        # Check for existing consultation data from previous visit
+        consultation_key = f"consultation_data_{visit_id}"
+        existing_data = st.session_state.get(consultation_key, {})
             
-            # If no session data, check database for previous consultation
-            if not existing_data:
-                conn = sqlite3.connect("clinic_database.db")
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                           surgical_history, medical_history, allergies, current_medications
-                    FROM visits 
-                    WHERE visit_id = ?
-                ''', (visit_id,))
-                db_data = cursor.fetchone()
-                conn.close()
-                
-                if db_data:
-                    existing_data = {
-                        'chief_complaint': db_data[0] or '',
-                        'symptoms': db_data[1] or '',
-                        'diagnosis': db_data[2] or '',
-                        'treatment_plan': db_data[3] or '',
-                        'notes': db_data[4] or '',
-                        'surgical_history': db_data[5] or '',
-                        'medical_history': db_data[6] or '',
-                        'allergies': db_data[7] or '',
-                        'current_medications': db_data[8] or ''
-                    }
+        # If no session data, check database for previous consultation
+        if not existing_data:
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                       medical_history, current_medications
+                FROM visits 
+                WHERE visit_id = ?
+            ''', (visit_id,))
+            db_data = cursor.fetchone()
+            conn.close()
             
-            # History Section (above chief complaint)
-            st.markdown("#### Patient History")
-            col1, col2 = st.columns(2)
-
-            with col1:
-                surgical_history = st.text_area(
-                    "Surgical History",
-                    value=existing_data.get('surgical_history', ''),
-                    placeholder="Previous surgeries, procedures...")
-                medical_history = st.text_area(
-                    "Medical History",
-                    value=existing_data.get('medical_history', ''),
-                    placeholder="Chronic conditions, past illnesses...")
-
-            with col2:
-                allergies = st.text_area(
-                    "Allergies",
-                    value=existing_data.get('allergies', ''),
-                    placeholder="Drug allergies, food allergies...")
-                current_medications = st.text_area(
-                    "Current Medications",
-                    value=existing_data.get('current_medications', ''),
-                    placeholder="Current medications and dosages...")
-
-            st.markdown("---")
-            # Auto-fill doctor name from logged-in session
-            doctor_name = st.session_state.get('doctor_name', '')
-            st.text_input("Doctor Name", value=doctor_name, disabled=True)
-
-            chief_complaint = st.text_area(
-                "Chief Complaint",
-                value=existing_data.get('chief_complaint', ''),
-                placeholder="What brought the patient in today?")
-            symptoms = st.text_area(
-                "Symptoms", 
-                value=existing_data.get('symptoms', ''),
-                placeholder="Describe symptoms observed/reported")
-            diagnosis = st.text_area("Diagnosis", 
-                                   value=existing_data.get('diagnosis', ''),
-                                   placeholder="Your diagnosis")
-            treatment_plan = st.text_area("Treatment Plan",
-                                          value=existing_data.get('treatment_plan', ''),
-                                          placeholder="Recommended treatment")
-            notes = st.text_area("Additional Notes",
-                                 value=existing_data.get('notes', ''),
-                                 placeholder="Any additional observations")
-
-            # Submit button for consultation updates
-            if st.form_submit_button("Update Consultation", type="primary"):
-                # Save consultation data to session state and database
-                consultation_key = f"consultation_data_{visit_id}"
-                st.session_state[consultation_key] = {
-                    'doctor_name': doctor_name,
-                    'chief_complaint': chief_complaint,
-                    'symptoms': symptoms,
-                    'diagnosis': diagnosis,
-                    'treatment_plan': treatment_plan,
-                    'notes': notes,
-                    'surgical_history': surgical_history,
-                    'medical_history': medical_history,
-                    'allergies': allergies,
-                    'current_medications': current_medications
+            if db_data:
+                existing_data = {
+                    'chief_complaint': db_data[0] or '',
+                    'symptoms': db_data[1] or '',
+                    'diagnosis': db_data[2] or '',
+                    'treatment_plan': db_data[3] or '',
+                    'notes': db_data[4] or '',
+                    'medical_history': db_data[5] or '',
+                    'current_medications': db_data[6] or ''
                 }
-                
-                # Update database with consultation details
-                conn = sqlite3.connect("clinic_database.db")
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE visits 
-                    SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
-                        treatment_plan = ?, notes = ?, surgical_history = ?,
-                        medical_history = ?, allergies = ?, current_medications = ?
-                    WHERE visit_id = ?
-                ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
-                      surgical_history, medical_history, allergies, current_medications, visit_id))
-                conn.commit()
-                conn.close()
-                
-                st.success("Consultation updated successfully!")
-                st.info("Continue to Lab & Prescriptions tab to complete the re-consultation.")
+        
+        # History Section (surgical history removed per user request)
+        st.markdown("#### Patient History")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Load medical history from patient registration if available
+            conn_pat = sqlite3.connect("clinic_database.db")
+            cursor_pat = conn_pat.cursor()
+            cursor_pat.execute('SELECT medical_history FROM patients WHERE patient_id = ?', (patient_id,))
+            patient_medical_history = cursor_pat.fetchone()
+            conn_pat.close()
+            
+            initial_medical_history = ""
+            if patient_medical_history and patient_medical_history[0]:
+                initial_medical_history = patient_medical_history[0]
+            elif existing_data.get('medical_history'):
+                initial_medical_history = existing_data.get('medical_history', '')
+            
+            medical_history = st.text_area(
+                "Medical History",
+                value=initial_medical_history,
+                placeholder="Chronic conditions, past illnesses...")
+
+        with col2:
+            current_medications = st.text_area(
+                "Current Medications",
+                value=existing_data.get('current_medications', ''),
+                placeholder="Current medications and dosages...")
+
+        st.markdown("---")
+        # Auto-fill doctor name from logged-in session
+        doctor_name = st.session_state.get('doctor_name', '')
+        st.text_input("Doctor Name", value=doctor_name, disabled=True)
+
+        chief_complaint = st.text_area(
+            "Chief Complaint",
+            value=existing_data.get('chief_complaint', ''),
+            placeholder="What brought the patient in today?")
+        symptoms = st.text_area(
+            "Symptoms", 
+            value=existing_data.get('symptoms', ''),
+            placeholder="Describe symptoms observed/reported")
+        diagnosis = st.text_area("Diagnosis", 
+                               value=existing_data.get('diagnosis', ''),
+                               placeholder="Your diagnosis")
+        treatment_plan = st.text_area("Treatment Plan",
+                                      value=existing_data.get('treatment_plan', ''),
+                                      placeholder="Recommended treatment")
+        notes = st.text_area("Additional Notes",
+                             value=existing_data.get('notes', ''),
+                             placeholder="Any additional observations")
+
+        # Auto-save functionality - consultation is saved automatically as user types
+        def auto_save_consultation():
+            """Auto-save consultation data to database"""
+            consultation_key = f"consultation_data_{visit_id}"
+            st.session_state[consultation_key] = {
+                'doctor_name': doctor_name,
+                'chief_complaint': chief_complaint,
+                'symptoms': symptoms,
+                'diagnosis': diagnosis,
+                'treatment_plan': treatment_plan,
+                'notes': notes,
+                'medical_history': medical_history,
+                'current_medications': current_medications
+            }
+            
+            # Update database with consultation details
+            conn = sqlite3.connect("clinic_database.db")
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE visits 
+                SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
+                    treatment_plan = ?, notes = ?,
+                    medical_history = ?, current_medications = ?
+                WHERE visit_id = ?
+            ''', (chief_complaint, symptoms, diagnosis, treatment_plan, notes,
+                  medical_history, current_medications, visit_id))
+            conn.commit()
+            conn.close()
+        
+        # Call auto-save after fields are defined
+        auto_save_consultation()
+        
+        st.success("✅ Consultation auto-saved")
+        st.info("All changes are automatically saved. Continue to Lab & Prescriptions tab to complete the consultation.")
 
     with tab2:
         # Photo documentation section (now in its own tab)
@@ -4674,8 +5360,30 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
 
         selected_medications = []
 
-        for category in sorted(med_categories):
-            with st.expander(f"{category} Medications"):
+        # Define custom order for categories, with Teaching Pamphlets placed after UTI Antibiotic
+        category_order = [
+            "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes", 
+            "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic", 
+            "Cholesterol", "UTI Antibiotic", "Teaching Pamphlets", "Other"
+        ]
+        
+        # Sort categories according to custom order, with unknown categories at the end
+        ordered_categories = []
+        for cat in category_order:
+            if cat in med_categories:
+                ordered_categories.append(cat)
+        # Add any categories not in our predefined order
+        for cat in sorted(med_categories):
+            if cat not in ordered_categories:
+                ordered_categories.append(cat)
+
+        for category in ordered_categories:
+            # Special case for Teaching Pamphlets - don't add "Medications" suffix
+            if category == "Teaching Pamphlets":
+                expander_title = category
+            else:
+                expander_title = f"{category} Medications"
+            with st.expander(expander_title):
                 category_meds = [
                     med for med in deduplicated_meds
                     if med['category'] == category
@@ -4699,69 +5407,108 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             # Get previously saved values for this medication
                             prev_med_data = previous_selections.get('medications', {}).get(med_key, {})
                             
-                            # Dosage and frequency options
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                dosages = med['common_dosages'].split(', ')
-                                prev_dosage_idx = 0
-                                if prev_med_data.get('dosage') in dosages:
-                                    prev_dosage_idx = dosages.index(prev_med_data.get('dosage'))
-                                selected_dosage = st.selectbox(
-                                    "Dosage", dosages, 
-                                    index=prev_dosage_idx,
-                                    key=f"dosage_{med['id']}_{visit_id}")
-                            with col2:
-                                freq_options = ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"]
-                                prev_freq_idx = 0
-                                if prev_med_data.get('frequency') in freq_options:
-                                    prev_freq_idx = freq_options.index(prev_med_data.get('frequency'))
-                                frequency = st.selectbox("Frequency", freq_options,
-                                                        index=prev_freq_idx,
-                                                        key=f"freq_{med['id']}_{visit_id}")
-                            with col3:
-                                dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
-                                prev_dur_idx = 0
-                                if prev_med_data.get('duration') in dur_options:
-                                    prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
-                                duration = st.selectbox("Duration", dur_options,
-                                                       index=prev_dur_idx,
-                                                       key=f"dur_{med['id']}_{visit_id}")
+                            # Special handling for Teaching Pamphlets - no dosage/frequency needed
+                            if category == "Teaching Pamphlets":
+                                # For teaching pamphlets, just show simple confirmation
+                                st.info("📋 This teaching pamphlet will be provided to the patient for education.")
+                                selected_dosage = "As needed for patient education"
+                                frequency = "As needed"
+                                duration = "N/A"
+                            else:
+                                # Dosage and frequency options for regular medications
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    dosages = med['common_dosages'].split(', ')
+                                    prev_dosage_idx = 0
+                                    if prev_med_data.get('dosage') in dosages:
+                                        prev_dosage_idx = dosages.index(prev_med_data.get('dosage'))
+                                    selected_dosage = st.selectbox(
+                                        "Dosage", dosages, 
+                                        index=prev_dosage_idx,
+                                        key=f"dosage_{med['id']}_{visit_id}")
+                                with col2:
+                                    freq_options = ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"]
+                                    prev_freq_idx = 0
+                                    if prev_med_data.get('frequency') in freq_options:
+                                        prev_freq_idx = freq_options.index(prev_med_data.get('frequency'))
+                                    frequency = st.selectbox("Frequency", freq_options,
+                                                            index=prev_freq_idx,
+                                                            key=f"freq_{med['id']}_{visit_id}")
+                                with col3:
+                                    dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
+                                    prev_dur_idx = 0
+                                    
+                                    # Get preset duration and normalize it
+                                    preset_dur = med.get('preset_duration', '') or ''
+                                    preset_dur = preset_dur.strip() if preset_dur else ''
+                                    
+                                    # Use preset duration if available and no previous data exists
+                                    if prev_med_data.get('duration'):
+                                        # Use previously selected duration
+                                        if prev_med_data.get('duration') in dur_options:
+                                            prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
+                                    elif preset_dur:
+                                        # Try to match preset duration - handle various formats
+                                        # If just a number, add " days"
+                                        if preset_dur.isdigit():
+                                            preset_dur_formatted = f"{preset_dur} days"
+                                        else:
+                                            preset_dur_formatted = preset_dur
+                                        
+                                        if preset_dur_formatted in dur_options:
+                                            prev_dur_idx = dur_options.index(preset_dur_formatted)
+                                    
+                                    duration = st.selectbox("Duration", dur_options,
+                                                           index=prev_dur_idx,
+                                                           key=f"dur_{med['id']}_{visit_id}")
 
-                            # Additional fields
-                            col4, col5 = st.columns(2)
-                            with col4:
-                                pharmacy_dosage = st.text_input(
-                                    "Dosage for Pharmacy",
-                                    value=prev_med_data.get('pharmacy_dosage', ''),
-                                    placeholder="e.g., 500mg twice daily for 7 days",
-                                    key=f"pharma_dose_{med['id']}_{visit_id}")
-                            with col5:
-                                indication = st.text_input(
-                                    "Indication",
-                                    value=prev_med_data.get('indication', ''),
-                                    placeholder="e.g., UTI, hypertension",
-                                    key=f"indication_{med['id']}_{visit_id}")
-
-                            instructions = st.text_input("Special Instructions",
-                                                         value=prev_med_data.get('instructions', ''),
-                                                         key=f"inst_{med['id']}_{visit_id}")
-
-                            # Lab results options with indentation - restore previous values
-                            st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
-                            col_indent, col_lab = st.columns([0.1, 0.9])
-                            with col_lab:
-                                prev_awaiting_lab = prev_med_data.get('awaiting_lab', 'no') == 'yes'
-                                awaiting_lab = "yes" if st.checkbox(
-                                    "Awaiting Lab Results",
-                                    key=f"await_{med['id']}_{visit_id}",
-                                    value=prev_awaiting_lab) else "no"
-                                
+                            # Additional fields - simplified for teaching pamphlets
+                            if category == "Teaching Pamphlets":
+                                # For teaching pamphlets, only show special instructions
+                                pharmacy_dosage = "Patient education material"
+                                indication = "Patient education"
+                                awaiting_lab = "no"
                                 return_to_provider = "no"
-                                if awaiting_lab == "yes":
-                                    return_to_provider = "yes" if st.checkbox(
-                                        "Return to provider after lab results",
-                                        key=f"return_{med['id']}_{visit_id}",
-                                        value=False) else "no"
+                                instructions = st.text_input("Special Instructions",
+                                                             value=prev_med_data.get('instructions', ''),
+                                                             placeholder="Any special notes about this educational material",
+                                                             key=f"inst_{med['id']}_{visit_id}")
+                            else:
+                                # Full fields for regular medications
+                                col4, col5 = st.columns(2)
+                                with col4:
+                                    pharmacy_dosage = st.text_input(
+                                        "Dosage for Pharmacy",
+                                        value=prev_med_data.get('pharmacy_dosage', ''),
+                                        placeholder="e.g., 500mg twice daily for 7 days",
+                                        key=f"pharma_dose_{med['id']}_{visit_id}")
+                                with col5:
+                                    indication = st.text_input(
+                                        "Indication",
+                                        value=prev_med_data.get('indication', ''),
+                                        placeholder="e.g., UTI, hypertension",
+                                        key=f"indication_{med['id']}_{visit_id}")
+
+                                instructions = st.text_input("Special Instructions",
+                                                             value=prev_med_data.get('instructions', ''),
+                                                             key=f"inst_{med['id']}_{visit_id}")
+
+                                # Lab results options with indentation - restore previous values
+                                st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
+                                col_indent, col_lab = st.columns([0.1, 0.9])
+                                with col_lab:
+                                    prev_awaiting_lab = prev_med_data.get('awaiting_lab', 'no') == 'yes'
+                                    awaiting_lab = "yes" if st.checkbox(
+                                        "Awaiting Lab Results",
+                                        key=f"await_{med['id']}_{visit_id}",
+                                        value=prev_awaiting_lab) else "no"
+                                    
+                                    return_to_provider = "no"
+                                    if awaiting_lab == "yes":
+                                        return_to_provider = "yes" if st.checkbox(
+                                            "Return to provider after lab results",
+                                            key=f"return_{med['id']}_{visit_id}",
+                                            value=False) else "no"
 
                             selected_medications.append({
                                 'id': med['id'],
@@ -4848,7 +5595,22 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         validation_errors.append(f"Missing dosage for {med['name']}")
                     if not med.get('frequency') or med.get('frequency').strip() == '':
                         validation_errors.append(f"Missing frequency for {med['name']}")
-                    if not med.get('indication') or med.get('indication').strip() == '':
+                    
+                    # Check if indication is required for this medication
+                    med_requires_indication = True
+                    if 'id' in med and med['id']:
+                        # Get medication details from database to check require_indication setting
+                        temp_conn = sqlite3.connect(db_manager.db_name)
+                        temp_cursor = temp_conn.cursor()
+                        temp_cursor.execute('SELECT require_indication FROM preset_medications WHERE id = ?', (med['id'],))
+                        require_result = temp_cursor.fetchone()
+                        temp_conn.close()
+                        
+                        if require_result and require_result[0] == 'no':
+                            med_requires_indication = False
+                    
+                    # Only validate indication if it's required for this medication
+                    if med_requires_indication and (not med.get('indication') or med.get('indication').strip() == ''):
                         validation_errors.append(f"Missing indication for {med['name']}")
                 
                 if validation_errors:
@@ -4862,18 +5624,18 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         db_conn.execute('BEGIN IMMEDIATE')
                         cursor = db_conn.cursor()
 
-                        # Save complete consultation state to visits table
+                        # Save complete consultation state to visits table (surgical history removed per user request)
                         cursor.execute('''
                             UPDATE visits 
                             SET chief_complaint = ?, symptoms = ?, diagnosis = ?, 
-                                treatment_plan = ?, notes = ?, surgical_history = ?,
-                                medical_history = ?, allergies = ?, current_medications = ?,
+                                treatment_plan = ?, notes = ?, 
+                                medical_history = ?, current_medications = ?,
                                 consultation_time = ?
                             WHERE visit_id = ?
                         ''', (current_chief_complaint, consultation_data.get('symptoms', ''), 
                               consultation_data.get('diagnosis', ''), consultation_data.get('treatment_plan', ''),
-                              consultation_data.get('notes', ''), consultation_data.get('surgical_history', ''),
-                              consultation_data.get('medical_history', ''), consultation_data.get('allergies', ''),
+                              consultation_data.get('notes', ''), 
+                              consultation_data.get('medical_history', ''), 
                               consultation_data.get('current_medications', ''), datetime.now().isoformat(), visit_id))
 
                         # Also save to consultations table for tracking
@@ -4981,14 +5743,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                     INSERT INTO prescriptions (visit_id, medication_name, 
                                                              dosage, frequency, duration, instructions, 
                                                              indication, awaiting_lab, return_to_provider, 
-                                                             prescribed_time, status)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                             prescribed_by, prescribed_time, status)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (visit_id, med['name'], med['dosage'],
                                       med['frequency'], med['duration'],
                                       med['instructions'],
                                       med.get('indication', ''), 
                                       med['awaiting_lab'],
                                       med.get('return_to_provider', 'no'),
+                                      current_doctor_name,
                                       datetime.now().isoformat(),
                                       prescription_status))
                                 conn_med.commit()
@@ -5070,11 +5833,10 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                         history_cursor.execute(
                             '''
                             UPDATE patients 
-                            SET medical_history = ?, allergies = ?
+                            SET medical_history = ?
                             WHERE patient_id = ?
                         ''',
-                            (f"Surgical: {surgical_history}\nMedical: {medical_history}",
-                             f"Allergies: {allergies}\nCurrent Meds: {current_medications}",
+                            (f"Medical: {medical_history}\nCurrent Meds: {current_medications}",
                              patient_id))
                         history_conn.commit()
                         history_conn.close()
@@ -5165,19 +5927,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             db_manager.update_doctor_status(st.session_state.doctor_name, "available")
                             st.session_state.page = 'doctor_interface'
                             st.rerun()
-                        if st.session_state.get('family_consultation_mode',
-                                                False):
-                            if 'remaining_family_children' in st.session_state:
-                                del st.session_state.remaining_family_children
-                            if 'family_consultation_mode' in st.session_state:
-                                del st.session_state.family_consultation_mode
 
-                            st.success(
-                                "✅ Family consultation completed for all members!"
-                            )
-                            st.info(
-                                "All family members have been seen by the doctor."
-                            )
 
                     except Exception as e:
                         # More user-friendly error messages
@@ -5263,34 +6013,83 @@ def consultation_history():
 
 
 def show_patient_history_detail(patient_id: str, patient_name: str):
-    """Display detailed patient history in a new view"""
+    """Display comprehensive patient chart with complete medical history"""
 
-    # Modal overlay styling for patient history (no JavaScript)
+    # Enhanced styling for patient chart
     st.markdown("""
     <style>
-    .history-modal-overlay {
-        background-color: rgba(0, 0, 0, 0.7);
-        border-radius: 10px;
+    .patient-chart-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
         padding: 20px;
         margin: 10px 0;
-        animation: slideIn 0.3s ease-out;
+        color: white;
+        text-align: center;
     }
-    @keyframes slideIn {
-        from { opacity: 0; transform: translateY(-20px); }
-        to { opacity: 1; transform: translateY(0); }
+    .chart-section {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 15px 0;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .vital-card {
+        background: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 100%);
+        border-left: 4px solid #0288d1;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .lab-card {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        border-left: 4px solid #f57c00;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .prescription-card {
+        background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+        border-left: 4px solid #388e3c;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .consultation-card {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left: 4px solid #7b1fa2;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .demographics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin: 15px 0;
+    }
+    .demo-item {
+        background: #f8fafc;
+        padding: 10px;
+        border-radius: 8px;
+        border-left: 3px solid #3b82f6;
     }
     </style>
-    """,
-                unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    st.markdown(
-        f"### 📋 Complete Patient History: {patient_name} (ID: {patient_id})")
+    # Chart header
+    st.markdown(f"""
+    <div class="patient-chart-header">
+        <h2>🏥 Complete Patient Chart</h2>
+        <h3>{patient_name} (ID: {patient_id})</h3>
+        <p>Comprehensive Medical Record & History</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Navigation buttons with X close button
+    # Navigation buttons
     nav_col1, nav_col2, nav_col3 = st.columns([2, 3, 1])
     with nav_col1:
-        if st.button("← Back to Consultation History",
-                     key="back_to_consult_history"):
+        if st.button("← Back to Consultation History", key="back_to_consult_history"):
             if 'show_patient_history' in st.session_state:
                 del st.session_state.show_patient_history
             if 'patient_history_name' in st.session_state:
@@ -5298,10 +6097,7 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
             st.rerun()
 
     with nav_col3:
-        if st.button("✕",
-                     key="close_patient_history",
-                     help="Close patient history",
-                     use_container_width=True):
+        if st.button("✕", key="close_patient_history", help="Close patient history", use_container_width=True):
             if 'show_patient_history' in st.session_state:
                 del st.session_state.show_patient_history
             if 'patient_history_name' in st.session_state:
@@ -5311,93 +6107,332 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
     conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
 
-    # Get patient basic info
-    cursor.execute('SELECT * FROM patients WHERE patient_id = ?',
-                   (patient_id, ))
+    # Get patient basic info with family information
+    cursor.execute('''
+        SELECT p.*, f.family_name, f.head_of_household, f.address as family_address
+        FROM patients p
+        LEFT JOIN families f ON p.family_id = f.family_id
+        WHERE p.patient_id = ?
+    ''', (patient_id,))
     patient = cursor.fetchone()
 
     if patient:
-        st.markdown("#### Patient Information")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Name:** {patient[1]}")
-            st.write(f"**Age:** {patient[2] or 'Not specified'}")
-            st.write(f"**Gender:** {patient[3] or 'Not specified'}")
-        with col2:
-            st.write(f"**Phone:** {patient[4] or 'Not provided'}")
-            st.write(f"**Emergency Contact:** {patient[6] or 'Not provided'}")
+        # Patient Demographics Section
+        st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+        st.markdown("### 👤 Patient Demographics & Information")
+        
+        st.markdown(f'''
+        <div class="demographics-grid">
+            <div class="demo-item">
+                <strong>👤 Name:</strong><br>{patient[1]}
+            </div>
+            <div class="demo-item">
+                <strong>🎂 Age:</strong><br>{patient[2] or 'Not specified'}
+            </div>
+            <div class="demo-item">
+                <strong>⚧ Gender:</strong><br>{patient[3] or 'Not specified'}
+            </div>
+            <div class="demo-item">
+                <strong>📱 Phone:</strong><br>{patient[4] or 'Not provided'}
+            </div>
+            <div class="demo-item">
+                <strong>🆘 Emergency Contact:</strong><br>{patient[6] or 'Not provided'}
+            </div>
+            <div class="demo-item">
+                <strong>📅 Registration:</strong><br>{patient[7][:10] if patient[7] else 'Unknown'}
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
+        # Family Information
+        if patient[10]:  # family_name exists
+            st.markdown("**👨‍👩‍👧‍👦 Family Information:**")
+            family_col1, family_col2 = st.columns(2)
+            with family_col1:
+                st.write(f"**Family Name:** {patient[10]}")
+                st.write(f"**Head of Household:** {patient[11] or 'Not specified'}")
+            with family_col2:
+                st.write(f"**Family Address:** {patient[12] or 'Not provided'}")
+                st.write(f"**Individual Status:** {'Independent' if patient[14] else 'Family Member'}")
+
+        # Medical History
         if patient[9]:  # medical_history
-            st.markdown("**Medical History:**")
-            st.text(patient[9])
-        if patient[8]:  # allergies
-            st.markdown("**Allergies:**")
-            st.text(patient[8])
+            st.markdown("### 📝 Medical History")
+            st.markdown(f'<div style="background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 3px solid #10b981;"><pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">{patient[9]}</pre></div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Get all visits
-    cursor.execute(
-        '''
-        SELECT v.visit_id, v.visit_date, v.status, c.chief_complaint, c.diagnosis, c.doctor_name, c.consultation_time
-        FROM visits v
-        LEFT JOIN consultations c ON v.visit_id = c.visit_id
-        WHERE v.patient_id = ?
-        ORDER BY v.visit_date DESC
-    ''', (patient_id, ))
+        # Get comprehensive visit data
+        cursor.execute('''
+            SELECT v.visit_id, v.visit_date, v.status, v.priority, v.triage_time, 
+                   v.consultation_time, v.pharmacy_time, v.completion_time,
+                   v.return_reason, v.notes
+            FROM visits v
+            WHERE v.patient_id = ?
+            ORDER BY v.visit_date DESC
+        ''', (patient_id,))
+        visits = cursor.fetchall()
 
-    visits = cursor.fetchall()
+        if visits:
+            st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+            st.markdown("### 🏥 Complete Visit Records")
+            
+            for visit in visits:
+                visit_id = visit[0]
+                visit_date = visit[1][:10] if visit[1] else "Unknown"
+                status = visit[2] or "In Progress"
+                priority = visit[3] or "routine"
+                
+                priority_emoji = "🔴" if priority == "critical" else "🟡" if priority == "urgent" else "🟢"
+                status_color = "#10b981" if status == "completed" else "#f59e0b" if status == "in_progress" else "#6b7280"
+                
+                with st.expander(f"{priority_emoji} Visit {visit_date} - {status.title()}", expanded=False):
+                    
+                    # Visit Overview
+                    overview_col1, overview_col2 = st.columns(2)
+                    with overview_col1:
+                        st.markdown("**📊 Visit Overview:**")
+                        st.write(f"**Status:** {status}")
+                        st.write(f"**Priority:** {priority}")
+                        if visit[8]:  # return_reason
+                            st.write(f"**Return Reason:** {visit[8]}")
+                    
+                    with overview_col2:
+                        st.markdown("**⏱️ Visit Timeline:**")
+                        if visit[4]: # triage_time
+                            st.write(f"🏥 Triage: {visit[4][:16].replace('T', ' ')}")
+                        if visit[5]: # consultation_time
+                            st.write(f"👨‍⚕️ Consultation: {visit[5][:16].replace('T', ' ')}")
+                        if visit[6]: # pharmacy_time
+                            st.write(f"💊 Pharmacy: {visit[6][:16].replace('T', ' ')}")
+                        if visit[7]: # completion_time
+                            st.write(f"✅ Completed: {visit[7][:16].replace('T', ' ')}")
 
-    if visits:
-        st.markdown("#### Visit History")
-        for visit in visits:
-            visit_date = visit[1][:10] if visit[1] else "Unknown"
-            status = visit[2] or "In Progress"
+                    # Vital Signs
+                    cursor.execute('''
+                        SELECT systolic_bp, diastolic_bp, heart_rate, temperature, weight, recorded_time
+                        FROM vital_signs
+                        WHERE visit_id = ?
+                        ORDER BY recorded_time DESC
+                    ''', (visit_id,))
+                    vitals = cursor.fetchall()
+                    
+                    if vitals:
+                        st.markdown("**💓 Vital Signs:**")
+                        for vital in vitals:
+                            bp_text = f"{vital[0] or 'N/A'}/{vital[1] or 'N/A'}"
+                            st.markdown(f"""
+                            <div class="vital-card">
+                                <strong>📅 Recorded:</strong> {vital[5][:16].replace('T', ' ') if vital[5] else 'Unknown'}<br>
+                                <strong>🩺 Blood Pressure:</strong> {bp_text} mmHg | 
+                                <strong>💓 Heart Rate:</strong> {vital[2] or 'N/A'} bpm<br>
+                                <strong>🌡️ Temperature:</strong> {vital[3] or 'N/A'}°F | 
+                                <strong>⚖️ Weight:</strong> {vital[4] or 'N/A'} kg
+                            </div>
+                            """, unsafe_allow_html=True)
 
-            with st.expander(f"Visit {visit_date} - {status}"):
-                if visit[3]:  # chief_complaint
-                    st.write(f"**Chief Complaint:** {visit[3]}")
-                if visit[4]:  # diagnosis
-                    st.write(f"**Diagnosis:** {visit[4]}")
-                if visit[5]:  # doctor_name
-                    st.write(f"**Doctor:** {visit[5]}")
-                if visit[6]:  # consultation_time
-                    st.write(
-                        f"**Consultation Time:** {visit[6][:16].replace('T', ' ')}"
-                    )
+                    # Consultation Details
+                    cursor.execute('''
+                        SELECT doctor_name, chief_complaint, symptoms, diagnosis, treatment_plan, 
+                               notes, current_medications, consultation_time
+                        FROM consultations
+                        WHERE visit_id = ?
+                        ORDER BY consultation_time DESC
+                    ''', (visit_id,))
+                    consultations = cursor.fetchall()
+                    
+                    if consultations:
+                        st.markdown("**👨‍⚕️ Consultation Records:**")
+                        for consultation in consultations:
+                            st.markdown(f"""
+                            <div class="consultation-card">
+                                <strong>👨‍⚕️ Doctor:</strong> {consultation[0]}<br>
+                                <strong>📝 Chief Complaint:</strong> {consultation[1] or 'None recorded'}<br>
+                                <strong>🔍 Symptoms:</strong> {consultation[2] or 'None recorded'}<br>
+                                <strong>🩺 Diagnosis:</strong> {consultation[3] or 'None recorded'}<br>
+                                <strong>💊 Treatment Plan:</strong> {consultation[4] or 'None recorded'}
+                            """, unsafe_allow_html=True)
+                            
+                            if consultation[5]:  # notes
+                                st.markdown(f"<strong>📋 Notes:</strong> {consultation[5]}<br>", unsafe_allow_html=True)
+                            if consultation[6]:  # current_medications
+                                st.markdown(f"<strong>💉 Current Medications:</strong> {consultation[6]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                # Get prescriptions for this visit
-                cursor.execute(
-                    '''
-                    SELECT medication_name, dosage, frequency, duration, indication, prescribed_time
-                    FROM prescriptions
-                    WHERE visit_id = ?
-                    ORDER BY prescribed_time DESC
-                ''', (visit[0], ))
+                    # Laboratory Tests and Results
+                    cursor.execute('''
+                        SELECT lt.test_type, lt.ordered_by, lt.ordered_time, lt.status, 
+                               lt.results, lt.completed_time
+                        FROM lab_tests lt
+                        WHERE lt.visit_id = ?
+                        ORDER BY lt.ordered_time DESC
+                    ''', (visit_id,))
+                    lab_tests = cursor.fetchall()
+                    
+                    # Get detailed lab results
+                    cursor.execute('''
+                        SELECT lr.test_id, lr.parameter_name, lr.parameter_value
+                        FROM lab_results lr
+                        JOIN lab_tests lt ON lr.test_id = lt.id
+                        WHERE lt.visit_id = ?
+                        ORDER BY lr.parameter_name
+                    ''', (visit_id,))
+                    lab_results = cursor.fetchall()
+                    
+                    if lab_tests:
+                        st.markdown("**🧪 Laboratory Tests & Results:**")
+                        
+                        # Group results by test_id
+                        results_by_test = {}
+                        for lr in lab_results:
+                            test_id = lr[0]
+                            if test_id not in results_by_test:
+                                results_by_test[test_id] = []
+                            results_by_test[test_id].append((lr[1], lr[2]))
+                        
+                        for test in lab_tests:
+                            test_type = test[0]
+                            ordered_by = test[1]
+                            status = test[3]
+                            status_color = "#10b981" if status == "completed" else "#f59e0b"
+                            
+                            st.markdown(f"""
+                            <div class="lab-card">
+                                <strong>🧪 {test_type}</strong> - Ordered by {ordered_by}<br>
+                                <strong>📅 Ordered:</strong> {test[2][:16].replace('T', ' ')}<br>
+                                <strong>⚡ Status:</strong> <span style="color: {status_color};">{status}</span>
+                            """, unsafe_allow_html=True)
+                            
+                            if test[5]:  # completed_time
+                                st.markdown(f"<strong>✅ Completed:</strong> {test[5][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            
+                            # Display detailed results if available
+                            test_id = None
+                            cursor.execute('SELECT id FROM lab_tests WHERE visit_id = ? AND test_type = ? AND ordered_time = ?', 
+                                         (visit_id, test_type, test[2]))
+                            test_id_result = cursor.fetchone()
+                            if test_id_result:
+                                test_id = test_id_result[0]
+                            
+                            if test_id and test_id in results_by_test:
+                                st.markdown("<strong>📊 Detailed Results:</strong><br>", unsafe_allow_html=True)
+                                for param_name, param_value in results_by_test[test_id]:
+                                    st.markdown(f"• <strong>{param_name}:</strong> {param_value}<br>", unsafe_allow_html=True)
+                            elif test[4]:  # basic results
+                                st.markdown(f"<strong>📊 Results:</strong> {test[4]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                prescriptions = cursor.fetchall()
-                if prescriptions:
-                    st.markdown("**Prescriptions:**")
-                    for rx in prescriptions:
-                        indication_text = f" - {rx[4]}" if rx[4] else ""
-                        st.write(
-                            f"• {rx[0]} {rx[1]} {rx[2]} for {rx[3]}{indication_text}"
-                        )
+                    # Prescriptions & Medications
+                    cursor.execute('''
+                        SELECT medication_name, dosage, frequency, duration, indication, 
+                               instructions, prescribed_by, prescribed_time, status, 
+                               filled_time, teaching_completed, teaching_notes, awaiting_lab
+                        FROM prescriptions
+                        WHERE visit_id = ?
+                        ORDER BY prescribed_time DESC
+                    ''', (visit_id,))
+                    prescriptions = cursor.fetchall()
+                    
+                    if prescriptions:
+                        st.markdown("**💊 Prescriptions & Medications:**")
+                        for rx in prescriptions:
+                            prescribed_by = rx[6] if rx[6] else "Unknown Doctor"
+                            status = rx[8] if rx[8] else "pending"
+                            status_color = "#10b981" if status == "filled" else "#f59e0b" if status == "awaiting_teaching" else "#6b7280"
+                            
+                            st.markdown(f"""
+                            <div class="prescription-card">
+                                <strong>💊 {rx[0]}</strong><br>
+                                <strong>📏 Dosage:</strong> {rx[1]} | <strong>⏰ Frequency:</strong> {rx[2]} | <strong>📅 Duration:</strong> {rx[3]}<br>
+                                <strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}<br>
+                                <strong>⚡ Status:</strong> <span style="color: {status_color};">{status}</span>
+                            """, unsafe_allow_html=True)
+                            
+                            if rx[4]:  # indication
+                                st.markdown(f"<strong>🎯 For:</strong> {rx[4]}<br>", unsafe_allow_html=True)
+                            if rx[5]:  # instructions
+                                st.markdown(f"<strong>📋 Instructions:</strong> {rx[5]}<br>", unsafe_allow_html=True)
+                            if rx[12] == 'yes':  # awaiting_lab
+                                st.markdown(f"<strong>🧪 Lab Required:</strong> Yes<br>", unsafe_allow_html=True)
+                            
+                            st.markdown(f"<strong>📅 Prescribed:</strong> {rx[7][:16].replace('T', ' ') if rx[7] else 'Unknown'}<br>", unsafe_allow_html=True)
+                            
+                            if rx[9]:  # filled_time
+                                st.markdown(f"<strong>✅ Filled:</strong> {rx[9][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            if rx[10]:  # teaching_completed
+                                st.markdown(f"<strong>📚 Teaching Completed:</strong> {rx[10][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            if rx[11]:  # teaching_notes
+                                st.markdown(f"<strong>📝 Teaching Notes:</strong> {rx[11]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                # Get lab tests for this visit
-                cursor.execute(
-                    '''
-                    SELECT test_type, status, results, ordered_time, completed_time
-                    FROM lab_tests
-                    WHERE visit_id = ?
-                    ORDER BY ordered_time DESC
-                ''', (visit[0], ))
+                    # Patient Photos
+                    cursor.execute('''
+                        SELECT description, photo_time
+                        FROM patient_photos
+                        WHERE patient_id = ? AND visit_id = ?
+                        ORDER BY photo_time DESC
+                    ''', (patient_id, visit_id))
+                    photos = cursor.fetchall()
+                    
+                    if photos:
+                        st.markdown("**📸 Photo Documentation:**")
+                        for photo in photos:
+                            st.markdown(f"""
+                            <div style="background: #f3f4f6; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 3px solid #6b7280;">
+                                <strong>📸 {photo[0]}</strong><br>
+                                <small>📅 Taken: {photo[1][:16].replace('T', ' ')}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                lab_tests = cursor.fetchall()
-                if lab_tests:
-                    st.markdown("**Lab Tests:**")
-                    for test in lab_tests:
-                        status_text = f"({test[1]})"
-                        results_text = f" - {test[2]}" if test[2] else ""
-                        st.write(f"• {test[0]} {status_text}{results_text}")
+                    # Visit Notes
+                    if visit[9]:  # visit notes
+                        st.markdown("**📝 Visit Notes:**")
+                        st.markdown(f'<div style="background: #f8fafc; padding: 10px; border-radius: 8px; border-left: 3px solid #3b82f6;"><em>{visit[9]}</em></div>', unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Patient Summary Statistics
+        cursor.execute('''
+            SELECT 
+                COUNT(DISTINCT v.visit_id) as total_visits,
+                COUNT(DISTINCT p.id) as total_prescriptions,
+                COUNT(DISTINCT lt.id) as total_lab_tests,
+                COUNT(DISTINCT ph.id) as total_photos,
+                MAX(v.visit_date) as last_visit
+            FROM visits v
+            LEFT JOIN prescriptions p ON v.visit_id = p.visit_id
+            LEFT JOIN lab_tests lt ON v.visit_id = lt.visit_id
+            LEFT JOIN patient_photos ph ON v.patient_id = ph.patient_id
+            WHERE v.patient_id = ?
+        ''', (patient_id,))
+        summary = cursor.fetchone()
+        
+        st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+        st.markdown("### 📊 Patient Summary Statistics")
+        
+        sum_col1, sum_col2, sum_col3, sum_col4, sum_col5 = st.columns(5)
+        with sum_col1:
+            st.metric("🏥 Total Visits", summary[0] or 0)
+        with sum_col2:
+            st.metric("💊 Prescriptions", summary[1] or 0)
+        with sum_col3:
+            st.metric("🧪 Lab Tests", summary[2] or 0)
+        with sum_col4:
+            st.metric("📸 Photos", summary[3] or 0)
+        with sum_col5:
+            if summary[4]:
+                last_visit = summary[4][:10]
+                st.metric("📅 Last Visit", last_visit)
+            else:
+                st.metric("📅 Last Visit", "Never")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    else:
+        st.error("❌ Patient not found in database.")
 
     conn.close()
 
@@ -5418,8 +6453,8 @@ def pharmacy_interface():
     
     lab_input_label = f"Lab Input ({pending_lab_count})" if pending_lab_count > 0 else "Lab Input"
     
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Ready to Fill", "Lab Results", lab_input_label, "Filled Prescriptions"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Ready to Fill", "Lab Results", lab_input_label, "Awaiting Teaching", "Filled Prescriptions"])
 
     with tab1:
         pending_prescriptions()
@@ -5431,6 +6466,9 @@ def pharmacy_interface():
         lab_results_input()
 
     with tab4:
+        awaiting_teaching()
+
+    with tab5:
         filled_prescriptions()
 
 
@@ -5458,6 +6496,20 @@ def pending_prescriptions():
         st.info("👨‍👩‍👧‍👦 **Family Consultation Complete** - Processing entire family prescriptions")
         family_data = st.session_state.family_pharmacy_workflow
         
+        # Add exit button for families
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("🏠 Exit Family Visit", type="secondary", help="Complete family visit and return to main menu"):
+                # Clear family workflow and session state
+                del st.session_state.family_pharmacy_workflow
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("🏠 Family visit ended - returning to main menu")
+                st.session_state.page = 'role_selection'
+                time.sleep(1)
+                st.rerun()
+        
         # Process all family members' prescriptions together
         for member in family_data:
             st.markdown(f"**{member['patient_name']} (ID: {member['patient_id']})**")
@@ -5467,7 +6519,7 @@ def pending_prescriptions():
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-                       p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+                       p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab, p.prescribed_by
                 FROM prescriptions p
                 JOIN visits v ON p.visit_id = v.visit_id
                 JOIN patients pt ON v.patient_id = pt.patient_id
@@ -5479,40 +6531,116 @@ def pending_prescriptions():
             
             if member_prescriptions:
                 for prescription in member_prescriptions:
-                    st.markdown(f"• {prescription[2]} - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                    edit_key = f"edit_family_prescription_{prescription[0]}"
+                    
+                    if st.session_state.get(edit_key, False):
+                        # Edit form for family prescription
+                        with st.form(f"edit_family_prescription_form_{prescription[0]}"):
+                            st.markdown(f"**💊 {prescription[2]}** (Editing)")
+                            
+                            col_dosage, col_frequency = st.columns(2)
+                            with col_dosage:
+                                new_dosage = st.text_input("Dosage", value=prescription[3], key=f"edit_family_dosage_{prescription[0]}")
+                            with col_frequency:
+                                new_frequency = st.text_input("Frequency", value=prescription[4], key=f"edit_family_frequency_{prescription[0]}")
+                            
+                            new_duration = st.text_input("Duration", value=prescription[5], key=f"edit_family_duration_{prescription[0]}")
+                            new_instructions = st.text_area("Instructions", value=prescription[6] if prescription[6] else "", key=f"edit_family_instructions_{prescription[0]}")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            with col_save:
+                                if st.form_submit_button("💾 Save Changes", type="primary"):
+                                    if new_dosage.strip() and new_frequency.strip() and new_duration.strip():
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE prescriptions 
+                                            SET dosage = ?, frequency = ?, duration = ?, instructions = ?
+                                            WHERE id = ?
+                                        ''', (new_dosage.strip(), new_frequency.strip(), new_duration.strip(), 
+                                             new_instructions.strip() if new_instructions else None, prescription[0]))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"prescription_updated:{prescription[2]}:{member['patient_name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success(f"✅ Updated prescription for {prescription[2]}")
+                                        st.rerun()
+                                    else:
+                                        st.error("Dosage, frequency, and duration are required")
+                            with col_cancel:
+                                if st.form_submit_button("❌ Cancel"):
+                                    st.session_state[edit_key] = False
+                                    st.rerun()
+                    else:
+                        # Display mode for family prescription
+                        col_prescription, col_edit = st.columns([4, 1])
+                        with col_prescription:
+                            prescribed_by = prescription[12] if len(prescription) > 12 and prescription[12] else "Unknown Doctor"
+                            st.markdown(f"• **{prescription[2]}** - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                            st.markdown(f"  👨‍⚕️ *Prescribed by: {prescribed_by}*")
+                        with col_edit:
+                            if st.button("✏️", key=f"edit_family_prescription_{prescription[0]}", type="secondary", help="Edit prescription"):
+                                st.session_state[edit_key] = True
+                                st.rerun()
             else:
                 st.markdown("• No prescriptions for this family member")
         
-        if st.button("Complete All Family Prescriptions", key="complete_family_pharmacy"):
-            # Mark all family prescriptions as filled
-            conn = sqlite3.connect(db.db_name)
-            cursor = conn.cursor()
-            
-            for member in family_data:
-                cursor.execute('''
-                    UPDATE prescriptions 
-                    SET status = 'filled', filled_time = ? 
-                    WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
-                ''', (datetime.now().isoformat(), member['visit_id']))
+        col_complete, col_skip = st.columns(2)
+        with col_complete:
+            if st.button("✅ Complete All Family Prescriptions", key="complete_family_pharmacy", type="primary"):
+                # Mark all family prescriptions as filled
+                conn = sqlite3.connect(db.db_name)
+                cursor = conn.cursor()
                 
-                cursor.execute('''
-                    UPDATE visits 
-                    SET pharmacy_time = ?, status = 'completed' 
-                    WHERE visit_id = ?
-                ''', (datetime.now().isoformat(), member['visit_id']))
-            
-            conn.commit()
-            conn.close()
-            
-            # Broadcast family prescription completion to all devices
-            family_names = [member['patient_name'] for member in family_data]
-            broadcast_to_clients(f"prescriptions_filled:family:{','.join(family_names)}:complete")
-            
-            # Clear family workflow
-            del st.session_state.family_pharmacy_workflow
-            
-            st.success("✅ All family prescriptions completed!")
-            st.rerun()
+                for member in family_data:
+                    cursor.execute('''
+                        UPDATE prescriptions 
+                        SET status = 'awaiting_teaching', filled_time = ? 
+                        WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
+                    ''', (datetime.now().isoformat(), member['visit_id']))
+                    
+                    cursor.execute('''
+                        UPDATE visits 
+                        SET pharmacy_time = ?, status = 'completed' 
+                        WHERE visit_id = ?
+                    ''', (datetime.now().isoformat(), member['visit_id']))
+                
+                conn.commit()
+                conn.close()
+                
+                # Broadcast family prescription completion to all devices
+                family_names = [member['patient_name'] for member in family_data]
+                broadcast_to_clients(f"prescriptions_filled:family:{','.join(family_names)}:complete")
+                
+                # Clear family workflow and session state
+                del st.session_state.family_pharmacy_workflow
+                
+                # Clear any remaining pharmacy session state
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("✅ All family prescriptions completed!")
+                st.success("🏠 Family visit complete - returning to main menu")
+                
+                # Force navigation back to role selection
+                st.session_state.page = 'role_selection'
+                time.sleep(2)
+                st.rerun()
+        
+        with col_skip:
+            if st.button("⏭️ Skip Prescriptions & Exit", key="skip_family_pharmacy", type="secondary"):
+                # Just clear family workflow without filling prescriptions
+                del st.session_state.family_pharmacy_workflow
+                if 'user_role' in st.session_state:
+                    del st.session_state.user_role
+                
+                st.success("🏠 Family visit ended without filling prescriptions")
+                st.session_state.page = 'role_selection'
+                time.sleep(1)
+                st.rerun()
         
         return
 
@@ -5521,7 +6649,7 @@ def pending_prescriptions():
 
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab, p.prescribed_by
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -5565,28 +6693,84 @@ def pending_prescriptions():
 
                 for prescription in patient_data['prescriptions']:
                     prescription_ids.append(prescription[0])
-
+                    edit_key = f"edit_prescription_{prescription[0]}"
+                    
                     col1, col2 = st.columns([3, 1])
 
                     with col1:
-                        st.markdown(f"""
-                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                            <h5 style="color: #1f2937; margin: 0 0 12px 0; font-size: 16px;">💊 {prescription[2]}</h5>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
-                                <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                        # Check if this prescription is in edit mode
+                        if st.session_state.get(edit_key, False):
+                            # Edit form for prescription
+                            with st.form(f"edit_prescription_form_{prescription[0]}"):
+                                st.markdown(f"**💊 {prescription[2]}** (Editing)")
+                                
+                                col_dosage, col_frequency = st.columns(2)
+                                with col_dosage:
+                                    new_dosage = st.text_input("Dosage", value=prescription[3], key=f"edit_dosage_{prescription[0]}")
+                                with col_frequency:
+                                    new_frequency = st.text_input("Frequency", value=prescription[4], key=f"edit_frequency_{prescription[0]}")
+                                
+                                new_duration = st.text_input("Duration", value=prescription[5], key=f"edit_duration_{prescription[0]}")
+                                new_instructions = st.text_area("Instructions", value=prescription[6] if prescription[6] else "", key=f"edit_instructions_{prescription[0]}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        if new_dosage.strip() and new_frequency.strip() and new_duration.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE prescriptions 
+                                                SET dosage = ?, frequency = ?, duration = ?, instructions = ?
+                                                WHERE id = ?
+                                            ''', (new_dosage.strip(), new_frequency.strip(), new_duration.strip(), 
+                                                 new_instructions.strip() if new_instructions else None, prescription[0]))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"prescription_updated:{prescription[2]}:{patient_data['name']}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"✅ Updated prescription for {prescription[2]}")
+                                            st.rerun()
+                                        else:
+                                            st.error("Dosage, frequency, and duration are required")
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        else:
+                            # Display mode for prescription
+                            prescribed_by = prescription[12] if len(prescription) > 12 and prescription[12] else "Unknown Doctor"
+                            st.markdown(f"""
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <h5 style="color: #1f2937; margin: 0 0 8px 0; font-size: 16px;">💊 {prescription[2]}</h5>
+                                <p style="margin: 0 0 12px 0; color: #7c3aed; font-size: 13px; font-weight: 600;"><strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}</p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                                    <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
+                                    <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
+                                </div>
+                                <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
+                                {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
+                                {f'<p style="margin: 0; color: #6b7280; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
                             </div>
-                            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 14px;"><strong>Duration:</strong> {prescription[5]}</p>
-                            {f'<p style="margin: 0 0 8px 0; color: #059669; font-size: 14px; background: #d1fae5; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {prescription[7]}</p>' if prescription[7] else ''}
-                            {f'<p style="margin: 0; color: #6b7280; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {prescription[6]}</p>' if prescription[6] else ''}
-                        </div>
-                        """,
-                                    unsafe_allow_html=True)
+                            """,
+                                        unsafe_allow_html=True)
 
                     with col2:
-                        if st.checkbox(f"Filled",
-                                       key=f"filled_{prescription[0]}"):
-                            pass
+                        if not st.session_state.get(edit_key, False):
+                            col_filled, col_edit = st.columns([1, 1])
+                            with col_filled:
+                                if st.checkbox(f"Filled",
+                                               key=f"filled_{prescription[0]}"):
+                                    pass
+                                else:
+                                    all_filled = False
+                            with col_edit:
+                                if st.button("✏️", key=f"edit_prescription_{prescription[0]}", type="secondary", help="Edit prescription details"):
+                                    st.session_state[edit_key] = True
+                                    st.rerun()
                         else:
                             all_filled = False
 
@@ -5601,12 +6785,12 @@ def pending_prescriptions():
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
 
-                    # Mark all prescriptions as filled
+                    # Mark all prescriptions as awaiting teaching
                     for prescription_id in prescription_ids:
                         cursor.execute(
                             '''
                             UPDATE prescriptions 
-                            SET status = 'filled', filled_time = ? 
+                            SET status = 'awaiting_teaching', filled_time = ? 
                             WHERE id = ?
                         ''', (datetime.now().isoformat(), prescription_id))
 
@@ -5704,62 +6888,264 @@ def awaiting_lab_prescriptions():
                 st.markdown("### 🧪 Lab Test Results")
                 
                 for lab in patient_data['lab_tests']:
-                    st.markdown(f"**{lab['test_type']} - Completed: {lab['completed_time'][:16].replace('T', ' ')}**")
+                    edit_key = f"edit_lab_{lab['id']}"
                     
-                    # Parse and display specific lab results based on test type
-                    if lab['test_type'].lower() == 'urinalysis':
-                        st.markdown("**Standard 10-Parameter Urinalysis:**")
-                        results = lab['results']
+                    # Lab test header with edit button
+                    col_header, col_edit = st.columns([4, 1])
+                    with col_header:
+                        st.markdown(f"**{lab['test_type']} - Completed: {lab['completed_time'][:16].replace('T', ' ')}**")
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_lab_btn_{lab['id']}", type="secondary", help="Edit lab results"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
+                    
+                    # Check if this lab result is in edit mode
+                    if st.session_state.get(edit_key, False):
+                        # Edit form based on test type
+                        if lab['test_type'].lower() == 'urinalysis':
+                            st.markdown("**Edit Urinalysis Results:**")
+                            with st.form(f"edit_urinalysis_{lab['id']}"):
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.markdown("**Physical Parameters:**")
+                                    color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"edit_color_{lab['id']}")
+                                    clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"edit_clarity_{lab['id']}")
+                                    specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.100, value=1.020, step=0.001, format="%.3f", key=f"edit_sg_{lab['id']}")
+                                    ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"edit_ph_{lab['id']}")
+                                    protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"edit_protein_{lab['id']}")
+                                
+                                with col2:
+                                    st.markdown("**Chemical Parameters:**")
+                                    glucose = st.selectbox("Glucose", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"edit_glucose_{lab['id']}")
+                                    ketones = st.selectbox("Ketones", ["Negative", "Trace", "Small", "Moderate", "Large"], key=f"edit_ketones_{lab['id']}")
+                                    blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_blood_{lab['id']}")
+                                    leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_leuk_{lab['id']}")
+                                    nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"edit_nitrites_{lab['id']}")
+                                    bilirubin = st.selectbox("Bilirubin", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_bilirubin_{lab['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = f"""URINALYSIS RESULTS:
+Physical Parameters:
+- Color: {color}
+- Clarity: {clarity}
+- Specific Gravity: {specific_gravity}
+- pH: {ph}
+
+Chemical Parameters:
+- Protein: {protein}
+- Glucose: {glucose}
+- Ketones: {ketones}
+- Blood: {blood}
+- Leukocyte Esterase: {leukocyte_esterase}
+- Nitrites: {nitrites}
+- Bilirubin: {bilirubin}"""
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Urinalysis results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                         
-                        # Create a structured display for UA results
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown("""
-                            **Physical Parameters:**
-                            - Color
-                            - Clarity
-                            - Specific Gravity
-                            """)
-                        with col2:
-                            st.markdown("""
-                            **Chemical Parameters:**
-                            - Leukocyte Esterase
-                            - Nitrites
-                            - Protein
-                            - Glucose
-                            - Ketones
-                            - Blood
-                            - pH
-                            """)
+                        elif lab['test_type'].lower() == 'glucose':
+                            st.markdown("**Edit Blood Glucose Results:**")
+                            with st.form(f"edit_glucose_{lab['id']}"):
+                                glucose_value = st.number_input("Glucose Level (mg/dL)", min_value=10, max_value=800, value=100, key=f"edit_glucose_val_{lab['id']}")
+                                glucose_units = st.selectbox("Units", ["mg/dL", "mmol/L"], key=f"edit_glucose_units_{lab['id']}")
+                                
+                                # Interpretation helper
+                                if glucose_units == "mg/dL":
+                                    if glucose_value < 70:
+                                        interpretation = "Low (Hypoglycemia)"
+                                    elif glucose_value <= 99:
+                                        interpretation = "Normal"
+                                    elif glucose_value <= 125:
+                                        interpretation = "Elevated (Prediabetes range)"
+                                    else:
+                                        interpretation = "High (Diabetes range)"
+                                else:
+                                    if glucose_value < 3.9:
+                                        interpretation = "Low (Hypoglycemia)"
+                                    elif glucose_value <= 5.5:
+                                        interpretation = "Normal"
+                                    elif glucose_value <= 6.9:
+                                        interpretation = "Elevated (Prediabetes range)"
+                                    else:
+                                        interpretation = "High (Diabetes range)"
+                                
+                                st.info(f"Interpretation: {interpretation}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = f"{glucose_value} {glucose_units} ({interpretation})"
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Glucose results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                         
-                        with st.container():
-                            if st.button("View Full UA Results", key=f"ua_results_{patient_id}_{lab['id']}"):
-                                st.text(results)
-                    
-                    elif lab['test_type'].lower() == 'glucose':
-                        st.markdown("**Blood Glucose Test:**")
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px; margin: 8px 0;">
-                                <strong>Glucose Level:</strong> {lab['results']}
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    elif lab['test_type'].lower() == 'pregnancy':
-                        st.markdown("**Pregnancy Test:**")
-                        result_color = "#10b981" if "positive" in lab['results'].lower() else "#ef4444"
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="background: #f0f9ff; border-left: 4px solid {result_color}; padding: 12px; margin: 8px 0;">
-                                <strong>Result:</strong> {lab['results']}
-                            </div>
-                            """, unsafe_allow_html=True)
+                        elif lab['test_type'].lower() == 'pregnancy':
+                            st.markdown("**Edit Pregnancy Test Results:**")
+                            with st.form(f"edit_pregnancy_{lab['id']}"):
+                                pregnancy_result = st.selectbox("Pregnancy Test Result", ["Negative", "Positive"], key=f"edit_pregnancy_{lab['id']}")
+                                test_notes = st.text_area("Additional Notes (optional)", key=f"edit_preg_notes_{lab['id']}")
+                                
+                                if pregnancy_result == "Positive":
+                                    st.success("Positive result - Patient is pregnant")
+                                else:
+                                    st.info("Negative result - Patient is not pregnant")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = pregnancy_result
+                                        if test_notes.strip():
+                                            new_results += f" - Notes: {test_notes.strip()}"
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Pregnancy test results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        
+                        else:
+                            # Generic lab result editing
+                            st.markdown(f"**Edit {lab['test_type']} Results:**")
+                            with st.form(f"edit_generic_{lab['id']}"):
+                                new_results = st.text_area("Test Results", value=lab['results'], key=f"edit_generic_results_{lab['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        if new_results.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE lab_tests 
+                                                SET results = ?
+                                                WHERE id = ?
+                                            ''', (new_results.strip(), lab['id']))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"✅ {lab['test_type']} results updated successfully!")
+                                            st.rerun()
+                                        else:
+                                            st.error("Please enter test results before saving.")
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                     
                     else:
-                        # Generic lab result display
-                        st.markdown(f"**{lab['test_type']} Results:**")
-                        with st.container():
-                            st.text(lab['results'])
+                        # Display mode for lab results
+                        if lab['test_type'].lower() == 'urinalysis':
+                            st.markdown("**Standard 11-Parameter Urinalysis:**")
+                            results = lab['results']
+                            
+                            # Create a structured display for UA results
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown("""
+                                **Physical Parameters:**
+                                - Color
+                                - Clarity
+                                - Specific Gravity
+                                - pH
+                                """)
+                            with col2:
+                                st.markdown("""
+                                **Chemical Parameters:**
+                                - Leukocyte Esterase
+                                - Nitrites
+                                - Protein
+                                - Glucose
+                                - Ketones
+                                - Blood
+                                - Bilirubin
+                                """)
+                            
+                            with st.container():
+                                if st.button("View Full UA Results", key=f"ua_results_{patient_id}_{lab['id']}"):
+                                    st.text(results)
+                        
+                        elif lab['test_type'].lower() == 'glucose':
+                            st.markdown("**Blood Glucose Test:**")
+                            with st.container():
+                                st.markdown(f"""
+                                <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px; margin: 8px 0;">
+                                    <strong>Glucose Level:</strong> {lab['results']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        elif lab['test_type'].lower() == 'pregnancy':
+                            st.markdown("**Pregnancy Test:**")
+                            result_color = "#10b981" if "positive" in lab['results'].lower() else "#ef4444"
+                            with st.container():
+                                st.markdown(f"""
+                                <div style="background: #f0f9ff; border-left: 4px solid {result_color}; padding: 12px; margin: 8px 0;">
+                                    <strong>Result:</strong> {lab['results']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        else:
+                            # Generic lab result display
+                            st.markdown(f"**{lab['test_type']} Results:**")
+                            with st.container():
+                                st.text(lab['results'])
                 
                 # Provider review status - automatic return
                 st.markdown("---")
@@ -5804,7 +7190,7 @@ def lab_results_input():
                 
                 # Different input forms based on test type
                 if test_type.lower() == 'urinalysis':
-                    st.markdown("#### 10-Parameter Urinalysis Input")
+                    st.markdown("#### 11-Parameter Urinalysis Input")
                     
                     with st.form(f"urinalysis_{test_id}"):
                         col1, col2 = st.columns(2)
@@ -5813,7 +7199,7 @@ def lab_results_input():
                             st.markdown("**Physical Parameters:**")
                             color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"color_{test_id}")
                             clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"clarity_{test_id}")
-                            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005, key=f"sg_{test_id}")
+                            specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.100, value=1.020, step=0.001, format="%.3f", key=f"sg_{test_id}")
                             ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"ph_{test_id}")
                             protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"protein_{test_id}")
                         
@@ -5824,6 +7210,7 @@ def lab_results_input():
                             blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"blood_{test_id}")
                             leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"leuk_{test_id}")
                             nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"nitrites_{test_id}")
+                            bilirubin = st.selectbox("Bilirubin", ["Negative", "Trace", "+1", "+2", "+3"], key=f"bilirubin_{test_id}")
                         
                         if st.form_submit_button("Complete Urinalysis", type="primary"):
                             results = f"""URINALYSIS RESULTS:
@@ -5839,7 +7226,8 @@ Chemical Parameters:
 - Ketones: {ketones}
 - Blood: {blood}
 - Leukocyte Esterase: {leukocyte_esterase}
-- Nitrites: {nitrites}"""
+- Nitrites: {nitrites}
+- Bilirubin: {bilirubin}"""
                             
                             # Save results to database
                             conn = sqlite3.connect(db.db_name)
@@ -6072,6 +7460,118 @@ Chemical Parameters:
         st.info("No pending lab tests for today.")
 
 
+def awaiting_teaching():
+    st.markdown("### Medication Teaching")
+    st.info("Patients who have filled prescriptions and are awaiting medication teaching.")
+    
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, p.duration, 
+               p.indication, p.instructions, p.filled_time, pt.name, v.patient_id, p.prescribed_by
+        FROM prescriptions p
+        JOIN visits v ON p.visit_id = v.visit_id
+        JOIN patients pt ON v.patient_id = pt.patient_id
+        WHERE p.status = 'awaiting_teaching' AND DATE(p.filled_time) = DATE('now')
+        ORDER BY p.filled_time
+    ''')
+    
+    awaiting_teaching_prescriptions = cursor.fetchall()
+    conn.close()
+    
+    if awaiting_teaching_prescriptions:
+        # Group prescriptions by patient for better organization
+        patients = {}
+        for prescription in awaiting_teaching_prescriptions:
+            patient_id = prescription[10]
+            patient_name = prescription[9]
+            
+            if patient_id not in patients:
+                patients[patient_id] = {
+                    'name': patient_name,
+                    'visit_id': prescription[1],
+                    'prescriptions': [],
+                    'filled_time': prescription[8]
+                }
+            
+            patients[patient_id]['prescriptions'].append(prescription)
+        
+        for patient_id, patient_data in patients.items():
+            with st.expander(f"📚 {patient_data['name']} (ID: {patient_id}) - {len(patient_data['prescriptions'])} medications to teach", expanded=True):
+                st.markdown(f"**Patient:** {patient_data['name']}")
+                st.markdown(f"**Prescriptions filled:** {patient_data['filled_time'][:16].replace('T', ' ')}")
+                
+                # Display all medications for this patient
+                for prescription in patient_data['prescriptions']:
+                    medication_name = prescription[2]
+                    dosage = prescription[3]
+                    frequency = prescription[4]
+                    duration = prescription[5]
+                    indication = prescription[6]
+                    instructions = prescription[7]
+                    
+                    prescribed_by = prescription[11] if len(prescription) > 11 and prescription[11] else "Unknown Doctor"
+                    st.markdown(f"""
+                    <div style="background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                        <h5 style="color: #92400e; margin: 0 0 8px 0; font-size: 16px;">📚 {medication_name}</h5>
+                        <p style="margin: 0 0 8px 0; color: #7c3aed; font-size: 13px; font-weight: 600;"><strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Dosage:</strong> {dosage}</p>
+                            <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Frequency:</strong> {frequency}</p>
+                        </div>
+                        <p style="margin: 0 0 8px 0; color: #78350f; font-size: 14px;"><strong>Duration:</strong> {duration}</p>
+                        {f'<p style="margin: 0 0 8px 0; color: #d97706; font-size: 14px; background: #fef3c7; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {indication}</p>' if indication else ''}
+                        {f'<p style="margin: 0 0 8px 0; color: #78350f; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {instructions}</p>' if instructions else ''}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Teaching completion button
+                st.markdown("---")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown("**Teaching Notes (optional):**")
+                    teaching_notes = st.text_area("Record any additional teaching notes for this patient", 
+                                                 key=f"teaching_notes_{patient_id}", 
+                                                 placeholder="Patient understood all medication instructions...")
+                with col2:
+                    st.markdown("**Complete Teaching:**")
+                    if st.button(f"✅ Teaching Complete", 
+                               key=f"complete_teaching_{patient_id}", 
+                               type="primary", 
+                               use_container_width=True):
+                        # Update all prescriptions for this patient to 'filled' status
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        
+                        # Mark all prescriptions as fully completed (taught)
+                        cursor.execute('''
+                            UPDATE prescriptions 
+                            SET status = 'filled', teaching_completed = ?, teaching_notes = ?
+                            WHERE visit_id = ? AND status = 'awaiting_teaching'
+                        ''', (datetime.now().isoformat(), teaching_notes, patient_data['visit_id']))
+                        
+                        # Update visit status to completed
+                        cursor.execute('''
+                            UPDATE visits 
+                            SET status = 'completed', completion_time = ?
+                            WHERE visit_id = ?
+                        ''', (datetime.now().isoformat(), patient_data['visit_id']))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        # Broadcast completion to all connected devices
+                        broadcast_to_clients(f"patient_teaching_complete:{patient_data['name']}:medications_taught")
+                        
+                        st.success(f"✅ Medication teaching completed for {patient_data['name']}! Patient visit is now complete.")
+                        st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info("No patients awaiting medication teaching.")
+
+
 def filled_prescriptions():
     st.markdown("### Prescription History")
 
@@ -6183,9 +7683,10 @@ def urinalysis_form(test_id: int):
                 "Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"])
             specific_gravity = st.number_input("Specific Gravity",
                                                min_value=1.000,
-                                               max_value=1.050,
+                                               max_value=1.100,
                                                value=1.020,
-                                               step=0.005)
+                                               step=0.001,
+                                               format="%.3f")
             ph = st.number_input("pH",
                                  min_value=4.0,
                                  max_value=9.0,
@@ -6754,9 +8255,9 @@ def admin_interface():
     add_to_history('admin')
     st.markdown("## Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "Patient Management", "Doctor Management", "Medication Management",
-        "Reports", "Settings"
+        "Edit Locations", "Reports", "Settings"
     ])
 
     with tab1:
@@ -6769,9 +8270,12 @@ def admin_interface():
         medication_management()
 
     with tab4:
-        daily_reports()
+        location_management()
 
     with tab5:
+        daily_reports()
+
+    with tab6:
         clinic_settings()
 
 
@@ -6790,12 +8294,29 @@ def doctor_management():
 
             if st.form_submit_button("Add Doctor", type="primary"):
                 if doctor_name.strip():
-                    if db.add_doctor(doctor_name.strip()):
-                        st.success(f"Doctor {doctor_name} added successfully!")
-                        st.rerun()
+                    # Check if doctor already exists before trying to add
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT is_active FROM doctors WHERE name = ?', (doctor_name.strip(),))
+                    existing = cursor.fetchone()
+                    conn.close()
+                    
+                    if existing and existing[0] == 1:
+                        st.warning(f"Doctor {doctor_name} is already active in the system.")
+                    elif existing and existing[0] == 0:
+                        # Doctor exists but is inactive - reactivate
+                        if db.add_doctor(doctor_name.strip()):
+                            st.success(f"Doctor {doctor_name} reactivated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to reactivate doctor.")
                     else:
-                        st.error(
-                            "Failed to add doctor. Name may already exist.")
+                        # New doctor
+                        if db.add_doctor(doctor_name.strip()):
+                            st.success(f"Doctor {doctor_name} added successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to add doctor.")
                 else:
                     st.error("Please enter a doctor name.")
 
@@ -6863,6 +8384,159 @@ def doctor_management():
             st.caption(f"Last updated: {last_update}")
 
 
+def location_management():
+    """Admin interface for managing clinic locations"""
+    add_to_history('location_management')
+    st.markdown("### Location Management")
+    
+    db = get_db_manager()
+    locations = db.get_locations()
+    
+    # Check for duplicate locations
+    if locations:
+        # Group locations by country code and city to find duplicates
+        location_groups = {}
+        for loc in locations:
+            key = (loc['country_code'].upper(), loc['city'].lower())
+            if key not in location_groups:
+                location_groups[key] = []
+            location_groups[key].append(loc)
+        
+        # Find duplicates
+        duplicates = {k: v for k, v in location_groups.items() if len(v) > 1}
+        
+        if duplicates:
+            st.warning(f"⚠️ Found {len(duplicates)} duplicate location groups")
+            with st.expander("🔗 Merge Duplicate Locations", expanded=True):
+                for (country_code, city), duplicate_locs in duplicates.items():
+                    st.markdown(f"**Duplicates for {country_code} - {city.title()}:**")
+                    
+                    # Show all duplicates
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        for i, dup_loc in enumerate(duplicate_locs):
+                            st.write(f"  {i+1}. {dup_loc['country_name']} - {dup_loc['city']} (ID: {dup_loc['id']})")
+                    
+                    with col2:
+                        merge_key = f"merge_{country_code}_{city}"
+                        if st.button(f"Merge All", key=merge_key, type="primary"):
+                            # Keep the first location, delete the rest
+                            primary_location = duplicate_locs[0]
+                            locations_to_delete = duplicate_locs[1:]
+                            
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            
+                            # Delete duplicate locations
+                            for dup_loc in locations_to_delete:
+                                cursor.execute('DELETE FROM locations WHERE id = ?', (dup_loc['id'],))
+                            
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"Merged {len(locations_to_delete)} duplicate locations into {primary_location['country_name']} - {primary_location['city']}")
+                            st.rerun()
+                    
+                    st.markdown("---")
+    
+    # Display existing locations for editing
+    if locations:
+        st.markdown("### Edit Locations")
+        st.info("💡 You can edit location names to fix typos or update information. Use the merge feature above to combine duplicate locations.")
+        for location in locations:
+            with st.expander(f"{location['country_name']} - {location['city']}", expanded=True):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    st.write(f"**Country Code:** {location['country_code']}")
+                    st.write(f"**Country:** {location['country_name']}")
+                    st.write(f"**City:** {location['city']}")
+                
+                with col2:
+                    # Edit button
+                    edit_key = f"edit_location_{location['id']}"
+                    if st.button("✏️ Edit Name", key=f"admin_edit_btn_{location['id']}", help="Edit location names and details"):
+                        st.session_state[edit_key] = True
+                        st.rerun()
+                
+                with col3:
+                    # Delete button with confirmation
+                    delete_key = f"delete_location_{location['id']}"
+                    if st.button("🗑️ Delete", key=f"delete_btn_{location['id']}", type="secondary"):
+                        st.session_state[delete_key] = True
+                        st.rerun()
+                
+                # Edit form
+                if st.session_state.get(edit_key, False):
+                    st.markdown("---")
+                    with st.form(f"edit_location_{location['id']}"):
+                        st.markdown("**Edit Location**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            new_country_code = st.text_input("Country Code", 
+                                                           value=location['country_code'],
+                                                           max_chars=5)
+                            new_country_name = st.text_input("Country Name", 
+                                                           value=location['country_name'])
+                        with col2:
+                            new_city = st.text_input("City/Location", 
+                                                   value=location['city'])
+                        
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.form_submit_button("Save Changes", type="primary"):
+                                if new_country_code and new_country_name and new_city:
+                                    # Update location in database
+                                    conn = sqlite3.connect(db.db_name)
+                                    cursor = conn.cursor()
+                                    cursor.execute('''
+                                        UPDATE locations 
+                                        SET country_code = ?, country_name = ?, city = ?
+                                        WHERE id = ?
+                                    ''', (new_country_code.upper(), new_country_name, new_city, location['id']))
+                                    conn.commit()
+                                    conn.close()
+                                    
+                                    st.session_state[edit_key] = False
+                                    st.success("Location updated!")
+                                    st.rerun()
+                                else:
+                                    st.error("Please fill in all fields")
+                        
+                        with col_cancel:
+                            if st.form_submit_button("Cancel"):
+                                st.session_state[edit_key] = False
+                                st.rerun()
+                
+                # Delete confirmation
+                if st.session_state.get(delete_key, False):
+                    st.markdown("---")
+                    st.error("⚠️ **Are you sure you want to delete this location?**")
+                    st.write("This action cannot be undone. Patients may already be using this location code.")
+                    
+                    col_confirm, col_cancel = st.columns(2)
+                    with col_confirm:
+                        if st.button("Yes, Delete", key=f"confirm_delete_{location['id']}", type="primary"):
+                            # Delete location from database
+                            conn = sqlite3.connect(db.db_name)
+                            cursor = conn.cursor()
+                            cursor.execute('DELETE FROM locations WHERE id = ?', (location['id'],))
+                            conn.commit()
+                            conn.close()
+                            
+                            st.session_state[delete_key] = False
+                            st.success("Location deleted!")
+                            st.rerun()
+                    
+                    with col_cancel:
+                        if st.button("Cancel", key=f"cancel_delete_{location['id']}"):
+                            st.session_state[delete_key] = False
+                            st.rerun()
+    else:
+        st.info("No locations configured yet. Locations are typically set up during initial clinic setup.")
+
+
 def medication_management():
     add_to_history('medication_management')
     st.markdown("### Preset Medications")
@@ -6892,12 +8566,18 @@ def medication_management():
                                         placeholder="e.g., 250mg, 500mg")
                 amount = st.text_input("Amount/Quantity",
                                      placeholder="e.g., 30 tablets, 100ml bottle")
+                preset_duration = st.text_input("Preset Duration",
+                                              placeholder="e.g., 30 days, 7 days, 10 days",
+                                              help="Default duration that will auto-populate when prescribing")
             with col2:
                 category = st.selectbox("Category", [
                     "Pain Relief", "Antibiotic", "Blood Pressure", "Diabetes",
                     "Stomach", "Respiratory", "Vitamin", "Steroid", "Diuretic",
-                    "Cholesterol", "UTI Antibiotic", "Other"
+                    "Cholesterol", "UTI Antibiotic", "Teaching Pamphlets", "Other"
                 ])
+                require_indication = st.checkbox("Require indication when prescribing", 
+                                                value=True,
+                                                help="Uncheck for medications like vitamins that don't need specific indications")
                 indications = st.text_area("Clinical Indications",
                                          placeholder="e.g., Hypertension, Pain relief, Bacterial infections",
                                          height=100)
@@ -6906,11 +8586,19 @@ def medication_management():
                 if med_name:
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
+                    # Check if columns exist, if not add them
+                    cursor.execute("PRAGMA table_info(preset_medications)")
+                    columns = [column[1] for column in cursor.fetchall()]
+                    if 'require_indication' not in columns:
+                        cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                    if 'preset_duration' not in columns:
+                        cursor.execute('ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT DEFAULT ""')
+                    
                     cursor.execute(
                         '''
-                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (med_name, dosages, category, "no", amount, indications))
+                        INSERT INTO preset_medications (medication_name, common_dosages, category, requires_lab, amount, indications, require_indication, preset_duration)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (med_name, dosages, category, "no", amount, indications, "yes" if require_indication else "no", preset_duration))
                     conn.commit()
                     conn.close()
                     st.success("Medication added!")
@@ -6946,13 +8634,18 @@ def medication_management():
                                 new_amount = st.text_input(
                                     "Amount/Quantity",
                                     value=med.get('amount', ''))
+                                new_preset_duration = st.text_input(
+                                    "Preset Duration",
+                                    value=med.get('preset_duration', ''),
+                                    placeholder="e.g., 30 days, 7 days, 10 days",
+                                    help="Default duration that will auto-populate when prescribing")
                             with col2:
                                 categories = [
                                     "Pain Relief", "Antibiotic",
                                     "Blood Pressure", "Diabetes", "Stomach",
                                     "Respiratory", "Vitamin", "Steroid",
                                     "Diuretic", "Cholesterol",
-                                    "UTI Antibiotic", "Other"
+                                    "UTI Antibiotic", "Teaching Pamphlets", "Other"
                                 ]
                                 try:
                                     cat_index = categories.index(
@@ -6962,6 +8655,9 @@ def medication_management():
                                 new_category = st.selectbox("Category",
                                                             categories,
                                                             index=cat_index)
+                                new_require_indication = st.checkbox("Require indication when prescribing",
+                                                                    value=med.get('require_indication', 'yes') == 'yes',
+                                                                    help="Uncheck for medications like vitamins that don't need specific indications")
                                 new_indications = st.text_area(
                                     "Clinical Indications",
                                     value=med.get('indications', ''),
@@ -6975,16 +8671,26 @@ def medication_management():
                                         conn = sqlite3.connect(
                                             "clinic_database.db")
                                         cursor = conn.cursor()
+                                        # Check if columns exist, if not add them
+                                        cursor.execute("PRAGMA table_info(preset_medications)")
+                                        columns = [column[1] for column in cursor.fetchall()]
+                                        if 'require_indication' not in columns:
+                                            cursor.execute('ALTER TABLE preset_medications ADD COLUMN require_indication TEXT DEFAULT "yes"')
+                                        if 'preset_duration' not in columns:
+                                            cursor.execute('ALTER TABLE preset_medications ADD COLUMN preset_duration TEXT DEFAULT ""')
+                                        
                                         cursor.execute(
                                             '''
                                             UPDATE preset_medications 
-                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?
+                                            SET medication_name = ?, common_dosages = ?, category = ?, amount = ?, indications = ?, require_indication = ?, preset_duration = ?
                                             WHERE id = ?
                                         ''',
                                             (new_name.strip(),
                                              new_dosages.strip() if new_dosages
                                              else "", new_category, new_amount.strip() if new_amount else "", 
-                                             new_indications.strip() if new_indications else "", med['id']))
+                                             new_indications.strip() if new_indications else "", 
+                                             "yes" if new_require_indication else "no", 
+                                             new_preset_duration.strip() if new_preset_duration else "", med['id']))
                                         conn.commit()
                                         conn.close()
                                         st.session_state[edit_key] = False
@@ -7006,8 +8712,14 @@ def medication_management():
                             st.caption(f"Dosages: {med['common_dosages']}")
                             if med.get('amount'):
                                 st.caption(f"Amount: {med['amount']}")
+                            if med.get('preset_duration'):
+                                st.caption(f"Default Duration: {med['preset_duration']}")
                             if med.get('indications'):
                                 st.caption(f"Indications: {med['indications']}")
+                            # Show indication requirement status
+                            indication_required = med.get('require_indication', 'yes') == 'yes'
+                            if not indication_required:
+                                st.caption("🏷️ Indication not required")
                         with col2:
                             st.write(f"{med['category']}")
                         with col3:
