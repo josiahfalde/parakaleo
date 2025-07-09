@@ -3865,25 +3865,37 @@ def new_patient_form():
                     # Build children data from form inputs
                     children_data = []
                     for i in range(num_children):
-                        if i < len(child_names) and child_names[i]:
+                        if i < len(child_names) and child_names[i] and child_names[i].strip():
                             children_data.append({
-                                'name': child_names[i],
-                                'age': child_ages[i] if i < len(child_ages) else None,
-                                'gender': child_genders[i] if i < len(child_genders) else ""
+                                'name': child_names[i].strip(),
+                                'age': child_ages[i] if i < len(child_ages) and child_ages[i] is not None else None,
+                                'gender': child_genders[i] if i < len(child_genders) and child_genders[i] else ""
                             })
                     
-                    # Validate children data
-                    valid_children = [
-                        child for child in children_data
-                        if child['name'] and child['name'].strip()
-                    ]
-
-                    # Debug information
-                    st.write(f"**Debug Info:** Total children entered: {num_children}, Valid children: {len(valid_children)}")
-                    for i, child in enumerate(valid_children):
-                        st.write(f"Child {i+1}: {child['name']}, Age: {child['age']}, Gender: {child['gender']}")
+                    # Validate children data - each child must have a name
+                    valid_children = []
+                    validation_errors = []
                     
-                    if len(valid_children) > 0 or num_children == 0:
+                    for i, child in enumerate(children_data):
+                        if child['name'] and child['name'].strip():
+                            valid_children.append(child)
+                        else:
+                            validation_errors.append(f"Child {i+1}: Missing name")
+                    
+                    # Check if we have the expected number of valid children
+                    missing_children = num_children - len(valid_children)
+                    if missing_children > 0:
+                        validation_errors.append(f"{missing_children} children missing names")
+
+                    # Show validation errors if any
+                    if validation_errors:
+                        st.error("Please fix the following issues:")
+                        for error in validation_errors:
+                            st.error(f"• {error}")
+                        return  # Don't proceed with family creation
+                    
+                    # Only proceed if we have valid data (all expected children or no children)
+                    if len(valid_children) == num_children:
                         location_code = st.session_state.clinic_location[
                             'country_code']
 
@@ -3928,7 +3940,6 @@ def new_patient_form():
                                     'patient_name': child['name'].strip(),
                                     'relationship': 'child'
                                 })
-                                st.write(f"✅ Child {i+1} ({child['name']}) added successfully with ID: {child_id}")
                             except Exception as e:
                                 st.error(f"Error adding child {i+1} ({child['name']}): {str(e)}")
                                 continue
@@ -3962,18 +3973,8 @@ def new_patient_form():
                             )
 
                         # Store family data for continuation outside form
-                        st.session_state.created_family_visits = family_visits.copy(
-                        )
+                        st.session_state.created_family_visits = family_visits.copy()
                         st.session_state.family_creation_complete = True
-
-                    else:
-                        st.error(
-                            f"Please provide at least one child's name, or set number of children to 0. Currently: {num_children} children expected, {len(valid_children)} valid children found."
-                        )
-                        # Show which children are missing names
-                        for i, child in enumerate(children_data):
-                            if not child['name'] or not child['name'].strip():
-                                st.warning(f"Child {i+1}: Missing name")
                 else:
                     st.error(
                         "Please provide family name and parent/guardian name.")
@@ -5607,19 +5608,7 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             db_manager.update_doctor_status(st.session_state.doctor_name, "available")
                             st.session_state.page = 'doctor_interface'
                             st.rerun()
-                        if st.session_state.get('family_consultation_mode',
-                                                False):
-                            if 'remaining_family_children' in st.session_state:
-                                del st.session_state.remaining_family_children
-                            if 'family_consultation_mode' in st.session_state:
-                                del st.session_state.family_consultation_mode
 
-                            st.success(
-                                "✅ Family consultation completed for all members!"
-                            )
-                            st.info(
-                                "All family members have been seen by the doctor."
-                            )
 
                     except Exception as e:
                         # More user-friendly error messages
