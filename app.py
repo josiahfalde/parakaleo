@@ -3051,45 +3051,54 @@ def family_vital_signs_collection():
     # Vital signs form for current family member
     with st.form(f"family_vitals_{current_member['visit_id']}"):
         st.markdown("#### Vital Signs")
+        st.info("💡 **Tip:** Enter 'N/A' for any measurement that cannot be taken (e.g., broken equipment, child won't cooperate)")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            systolic = st.number_input("Systolic BP",
-                                       min_value=50,
-                                       max_value=300,
-                                       value=120)
-            diastolic = st.number_input("Diastolic BP",
-                                        min_value=30,
-                                        max_value=200,
-                                        value=80)
+            systolic = st.text_input("Systolic BP",
+                                     value="120",
+                                     placeholder="e.g., 120 or N/A")
+            diastolic = st.text_input("Diastolic BP",
+                                      value="80",
+                                      placeholder="e.g., 80 or N/A")
 
         with col2:
-            heart_rate = st.number_input("Heart Rate (bpm)",
-                                         min_value=30,
-                                         max_value=250,
-                                         value=72)
-            temperature = st.number_input("Temperature (°F)",
-                                          min_value=90.0,
-                                          max_value=110.0,
-                                          value=98.6,
-                                          step=0.1)
+            heart_rate = st.text_input("Heart Rate (bpm)",
+                                       value="72",
+                                       placeholder="e.g., 72 or N/A")
+            temperature = st.text_input("Temperature (°F)",
+                                        value="98.6",
+                                        placeholder="e.g., 98.6 or N/A")
 
         with col3:
-            weight = st.number_input("Weight (kg)",
-                                     min_value=0.5,
-                                     max_value=500.0,
-                                     value=None,
-                                     step=0.1)
-            oxygen_sat = st.number_input("O2 Saturation (%)",
-                                         min_value=70,
-                                         max_value=100,
-                                         value=98)
+            weight = st.text_input("Weight (kg)",
+                                   placeholder="e.g., 15.5 or N/A")
+            oxygen_sat = st.text_input("O2 Saturation (%)",
+                                       value="98",
+                                       placeholder="e.g., 98 or N/A")
 
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.form_submit_button("Save Vital Signs & Continue",
                                      type="primary"):
+                # Convert text inputs to appropriate values, handling N/A entries
+                def process_vital_sign(value, is_decimal=False):
+                    if not value or value.strip().upper() == 'N/A':
+                        return None
+                    try:
+                        return float(value) if is_decimal else int(float(value))
+                    except ValueError:
+                        return None
+                
+                # Process each vital sign
+                systolic_val = process_vital_sign(systolic)
+                diastolic_val = process_vital_sign(diastolic)
+                heart_rate_val = process_vital_sign(heart_rate)
+                temperature_val = process_vital_sign(temperature, is_decimal=True)
+                weight_val = process_vital_sign(weight, is_decimal=True)
+                oxygen_sat_val = process_vital_sign(oxygen_sat)
+                
                 # Save vital signs for current family member
                 conn = sqlite3.connect(db.db_name)
                 cursor = conn.cursor()
@@ -3103,8 +3112,8 @@ def family_vital_signs_collection():
                     INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
                                            temperature, weight, oxygen_saturation, recorded_time)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (current_member['visit_id'], systolic, diastolic,
-                      heart_rate, temperature, weight, oxygen_sat,
+                ''', (current_member['visit_id'], systolic_val, diastolic_val,
+                      heart_rate_val, temperature_val, weight_val, oxygen_sat_val,
                       datetime.now().isoformat()))
 
                 # Update visit status
@@ -4071,43 +4080,51 @@ def existing_patient_search():
 def vital_signs_form(visit_id: str):
     with st.form(f"vitals_{visit_id}"):
         st.markdown("#### Vital Signs")
+        st.info("💡 **Tip:** Enter 'N/A' for any measurement that cannot be taken (e.g., broken equipment, child won't cooperate)")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            systolic = st.number_input("Systolic BP",
-                                       min_value=50,
-                                       max_value=300,
-                                       value=120)
-            diastolic = st.number_input("Diastolic BP",
-                                        min_value=30,
-                                        max_value=200,
-                                        value=80)
+            systolic = st.text_input("Systolic BP",
+                                     value="120",
+                                     placeholder="e.g., 120 or N/A")
+            diastolic = st.text_input("Diastolic BP",
+                                      value="80",
+                                      placeholder="e.g., 80 or N/A")
 
         with col2:
-            heart_rate = st.number_input("Heart Rate (bpm)",
-                                         min_value=30,
-                                         max_value=250,
-                                         value=72)
-            temperature = st.number_input("Temperature (°F)",
-                                          min_value=90.0,
-                                          max_value=110.0,
-                                          value=98.6,
-                                          step=0.1)
+            heart_rate = st.text_input("Heart Rate (bpm)",
+                                       value="72",
+                                       placeholder="e.g., 72 or N/A")
+            temperature = st.text_input("Temperature (°F)",
+                                        value="98.6",
+                                        placeholder="e.g., 98.6 or N/A")
 
         with col3:
-            weight = st.number_input("Weight (kg)",
-                                     min_value=0.5,
-                                     max_value=500.0,
-                                     value=None,
-                                     step=0.1)
-            oxygen_sat = st.number_input("Oxygen Saturation (%)",
-                                        min_value=50,
-                                        max_value=100,
-                                        value=98,
-                                        step=1)
+            weight = st.text_input("Weight (kg)",
+                                   placeholder="e.g., 15.5 or N/A")
+            oxygen_sat = st.text_input("Oxygen Saturation (%)",
+                                       value="98",
+                                       placeholder="e.g., 98 or N/A")
 
         if st.form_submit_button("Save Vital Signs", type="primary"):
+            # Convert text inputs to appropriate values, handling N/A entries
+            def process_vital_sign(value, is_decimal=False):
+                if not value or value.strip().upper() == 'N/A':
+                    return None
+                try:
+                    return float(value) if is_decimal else int(float(value))
+                except ValueError:
+                    return None
+            
+            # Process each vital sign
+            systolic_val = process_vital_sign(systolic)
+            diastolic_val = process_vital_sign(diastolic)
+            heart_rate_val = process_vital_sign(heart_rate)
+            temperature_val = process_vital_sign(temperature, is_decimal=True)
+            weight_val = process_vital_sign(weight, is_decimal=True)
+            oxygen_sat_val = process_vital_sign(oxygen_sat)
+            
             conn = sqlite3.connect(db.db_name)
             cursor = conn.cursor()
 
@@ -4116,8 +4133,8 @@ def vital_signs_form(visit_id: str):
                 INSERT INTO vital_signs (visit_id, systolic_bp, diastolic_bp, heart_rate, 
                                        temperature, weight, oxygen_saturation, recorded_time)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (visit_id, systolic, diastolic, heart_rate, temperature,
-                  weight, oxygen_sat, datetime.now().isoformat()))
+            ''', (visit_id, systolic_val, diastolic_val, heart_rate_val, temperature_val,
+                  weight_val, oxygen_sat_val, datetime.now().isoformat()))
 
             # Update visit status
             cursor.execute(
@@ -4738,23 +4755,23 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if systolic and diastolic:
-                st.metric("Blood Pressure", f"{systolic}/{diastolic}")
+            bp_value = f"{systolic}/{diastolic}" if systolic and diastolic else "N/A"
+            st.metric("Blood Pressure", bp_value)
         with col2:
-            if hr:
-                st.metric("Heart Rate", f"{hr} bpm")
+            hr_value = f"{hr} bpm" if hr else "N/A"
+            st.metric("Heart Rate", hr_value)
         with col3:
-            if temp:
-                st.metric("Temperature", f"{temp}°F")
+            temp_value = f"{temp}°F" if temp else "N/A"
+            st.metric("Temperature", temp_value)
         with col4:
-            if o2_sat:
-                st.metric("O2 Saturation", f"{o2_sat}%")
+            o2_value = f"{o2_sat}%" if o2_sat else "N/A"
+            st.metric("O2 Saturation", o2_value)
         
         # Second row for weight and timestamp
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            if weight:
-                st.metric("Weight", f"{weight} kg")
+            weight_value = f"{weight} kg" if weight else "N/A"
+            st.metric("Weight", weight_value)
         with col2:
             if recorded_time:
                 time_display = recorded_time[:16].replace('T', ' ')

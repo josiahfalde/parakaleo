@@ -232,6 +232,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Improved family exit workflow to prevent parents remaining in system after consultation
   - Added proper validation error handling for family registration with early return to prevent incomplete submissions
   - Streamlined family workflow to ensure proper progression from registration through consultation to pharmacy completion
+- July 9, 2025. Enhanced vital signs collection with N/A support
+  - Converted all vital signs forms from number inputs to text inputs to allow "N/A" entries
+  - Added helpful tip messages explaining how to use N/A for unavailable measurements
+  - Enhanced processing logic to handle N/A entries by storing them as NULL in database
+  - Updated both individual patient and family vital signs workflows with N/A support
+  - Improved vital signs flexibility for situations where equipment is broken or children won't cooperate
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed
