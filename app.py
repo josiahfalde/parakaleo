@@ -6510,62 +6510,261 @@ def awaiting_lab_prescriptions():
                 st.markdown("### 🧪 Lab Test Results")
                 
                 for lab in patient_data['lab_tests']:
-                    st.markdown(f"**{lab['test_type']} - Completed: {lab['completed_time'][:16].replace('T', ' ')}**")
+                    edit_key = f"edit_lab_{lab['id']}"
                     
-                    # Parse and display specific lab results based on test type
-                    if lab['test_type'].lower() == 'urinalysis':
-                        st.markdown("**Standard 10-Parameter Urinalysis:**")
-                        results = lab['results']
+                    # Lab test header with edit button
+                    col_header, col_edit = st.columns([4, 1])
+                    with col_header:
+                        st.markdown(f"**{lab['test_type']} - Completed: {lab['completed_time'][:16].replace('T', ' ')}**")
+                    with col_edit:
+                        if st.button("✏️", key=f"edit_lab_btn_{lab['id']}", type="secondary", help="Edit lab results"):
+                            st.session_state[edit_key] = True
+                            st.rerun()
+                    
+                    # Check if this lab result is in edit mode
+                    if st.session_state.get(edit_key, False):
+                        # Edit form based on test type
+                        if lab['test_type'].lower() == 'urinalysis':
+                            st.markdown("**Edit Urinalysis Results:**")
+                            with st.form(f"edit_urinalysis_{lab['id']}"):
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    st.markdown("**Physical Parameters:**")
+                                    color = st.selectbox("Color", ["Yellow", "Pale Yellow", "Dark Yellow", "Amber", "Red", "Brown", "Other"], key=f"edit_color_{lab['id']}")
+                                    clarity = st.selectbox("Clarity", ["Clear", "Slightly Cloudy", "Cloudy", "Turbid"], key=f"edit_clarity_{lab['id']}")
+                                    specific_gravity = st.number_input("Specific Gravity", min_value=1.000, max_value=1.050, value=1.020, step=0.005, key=f"edit_sg_{lab['id']}")
+                                    ph = st.number_input("pH", min_value=4.5, max_value=9.0, value=6.0, step=0.5, key=f"edit_ph_{lab['id']}")
+                                    protein = st.selectbox("Protein", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"edit_protein_{lab['id']}")
+                                
+                                with col2:
+                                    st.markdown("**Chemical Parameters:**")
+                                    glucose = st.selectbox("Glucose", ["Negative", "Trace", "+1", "+2", "+3", "+4"], key=f"edit_glucose_{lab['id']}")
+                                    ketones = st.selectbox("Ketones", ["Negative", "Trace", "Small", "Moderate", "Large"], key=f"edit_ketones_{lab['id']}")
+                                    blood = st.selectbox("Blood", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_blood_{lab['id']}")
+                                    leukocyte_esterase = st.selectbox("Leukocyte Esterase", ["Negative", "Trace", "+1", "+2", "+3"], key=f"edit_leuk_{lab['id']}")
+                                    nitrites = st.selectbox("Nitrites", ["Negative", "Positive"], key=f"edit_nitrites_{lab['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = f"""URINALYSIS RESULTS:
+Physical Parameters:
+- Color: {color}
+- Clarity: {clarity}
+- Specific Gravity: {specific_gravity}
+- pH: {ph}
+
+Chemical Parameters:
+- Protein: {protein}
+- Glucose: {glucose}
+- Ketones: {ketones}
+- Blood: {blood}
+- Leukocyte Esterase: {leukocyte_esterase}
+- Nitrites: {nitrites}"""
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Urinalysis results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                         
-                        # Create a structured display for UA results
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown("""
-                            **Physical Parameters:**
-                            - Color
-                            - Clarity
-                            - Specific Gravity
-                            """)
-                        with col2:
-                            st.markdown("""
-                            **Chemical Parameters:**
-                            - Leukocyte Esterase
-                            - Nitrites
-                            - Protein
-                            - Glucose
-                            - Ketones
-                            - Blood
-                            - pH
-                            """)
+                        elif lab['test_type'].lower() == 'glucose':
+                            st.markdown("**Edit Blood Glucose Results:**")
+                            with st.form(f"edit_glucose_{lab['id']}"):
+                                glucose_value = st.number_input("Glucose Level (mg/dL)", min_value=10, max_value=800, value=100, key=f"edit_glucose_val_{lab['id']}")
+                                glucose_units = st.selectbox("Units", ["mg/dL", "mmol/L"], key=f"edit_glucose_units_{lab['id']}")
+                                
+                                # Interpretation helper
+                                if glucose_units == "mg/dL":
+                                    if glucose_value < 70:
+                                        interpretation = "Low (Hypoglycemia)"
+                                    elif glucose_value <= 99:
+                                        interpretation = "Normal"
+                                    elif glucose_value <= 125:
+                                        interpretation = "Elevated (Prediabetes range)"
+                                    else:
+                                        interpretation = "High (Diabetes range)"
+                                else:
+                                    if glucose_value < 3.9:
+                                        interpretation = "Low (Hypoglycemia)"
+                                    elif glucose_value <= 5.5:
+                                        interpretation = "Normal"
+                                    elif glucose_value <= 6.9:
+                                        interpretation = "Elevated (Prediabetes range)"
+                                    else:
+                                        interpretation = "High (Diabetes range)"
+                                
+                                st.info(f"Interpretation: {interpretation}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = f"{glucose_value} {glucose_units} ({interpretation})"
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Glucose results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                         
-                        with st.container():
-                            if st.button("View Full UA Results", key=f"ua_results_{patient_id}_{lab['id']}"):
-                                st.text(results)
-                    
-                    elif lab['test_type'].lower() == 'glucose':
-                        st.markdown("**Blood Glucose Test:**")
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px; margin: 8px 0;">
-                                <strong>Glucose Level:</strong> {lab['results']}
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    elif lab['test_type'].lower() == 'pregnancy':
-                        st.markdown("**Pregnancy Test:**")
-                        result_color = "#10b981" if "positive" in lab['results'].lower() else "#ef4444"
-                        with st.container():
-                            st.markdown(f"""
-                            <div style="background: #f0f9ff; border-left: 4px solid {result_color}; padding: 12px; margin: 8px 0;">
-                                <strong>Result:</strong> {lab['results']}
-                            </div>
-                            """, unsafe_allow_html=True)
+                        elif lab['test_type'].lower() == 'pregnancy':
+                            st.markdown("**Edit Pregnancy Test Results:**")
+                            with st.form(f"edit_pregnancy_{lab['id']}"):
+                                pregnancy_result = st.selectbox("Pregnancy Test Result", ["Negative", "Positive"], key=f"edit_pregnancy_{lab['id']}")
+                                test_notes = st.text_area("Additional Notes (optional)", key=f"edit_preg_notes_{lab['id']}")
+                                
+                                if pregnancy_result == "Positive":
+                                    st.success("Positive result - Patient is pregnant")
+                                else:
+                                    st.info("Negative result - Patient is not pregnant")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        new_results = pregnancy_result
+                                        if test_notes.strip():
+                                            new_results += f" - Notes: {test_notes.strip()}"
+                                        
+                                        conn = sqlite3.connect(db.db_name)
+                                        cursor = conn.cursor()
+                                        cursor.execute('''
+                                            UPDATE lab_tests 
+                                            SET results = ?
+                                            WHERE id = ?
+                                        ''', (new_results, lab['id']))
+                                        conn.commit()
+                                        conn.close()
+                                        
+                                        # Broadcast update to all connected devices
+                                        broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                        
+                                        st.session_state[edit_key] = False
+                                        st.success("✅ Pregnancy test results updated successfully!")
+                                        st.rerun()
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
+                        
+                        else:
+                            # Generic lab result editing
+                            st.markdown(f"**Edit {lab['test_type']} Results:**")
+                            with st.form(f"edit_generic_{lab['id']}"):
+                                new_results = st.text_area("Test Results", value=lab['results'], key=f"edit_generic_results_{lab['id']}")
+                                
+                                col_save, col_cancel = st.columns(2)
+                                with col_save:
+                                    if st.form_submit_button("💾 Save Changes", type="primary"):
+                                        if new_results.strip():
+                                            conn = sqlite3.connect(db.db_name)
+                                            cursor = conn.cursor()
+                                            cursor.execute('''
+                                                UPDATE lab_tests 
+                                                SET results = ?
+                                                WHERE id = ?
+                                            ''', (new_results.strip(), lab['id']))
+                                            conn.commit()
+                                            conn.close()
+                                            
+                                            # Broadcast update to all connected devices
+                                            broadcast_to_clients(f"lab_results_updated:{lab['test_type']}:{patient_data['name']}")
+                                            
+                                            st.session_state[edit_key] = False
+                                            st.success(f"✅ {lab['test_type']} results updated successfully!")
+                                            st.rerun()
+                                        else:
+                                            st.error("Please enter test results before saving.")
+                                with col_cancel:
+                                    if st.form_submit_button("❌ Cancel"):
+                                        st.session_state[edit_key] = False
+                                        st.rerun()
                     
                     else:
-                        # Generic lab result display
-                        st.markdown(f"**{lab['test_type']} Results:**")
-                        with st.container():
-                            st.text(lab['results'])
+                        # Display mode for lab results
+                        if lab['test_type'].lower() == 'urinalysis':
+                            st.markdown("**Standard 10-Parameter Urinalysis:**")
+                            results = lab['results']
+                            
+                            # Create a structured display for UA results
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown("""
+                                **Physical Parameters:**
+                                - Color
+                                - Clarity
+                                - Specific Gravity
+                                """)
+                            with col2:
+                                st.markdown("""
+                                **Chemical Parameters:**
+                                - Leukocyte Esterase
+                                - Nitrites
+                                - Protein
+                                - Glucose
+                                - Ketones
+                                - Blood
+                                - pH
+                                """)
+                            
+                            with st.container():
+                                if st.button("View Full UA Results", key=f"ua_results_{patient_id}_{lab['id']}"):
+                                    st.text(results)
+                        
+                        elif lab['test_type'].lower() == 'glucose':
+                            st.markdown("**Blood Glucose Test:**")
+                            with st.container():
+                                st.markdown(f"""
+                                <div style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 12px; margin: 8px 0;">
+                                    <strong>Glucose Level:</strong> {lab['results']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        elif lab['test_type'].lower() == 'pregnancy':
+                            st.markdown("**Pregnancy Test:**")
+                            result_color = "#10b981" if "positive" in lab['results'].lower() else "#ef4444"
+                            with st.container():
+                                st.markdown(f"""
+                                <div style="background: #f0f9ff; border-left: 4px solid {result_color}; padding: 12px; margin: 8px 0;">
+                                    <strong>Result:</strong> {lab['results']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        else:
+                            # Generic lab result display
+                            st.markdown(f"**{lab['test_type']} Results:**")
+                            with st.container():
+                                st.text(lab['results'])
                 
                 # Provider review status - automatic return
                 st.markdown("---")
