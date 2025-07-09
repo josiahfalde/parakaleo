@@ -5400,87 +5400,108 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                             # Get previously saved values for this medication
                             prev_med_data = previous_selections.get('medications', {}).get(med_key, {})
                             
-                            # Dosage and frequency options
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                dosages = med['common_dosages'].split(', ')
-                                prev_dosage_idx = 0
-                                if prev_med_data.get('dosage') in dosages:
-                                    prev_dosage_idx = dosages.index(prev_med_data.get('dosage'))
-                                selected_dosage = st.selectbox(
-                                    "Dosage", dosages, 
-                                    index=prev_dosage_idx,
-                                    key=f"dosage_{med['id']}_{visit_id}")
-                            with col2:
-                                freq_options = ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"]
-                                prev_freq_idx = 0
-                                if prev_med_data.get('frequency') in freq_options:
-                                    prev_freq_idx = freq_options.index(prev_med_data.get('frequency'))
-                                frequency = st.selectbox("Frequency", freq_options,
-                                                        index=prev_freq_idx,
-                                                        key=f"freq_{med['id']}_{visit_id}")
-                            with col3:
-                                dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
-                                prev_dur_idx = 0
-                                
-                                # Get preset duration and normalize it
-                                preset_dur = med.get('preset_duration', '').strip()
-                                
-                                # Use preset duration if available and no previous data exists
-                                if prev_med_data.get('duration'):
-                                    # Use previously selected duration
-                                    if prev_med_data.get('duration') in dur_options:
-                                        prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
-                                elif preset_dur:
-                                    # Try to match preset duration - handle various formats
-                                    # If just a number, add " days"
-                                    if preset_dur.isdigit():
-                                        preset_dur_formatted = f"{preset_dur} days"
-                                    else:
-                                        preset_dur_formatted = preset_dur
+                            # Special handling for Teaching Pamphlets - no dosage/frequency needed
+                            if category == "Teaching Pamphlets":
+                                # For teaching pamphlets, just show simple confirmation
+                                st.info("📋 This teaching pamphlet will be provided to the patient for education.")
+                                selected_dosage = "As needed for patient education"
+                                frequency = "As needed"
+                                duration = "N/A"
+                            else:
+                                # Dosage and frequency options for regular medications
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    dosages = med['common_dosages'].split(', ')
+                                    prev_dosage_idx = 0
+                                    if prev_med_data.get('dosage') in dosages:
+                                        prev_dosage_idx = dosages.index(prev_med_data.get('dosage'))
+                                    selected_dosage = st.selectbox(
+                                        "Dosage", dosages, 
+                                        index=prev_dosage_idx,
+                                        key=f"dosage_{med['id']}_{visit_id}")
+                                with col2:
+                                    freq_options = ["Once daily", "Twice daily", "Three times daily", "Four times daily", "As needed"]
+                                    prev_freq_idx = 0
+                                    if prev_med_data.get('frequency') in freq_options:
+                                        prev_freq_idx = freq_options.index(prev_med_data.get('frequency'))
+                                    frequency = st.selectbox("Frequency", freq_options,
+                                                            index=prev_freq_idx,
+                                                            key=f"freq_{med['id']}_{visit_id}")
+                                with col3:
+                                    dur_options = ["3 days", "5 days", "7 days", "10 days", "14 days", "30 days"]
+                                    prev_dur_idx = 0
                                     
-                                    if preset_dur_formatted in dur_options:
-                                        prev_dur_idx = dur_options.index(preset_dur_formatted)
-                                
-                                duration = st.selectbox("Duration", dur_options,
-                                                       index=prev_dur_idx,
-                                                       key=f"dur_{med['id']}_{visit_id}")
+                                    # Get preset duration and normalize it
+                                    preset_dur = med.get('preset_duration', '') or ''
+                                    preset_dur = preset_dur.strip() if preset_dur else ''
+                                    
+                                    # Use preset duration if available and no previous data exists
+                                    if prev_med_data.get('duration'):
+                                        # Use previously selected duration
+                                        if prev_med_data.get('duration') in dur_options:
+                                            prev_dur_idx = dur_options.index(prev_med_data.get('duration'))
+                                    elif preset_dur:
+                                        # Try to match preset duration - handle various formats
+                                        # If just a number, add " days"
+                                        if preset_dur.isdigit():
+                                            preset_dur_formatted = f"{preset_dur} days"
+                                        else:
+                                            preset_dur_formatted = preset_dur
+                                        
+                                        if preset_dur_formatted in dur_options:
+                                            prev_dur_idx = dur_options.index(preset_dur_formatted)
+                                    
+                                    duration = st.selectbox("Duration", dur_options,
+                                                           index=prev_dur_idx,
+                                                           key=f"dur_{med['id']}_{visit_id}")
 
-                            # Additional fields
-                            col4, col5 = st.columns(2)
-                            with col4:
-                                pharmacy_dosage = st.text_input(
-                                    "Dosage for Pharmacy",
-                                    value=prev_med_data.get('pharmacy_dosage', ''),
-                                    placeholder="e.g., 500mg twice daily for 7 days",
-                                    key=f"pharma_dose_{med['id']}_{visit_id}")
-                            with col5:
-                                indication = st.text_input(
-                                    "Indication",
-                                    value=prev_med_data.get('indication', ''),
-                                    placeholder="e.g., UTI, hypertension",
-                                    key=f"indication_{med['id']}_{visit_id}")
-
-                            instructions = st.text_input("Special Instructions",
-                                                         value=prev_med_data.get('instructions', ''),
-                                                         key=f"inst_{med['id']}_{visit_id}")
-
-                            # Lab results options with indentation - restore previous values
-                            st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
-                            col_indent, col_lab = st.columns([0.1, 0.9])
-                            with col_lab:
-                                prev_awaiting_lab = prev_med_data.get('awaiting_lab', 'no') == 'yes'
-                                awaiting_lab = "yes" if st.checkbox(
-                                    "Awaiting Lab Results",
-                                    key=f"await_{med['id']}_{visit_id}",
-                                    value=prev_awaiting_lab) else "no"
-                                
+                            # Additional fields - simplified for teaching pamphlets
+                            if category == "Teaching Pamphlets":
+                                # For teaching pamphlets, only show special instructions
+                                pharmacy_dosage = "Patient education material"
+                                indication = "Patient education"
+                                awaiting_lab = "no"
                                 return_to_provider = "no"
-                                if awaiting_lab == "yes":
-                                    return_to_provider = "yes" if st.checkbox(
-                                        "Return to provider after lab results",
-                                        key=f"return_{med['id']}_{visit_id}",
-                                        value=False) else "no"
+                                instructions = st.text_input("Special Instructions",
+                                                             value=prev_med_data.get('instructions', ''),
+                                                             placeholder="Any special notes about this educational material",
+                                                             key=f"inst_{med['id']}_{visit_id}")
+                            else:
+                                # Full fields for regular medications
+                                col4, col5 = st.columns(2)
+                                with col4:
+                                    pharmacy_dosage = st.text_input(
+                                        "Dosage for Pharmacy",
+                                        value=prev_med_data.get('pharmacy_dosage', ''),
+                                        placeholder="e.g., 500mg twice daily for 7 days",
+                                        key=f"pharma_dose_{med['id']}_{visit_id}")
+                                with col5:
+                                    indication = st.text_input(
+                                        "Indication",
+                                        value=prev_med_data.get('indication', ''),
+                                        placeholder="e.g., UTI, hypertension",
+                                        key=f"indication_{med['id']}_{visit_id}")
+
+                                instructions = st.text_input("Special Instructions",
+                                                             value=prev_med_data.get('instructions', ''),
+                                                             key=f"inst_{med['id']}_{visit_id}")
+
+                                # Lab results options with indentation - restore previous values
+                                st.markdown("&nbsp;&nbsp;&nbsp;&nbsp;**Lab Options:**", unsafe_allow_html=True)
+                                col_indent, col_lab = st.columns([0.1, 0.9])
+                                with col_lab:
+                                    prev_awaiting_lab = prev_med_data.get('awaiting_lab', 'no') == 'yes'
+                                    awaiting_lab = "yes" if st.checkbox(
+                                        "Awaiting Lab Results",
+                                        key=f"await_{med['id']}_{visit_id}",
+                                        value=prev_awaiting_lab) else "no"
+                                    
+                                    return_to_provider = "no"
+                                    if awaiting_lab == "yes":
+                                        return_to_provider = "yes" if st.checkbox(
+                                            "Return to provider after lab results",
+                                            key=f"return_{med['id']}_{visit_id}",
+                                            value=False) else "no"
 
                             selected_medications.append({
                                 'id': med['id'],
