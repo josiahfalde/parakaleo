@@ -219,6 +219,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented one-click login by touching doctor name buttons
   - Streamlined interface to reduce scrolling and improve efficiency for multiple doctors
   - Maintained consultation restoration functionality for doctors returning to active patients
+- July 9, 2025. Fixed doctor management duplicate error issues
+  - Enhanced add_doctor function to properly handle reactivating previously removed doctors
+  - Fixed duplicate error when trying to re-add a doctor that was previously removed
+  - Added proper cleanup of doctor_status records when removing doctors
+  - Improved doctor management interface with clear messaging for reactivation vs new additions
+  - Added automatic status entry creation when adding/reactivating doctors to prevent login issues
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

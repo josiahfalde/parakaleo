@@ -1323,13 +1323,33 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
 
-            cursor.execute(
-                'INSERT INTO doctors (name, is_active) VALUES (?, 1)',
-                (name, ))
+            # Check if doctor already exists (active or inactive)
+            cursor.execute('SELECT is_active FROM doctors WHERE name = ?', (name,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Doctor exists - reactivate if inactive
+                cursor.execute('UPDATE doctors SET is_active = 1 WHERE name = ?', (name,))
+                # Also ensure they have a clean status entry
+                cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (name,))
+                cursor.execute('''
+                    INSERT INTO doctor_status (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                    VALUES (?, 'available', '', '', ?)
+                ''', (name, datetime.now().isoformat()))
+            else:
+                # New doctor - insert new record
+                cursor.execute('INSERT INTO doctors (name, is_active) VALUES (?, 1)', (name,))
+                # Create initial status entry
+                cursor.execute('''
+                    INSERT INTO doctor_status (doctor_name, status, current_patient_id, current_patient_name, last_updated)
+                    VALUES (?, 'available', '', '', ?)
+                ''', (name, datetime.now().isoformat()))
+            
             conn.commit()
             conn.close()
             return True
-        except:
+        except Exception as e:
+            print(f"Error adding doctor: {e}")
             return False
 
     def remove_doctor(self, name: str) -> bool:
@@ -1338,12 +1358,17 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_name)
             cursor = conn.cursor()
 
-            cursor.execute('UPDATE doctors SET is_active = 0 WHERE name = ?',
-                           (name, ))
+            # Set doctor as inactive
+            cursor.execute('UPDATE doctors SET is_active = 0 WHERE name = ?', (name,))
+            
+            # Also remove their status entry to clean up
+            cursor.execute('DELETE FROM doctor_status WHERE doctor_name = ?', (name,))
+            
             conn.commit()
             conn.close()
             return True
-        except:
+        except Exception as e:
+            print(f"Error removing doctor: {e}")
             return False
 
     def update_doctor_status(self,
@@ -7247,12 +7272,29 @@ def doctor_management():
 
             if st.form_submit_button("Add Doctor", type="primary"):
                 if doctor_name.strip():
-                    if db.add_doctor(doctor_name.strip()):
-                        st.success(f"Doctor {doctor_name} added successfully!")
-                        st.rerun()
+                    # Check if doctor already exists before trying to add
+                    conn = sqlite3.connect(db.db_name)
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT is_active FROM doctors WHERE name = ?', (doctor_name.strip(),))
+                    existing = cursor.fetchone()
+                    conn.close()
+                    
+                    if existing and existing[0] == 1:
+                        st.warning(f"Doctor {doctor_name} is already active in the system.")
+                    elif existing and existing[0] == 0:
+                        # Doctor exists but is inactive - reactivate
+                        if db.add_doctor(doctor_name.strip()):
+                            st.success(f"Doctor {doctor_name} reactivated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to reactivate doctor.")
                     else:
-                        st.error(
-                            "Failed to add doctor. Name may already exist.")
+                        # New doctor
+                        if db.add_doctor(doctor_name.strip()):
+                            st.success(f"Doctor {doctor_name} added successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to add doctor.")
                 else:
                     st.error("Please enter a doctor name.")
 
