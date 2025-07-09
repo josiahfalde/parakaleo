@@ -282,6 +282,12 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented teaching completion workflow that marks prescriptions as fully 'filled' and visits as 'completed'
   - Added WebSocket notifications for teaching completion across all devices
   - Created visual medication cards showing dosage, frequency, duration, and indications for teaching
+- July 9, 2025. Added prescribing doctor tracking for lab/pharmacy visibility
+  - Added prescribed_by column to prescriptions table for tracking which doctor ordered each medication
+  - Enhanced consultation form to save prescribing doctor name with each prescription
+  - Updated pharmacy interface displays to show "👨‍⚕️ Prescribed by: Dr. [Name]" on all prescription cards
+  - Enhanced "Ready to Fill", "Awaiting Teaching", and family prescription displays with prescribing doctor information
+  - Improved prescription workflow transparency for multi-doctor clinic operations
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

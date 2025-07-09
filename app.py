@@ -559,6 +559,12 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add prescribed_by column to prescriptions table if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN prescribed_by TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Add oxygen saturation column if it doesn't exist
         try:
             cursor.execute(
@@ -1716,7 +1722,8 @@ class DatabaseManager:
                          frequency: str,
                          duration: str,
                          instructions: str = "",
-                         awaiting_lab: str = "no") -> int:
+                         awaiting_lab: str = "no",
+                         prescribed_by: str = "") -> int:
         """Add a prescription"""
         conn = sqlite3.connect(self.db_name)
         cursor = conn.cursor()
@@ -1725,11 +1732,11 @@ class DatabaseManager:
             '''
             INSERT INTO prescriptions 
             (visit_id, medication_id, medication_name, dosage, frequency, duration, 
-             instructions, awaiting_lab, prescribed_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             instructions, awaiting_lab, prescribed_by, prescribed_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
             (visit_id, medication_id, medication_name, dosage, frequency,
-             duration, instructions, awaiting_lab, datetime.now().isoformat()))
+             duration, instructions, awaiting_lab, prescribed_by, datetime.now().isoformat()))
 
         prescription_id = cursor.lastrowid
         conn.commit()
@@ -5736,14 +5743,15 @@ def consultation_form(visit_id: str, patient_id: str, patient_name: str):
                                     INSERT INTO prescriptions (visit_id, medication_name, 
                                                              dosage, frequency, duration, instructions, 
                                                              indication, awaiting_lab, return_to_provider, 
-                                                             prescribed_time, status)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                             prescribed_by, prescribed_time, status)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 ''', (visit_id, med['name'], med['dosage'],
                                       med['frequency'], med['duration'],
                                       med['instructions'],
                                       med.get('indication', ''), 
                                       med['awaiting_lab'],
                                       med.get('return_to_provider', 'no'),
+                                      current_doctor_name,
                                       datetime.now().isoformat(),
                                       prescription_status))
                                 conn_med.commit()
@@ -6226,7 +6234,7 @@ def pending_prescriptions():
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-                       p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+                       p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab, p.prescribed_by
                 FROM prescriptions p
                 JOIN visits v ON p.visit_id = v.visit_id
                 JOIN patients pt ON v.patient_id = pt.patient_id
@@ -6285,7 +6293,9 @@ def pending_prescriptions():
                         # Display mode for family prescription
                         col_prescription, col_edit = st.columns([4, 1])
                         with col_prescription:
-                            st.markdown(f"• {prescription[2]} - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                            prescribed_by = prescription[12] if len(prescription) > 12 and prescription[12] else "Unknown Doctor"
+                            st.markdown(f"• **{prescription[2]}** - {prescription[3]} {prescription[4]} for {prescription[5]}")
+                            st.markdown(f"  👨‍⚕️ *Prescribed by: {prescribed_by}*")
                         with col_edit:
                             if st.button("✏️", key=f"edit_family_prescription_{prescription[0]}", type="secondary", help="Edit prescription"):
                                 st.session_state[edit_key] = True
@@ -6354,7 +6364,7 @@ def pending_prescriptions():
 
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, 
-               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab
+               p.duration, p.instructions, p.indication, p.prescribed_time, pt.name, v.patient_id, p.awaiting_lab, p.prescribed_by
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -6447,9 +6457,11 @@ def pending_prescriptions():
                                         st.rerun()
                         else:
                             # Display mode for prescription
+                            prescribed_by = prescription[12] if len(prescription) > 12 and prescription[12] else "Unknown Doctor"
                             st.markdown(f"""
                             <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                                <h5 style="color: #1f2937; margin: 0 0 12px 0; font-size: 16px;">💊 {prescription[2]}</h5>
+                                <h5 style="color: #1f2937; margin: 0 0 8px 0; font-size: 16px;">💊 {prescription[2]}</h5>
+                                <p style="margin: 0 0 12px 0; color: #7c3aed; font-size: 13px; font-weight: 600;"><strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}</p>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                     <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Dosage:</strong> {prescription[3]}</p>
                                     <p style="margin: 0; color: #4b5563; font-size: 14px;"><strong>Frequency:</strong> {prescription[4]}</p>
@@ -7172,7 +7184,7 @@ def awaiting_teaching():
     
     cursor.execute('''
         SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, p.duration, 
-               p.indication, p.instructions, p.filled_time, pt.name, v.patient_id
+               p.indication, p.instructions, p.filled_time, pt.name, v.patient_id, p.prescribed_by
         FROM prescriptions p
         JOIN visits v ON p.visit_id = v.visit_id
         JOIN patients pt ON v.patient_id = pt.patient_id
@@ -7214,9 +7226,11 @@ def awaiting_teaching():
                     indication = prescription[6]
                     instructions = prescription[7]
                     
+                    prescribed_by = prescription[11] if len(prescription) > 11 and prescription[11] else "Unknown Doctor"
                     st.markdown(f"""
                     <div style="background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
                         <h5 style="color: #92400e; margin: 0 0 8px 0; font-size: 16px;">📚 {medication_name}</h5>
+                        <p style="margin: 0 0 8px 0; color: #7c3aed; font-size: 13px; font-weight: 600;"><strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}</p>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                             <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Dosage:</strong> {dosage}</p>
                             <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Frequency:</strong> {frequency}</p>
