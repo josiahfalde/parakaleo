@@ -6013,34 +6013,83 @@ def consultation_history():
 
 
 def show_patient_history_detail(patient_id: str, patient_name: str):
-    """Display detailed patient history in a new view"""
+    """Display comprehensive patient chart with complete medical history"""
 
-    # Modal overlay styling for patient history (no JavaScript)
+    # Enhanced styling for patient chart
     st.markdown("""
     <style>
-    .history-modal-overlay {
-        background-color: rgba(0, 0, 0, 0.7);
-        border-radius: 10px;
+    .patient-chart-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
         padding: 20px;
         margin: 10px 0;
-        animation: slideIn 0.3s ease-out;
+        color: white;
+        text-align: center;
     }
-    @keyframes slideIn {
-        from { opacity: 0; transform: translateY(-20px); }
-        to { opacity: 1; transform: translateY(0); }
+    .chart-section {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin: 15px 0;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .vital-card {
+        background: linear-gradient(135deg, #e0f2fe 0%, #b3e5fc 100%);
+        border-left: 4px solid #0288d1;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .lab-card {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        border-left: 4px solid #f57c00;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .prescription-card {
+        background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+        border-left: 4px solid #388e3c;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .consultation-card {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left: 4px solid #7b1fa2;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .demographics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin: 15px 0;
+    }
+    .demo-item {
+        background: #f8fafc;
+        padding: 10px;
+        border-radius: 8px;
+        border-left: 3px solid #3b82f6;
     }
     </style>
-    """,
-                unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    st.markdown(
-        f"### 📋 Complete Patient History: {patient_name} (ID: {patient_id})")
+    # Chart header
+    st.markdown(f"""
+    <div class="patient-chart-header">
+        <h2>🏥 Complete Patient Chart</h2>
+        <h3>{patient_name} (ID: {patient_id})</h3>
+        <p>Comprehensive Medical Record & History</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Navigation buttons with X close button
+    # Navigation buttons
     nav_col1, nav_col2, nav_col3 = st.columns([2, 3, 1])
     with nav_col1:
-        if st.button("← Back to Consultation History",
-                     key="back_to_consult_history"):
+        if st.button("← Back to Consultation History", key="back_to_consult_history"):
             if 'show_patient_history' in st.session_state:
                 del st.session_state.show_patient_history
             if 'patient_history_name' in st.session_state:
@@ -6048,10 +6097,7 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
             st.rerun()
 
     with nav_col3:
-        if st.button("✕",
-                     key="close_patient_history",
-                     help="Close patient history",
-                     use_container_width=True):
+        if st.button("✕", key="close_patient_history", help="Close patient history", use_container_width=True):
             if 'show_patient_history' in st.session_state:
                 del st.session_state.show_patient_history
             if 'patient_history_name' in st.session_state:
@@ -6061,93 +6107,332 @@ def show_patient_history_detail(patient_id: str, patient_name: str):
     conn = sqlite3.connect("clinic_database.db")
     cursor = conn.cursor()
 
-    # Get patient basic info
-    cursor.execute('SELECT * FROM patients WHERE patient_id = ?',
-                   (patient_id, ))
+    # Get patient basic info with family information
+    cursor.execute('''
+        SELECT p.*, f.family_name, f.head_of_household, f.address as family_address
+        FROM patients p
+        LEFT JOIN families f ON p.family_id = f.family_id
+        WHERE p.patient_id = ?
+    ''', (patient_id,))
     patient = cursor.fetchone()
 
     if patient:
-        st.markdown("#### Patient Information")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Name:** {patient[1]}")
-            st.write(f"**Age:** {patient[2] or 'Not specified'}")
-            st.write(f"**Gender:** {patient[3] or 'Not specified'}")
-        with col2:
-            st.write(f"**Phone:** {patient[4] or 'Not provided'}")
-            st.write(f"**Emergency Contact:** {patient[6] or 'Not provided'}")
+        # Patient Demographics Section
+        st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+        st.markdown("### 👤 Patient Demographics & Information")
+        
+        st.markdown(f'''
+        <div class="demographics-grid">
+            <div class="demo-item">
+                <strong>👤 Name:</strong><br>{patient[1]}
+            </div>
+            <div class="demo-item">
+                <strong>🎂 Age:</strong><br>{patient[2] or 'Not specified'}
+            </div>
+            <div class="demo-item">
+                <strong>⚧ Gender:</strong><br>{patient[3] or 'Not specified'}
+            </div>
+            <div class="demo-item">
+                <strong>📱 Phone:</strong><br>{patient[4] or 'Not provided'}
+            </div>
+            <div class="demo-item">
+                <strong>🆘 Emergency Contact:</strong><br>{patient[6] or 'Not provided'}
+            </div>
+            <div class="demo-item">
+                <strong>📅 Registration:</strong><br>{patient[7][:10] if patient[7] else 'Unknown'}
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
+        # Family Information
+        if patient[10]:  # family_name exists
+            st.markdown("**👨‍👩‍👧‍👦 Family Information:**")
+            family_col1, family_col2 = st.columns(2)
+            with family_col1:
+                st.write(f"**Family Name:** {patient[10]}")
+                st.write(f"**Head of Household:** {patient[11] or 'Not specified'}")
+            with family_col2:
+                st.write(f"**Family Address:** {patient[12] or 'Not provided'}")
+                st.write(f"**Individual Status:** {'Independent' if patient[14] else 'Family Member'}")
+
+        # Medical History
         if patient[9]:  # medical_history
-            st.markdown("**Medical History:**")
-            st.text(patient[9])
-        if patient[8]:  # allergies
-            st.markdown("**Allergies:**")
-            st.text(patient[8])
+            st.markdown("### 📝 Medical History")
+            st.markdown(f'<div style="background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 3px solid #10b981;"><pre style="margin: 0; white-space: pre-wrap; font-family: inherit;">{patient[9]}</pre></div>', unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Get all visits
-    cursor.execute(
-        '''
-        SELECT v.visit_id, v.visit_date, v.status, c.chief_complaint, c.diagnosis, c.doctor_name, c.consultation_time
-        FROM visits v
-        LEFT JOIN consultations c ON v.visit_id = c.visit_id
-        WHERE v.patient_id = ?
-        ORDER BY v.visit_date DESC
-    ''', (patient_id, ))
+        # Get comprehensive visit data
+        cursor.execute('''
+            SELECT v.visit_id, v.visit_date, v.status, v.priority, v.triage_time, 
+                   v.consultation_time, v.pharmacy_time, v.completion_time,
+                   v.return_reason, v.notes
+            FROM visits v
+            WHERE v.patient_id = ?
+            ORDER BY v.visit_date DESC
+        ''', (patient_id,))
+        visits = cursor.fetchall()
 
-    visits = cursor.fetchall()
+        if visits:
+            st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+            st.markdown("### 🏥 Complete Visit Records")
+            
+            for visit in visits:
+                visit_id = visit[0]
+                visit_date = visit[1][:10] if visit[1] else "Unknown"
+                status = visit[2] or "In Progress"
+                priority = visit[3] or "routine"
+                
+                priority_emoji = "🔴" if priority == "critical" else "🟡" if priority == "urgent" else "🟢"
+                status_color = "#10b981" if status == "completed" else "#f59e0b" if status == "in_progress" else "#6b7280"
+                
+                with st.expander(f"{priority_emoji} Visit {visit_date} - {status.title()}", expanded=False):
+                    
+                    # Visit Overview
+                    overview_col1, overview_col2 = st.columns(2)
+                    with overview_col1:
+                        st.markdown("**📊 Visit Overview:**")
+                        st.write(f"**Status:** {status}")
+                        st.write(f"**Priority:** {priority}")
+                        if visit[8]:  # return_reason
+                            st.write(f"**Return Reason:** {visit[8]}")
+                    
+                    with overview_col2:
+                        st.markdown("**⏱️ Visit Timeline:**")
+                        if visit[4]: # triage_time
+                            st.write(f"🏥 Triage: {visit[4][:16].replace('T', ' ')}")
+                        if visit[5]: # consultation_time
+                            st.write(f"👨‍⚕️ Consultation: {visit[5][:16].replace('T', ' ')}")
+                        if visit[6]: # pharmacy_time
+                            st.write(f"💊 Pharmacy: {visit[6][:16].replace('T', ' ')}")
+                        if visit[7]: # completion_time
+                            st.write(f"✅ Completed: {visit[7][:16].replace('T', ' ')}")
 
-    if visits:
-        st.markdown("#### Visit History")
-        for visit in visits:
-            visit_date = visit[1][:10] if visit[1] else "Unknown"
-            status = visit[2] or "In Progress"
+                    # Vital Signs
+                    cursor.execute('''
+                        SELECT systolic_bp, diastolic_bp, heart_rate, temperature, weight, recorded_time
+                        FROM vital_signs
+                        WHERE visit_id = ?
+                        ORDER BY recorded_time DESC
+                    ''', (visit_id,))
+                    vitals = cursor.fetchall()
+                    
+                    if vitals:
+                        st.markdown("**💓 Vital Signs:**")
+                        for vital in vitals:
+                            bp_text = f"{vital[0] or 'N/A'}/{vital[1] or 'N/A'}"
+                            st.markdown(f"""
+                            <div class="vital-card">
+                                <strong>📅 Recorded:</strong> {vital[5][:16].replace('T', ' ') if vital[5] else 'Unknown'}<br>
+                                <strong>🩺 Blood Pressure:</strong> {bp_text} mmHg | 
+                                <strong>💓 Heart Rate:</strong> {vital[2] or 'N/A'} bpm<br>
+                                <strong>🌡️ Temperature:</strong> {vital[3] or 'N/A'}°F | 
+                                <strong>⚖️ Weight:</strong> {vital[4] or 'N/A'} kg
+                            </div>
+                            """, unsafe_allow_html=True)
 
-            with st.expander(f"Visit {visit_date} - {status}"):
-                if visit[3]:  # chief_complaint
-                    st.write(f"**Chief Complaint:** {visit[3]}")
-                if visit[4]:  # diagnosis
-                    st.write(f"**Diagnosis:** {visit[4]}")
-                if visit[5]:  # doctor_name
-                    st.write(f"**Doctor:** {visit[5]}")
-                if visit[6]:  # consultation_time
-                    st.write(
-                        f"**Consultation Time:** {visit[6][:16].replace('T', ' ')}"
-                    )
+                    # Consultation Details
+                    cursor.execute('''
+                        SELECT doctor_name, chief_complaint, symptoms, diagnosis, treatment_plan, 
+                               notes, current_medications, consultation_time
+                        FROM consultations
+                        WHERE visit_id = ?
+                        ORDER BY consultation_time DESC
+                    ''', (visit_id,))
+                    consultations = cursor.fetchall()
+                    
+                    if consultations:
+                        st.markdown("**👨‍⚕️ Consultation Records:**")
+                        for consultation in consultations:
+                            st.markdown(f"""
+                            <div class="consultation-card">
+                                <strong>👨‍⚕️ Doctor:</strong> {consultation[0]}<br>
+                                <strong>📝 Chief Complaint:</strong> {consultation[1] or 'None recorded'}<br>
+                                <strong>🔍 Symptoms:</strong> {consultation[2] or 'None recorded'}<br>
+                                <strong>🩺 Diagnosis:</strong> {consultation[3] or 'None recorded'}<br>
+                                <strong>💊 Treatment Plan:</strong> {consultation[4] or 'None recorded'}
+                            """, unsafe_allow_html=True)
+                            
+                            if consultation[5]:  # notes
+                                st.markdown(f"<strong>📋 Notes:</strong> {consultation[5]}<br>", unsafe_allow_html=True)
+                            if consultation[6]:  # current_medications
+                                st.markdown(f"<strong>💉 Current Medications:</strong> {consultation[6]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                # Get prescriptions for this visit
-                cursor.execute(
-                    '''
-                    SELECT medication_name, dosage, frequency, duration, indication, prescribed_time
-                    FROM prescriptions
-                    WHERE visit_id = ?
-                    ORDER BY prescribed_time DESC
-                ''', (visit[0], ))
+                    # Laboratory Tests and Results
+                    cursor.execute('''
+                        SELECT lt.test_type, lt.ordered_by, lt.ordered_time, lt.status, 
+                               lt.results, lt.completed_time
+                        FROM lab_tests lt
+                        WHERE lt.visit_id = ?
+                        ORDER BY lt.ordered_time DESC
+                    ''', (visit_id,))
+                    lab_tests = cursor.fetchall()
+                    
+                    # Get detailed lab results
+                    cursor.execute('''
+                        SELECT lr.test_id, lr.parameter_name, lr.parameter_value
+                        FROM lab_results lr
+                        JOIN lab_tests lt ON lr.test_id = lt.id
+                        WHERE lt.visit_id = ?
+                        ORDER BY lr.parameter_name
+                    ''', (visit_id,))
+                    lab_results = cursor.fetchall()
+                    
+                    if lab_tests:
+                        st.markdown("**🧪 Laboratory Tests & Results:**")
+                        
+                        # Group results by test_id
+                        results_by_test = {}
+                        for lr in lab_results:
+                            test_id = lr[0]
+                            if test_id not in results_by_test:
+                                results_by_test[test_id] = []
+                            results_by_test[test_id].append((lr[1], lr[2]))
+                        
+                        for test in lab_tests:
+                            test_type = test[0]
+                            ordered_by = test[1]
+                            status = test[3]
+                            status_color = "#10b981" if status == "completed" else "#f59e0b"
+                            
+                            st.markdown(f"""
+                            <div class="lab-card">
+                                <strong>🧪 {test_type}</strong> - Ordered by {ordered_by}<br>
+                                <strong>📅 Ordered:</strong> {test[2][:16].replace('T', ' ')}<br>
+                                <strong>⚡ Status:</strong> <span style="color: {status_color};">{status}</span>
+                            """, unsafe_allow_html=True)
+                            
+                            if test[5]:  # completed_time
+                                st.markdown(f"<strong>✅ Completed:</strong> {test[5][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            
+                            # Display detailed results if available
+                            test_id = None
+                            cursor.execute('SELECT id FROM lab_tests WHERE visit_id = ? AND test_type = ? AND ordered_time = ?', 
+                                         (visit_id, test_type, test[2]))
+                            test_id_result = cursor.fetchone()
+                            if test_id_result:
+                                test_id = test_id_result[0]
+                            
+                            if test_id and test_id in results_by_test:
+                                st.markdown("<strong>📊 Detailed Results:</strong><br>", unsafe_allow_html=True)
+                                for param_name, param_value in results_by_test[test_id]:
+                                    st.markdown(f"• <strong>{param_name}:</strong> {param_value}<br>", unsafe_allow_html=True)
+                            elif test[4]:  # basic results
+                                st.markdown(f"<strong>📊 Results:</strong> {test[4]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                prescriptions = cursor.fetchall()
-                if prescriptions:
-                    st.markdown("**Prescriptions:**")
-                    for rx in prescriptions:
-                        indication_text = f" - {rx[4]}" if rx[4] else ""
-                        st.write(
-                            f"• {rx[0]} {rx[1]} {rx[2]} for {rx[3]}{indication_text}"
-                        )
+                    # Prescriptions & Medications
+                    cursor.execute('''
+                        SELECT medication_name, dosage, frequency, duration, indication, 
+                               instructions, prescribed_by, prescribed_time, status, 
+                               filled_time, teaching_completed, teaching_notes, awaiting_lab
+                        FROM prescriptions
+                        WHERE visit_id = ?
+                        ORDER BY prescribed_time DESC
+                    ''', (visit_id,))
+                    prescriptions = cursor.fetchall()
+                    
+                    if prescriptions:
+                        st.markdown("**💊 Prescriptions & Medications:**")
+                        for rx in prescriptions:
+                            prescribed_by = rx[6] if rx[6] else "Unknown Doctor"
+                            status = rx[8] if rx[8] else "pending"
+                            status_color = "#10b981" if status == "filled" else "#f59e0b" if status == "awaiting_teaching" else "#6b7280"
+                            
+                            st.markdown(f"""
+                            <div class="prescription-card">
+                                <strong>💊 {rx[0]}</strong><br>
+                                <strong>📏 Dosage:</strong> {rx[1]} | <strong>⏰ Frequency:</strong> {rx[2]} | <strong>📅 Duration:</strong> {rx[3]}<br>
+                                <strong>👨‍⚕️ Prescribed by:</strong> {prescribed_by}<br>
+                                <strong>⚡ Status:</strong> <span style="color: {status_color};">{status}</span>
+                            """, unsafe_allow_html=True)
+                            
+                            if rx[4]:  # indication
+                                st.markdown(f"<strong>🎯 For:</strong> {rx[4]}<br>", unsafe_allow_html=True)
+                            if rx[5]:  # instructions
+                                st.markdown(f"<strong>📋 Instructions:</strong> {rx[5]}<br>", unsafe_allow_html=True)
+                            if rx[12] == 'yes':  # awaiting_lab
+                                st.markdown(f"<strong>🧪 Lab Required:</strong> Yes<br>", unsafe_allow_html=True)
+                            
+                            st.markdown(f"<strong>📅 Prescribed:</strong> {rx[7][:16].replace('T', ' ') if rx[7] else 'Unknown'}<br>", unsafe_allow_html=True)
+                            
+                            if rx[9]:  # filled_time
+                                st.markdown(f"<strong>✅ Filled:</strong> {rx[9][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            if rx[10]:  # teaching_completed
+                                st.markdown(f"<strong>📚 Teaching Completed:</strong> {rx[10][:16].replace('T', ' ')}<br>", unsafe_allow_html=True)
+                            if rx[11]:  # teaching_notes
+                                st.markdown(f"<strong>📝 Teaching Notes:</strong> {rx[11]}<br>", unsafe_allow_html=True)
+                            
+                            st.markdown("</div>", unsafe_allow_html=True)
 
-                # Get lab tests for this visit
-                cursor.execute(
-                    '''
-                    SELECT test_type, status, results, ordered_time, completed_time
-                    FROM lab_tests
-                    WHERE visit_id = ?
-                    ORDER BY ordered_time DESC
-                ''', (visit[0], ))
+                    # Patient Photos
+                    cursor.execute('''
+                        SELECT description, photo_time
+                        FROM patient_photos
+                        WHERE patient_id = ? AND visit_id = ?
+                        ORDER BY photo_time DESC
+                    ''', (patient_id, visit_id))
+                    photos = cursor.fetchall()
+                    
+                    if photos:
+                        st.markdown("**📸 Photo Documentation:**")
+                        for photo in photos:
+                            st.markdown(f"""
+                            <div style="background: #f3f4f6; padding: 10px; border-radius: 8px; margin: 5px 0; border-left: 3px solid #6b7280;">
+                                <strong>📸 {photo[0]}</strong><br>
+                                <small>📅 Taken: {photo[1][:16].replace('T', ' ')}</small>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                lab_tests = cursor.fetchall()
-                if lab_tests:
-                    st.markdown("**Lab Tests:**")
-                    for test in lab_tests:
-                        status_text = f"({test[1]})"
-                        results_text = f" - {test[2]}" if test[2] else ""
-                        st.write(f"• {test[0]} {status_text}{results_text}")
+                    # Visit Notes
+                    if visit[9]:  # visit notes
+                        st.markdown("**📝 Visit Notes:**")
+                        st.markdown(f'<div style="background: #f8fafc; padding: 10px; border-radius: 8px; border-left: 3px solid #3b82f6;"><em>{visit[9]}</em></div>', unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Patient Summary Statistics
+        cursor.execute('''
+            SELECT 
+                COUNT(DISTINCT v.visit_id) as total_visits,
+                COUNT(DISTINCT p.id) as total_prescriptions,
+                COUNT(DISTINCT lt.id) as total_lab_tests,
+                COUNT(DISTINCT ph.id) as total_photos,
+                MAX(v.visit_date) as last_visit
+            FROM visits v
+            LEFT JOIN prescriptions p ON v.visit_id = p.visit_id
+            LEFT JOIN lab_tests lt ON v.visit_id = lt.visit_id
+            LEFT JOIN patient_photos ph ON v.patient_id = ph.patient_id
+            WHERE v.patient_id = ?
+        ''', (patient_id,))
+        summary = cursor.fetchone()
+        
+        st.markdown('<div class="chart-section">', unsafe_allow_html=True)
+        st.markdown("### 📊 Patient Summary Statistics")
+        
+        sum_col1, sum_col2, sum_col3, sum_col4, sum_col5 = st.columns(5)
+        with sum_col1:
+            st.metric("🏥 Total Visits", summary[0] or 0)
+        with sum_col2:
+            st.metric("💊 Prescriptions", summary[1] or 0)
+        with sum_col3:
+            st.metric("🧪 Lab Tests", summary[2] or 0)
+        with sum_col4:
+            st.metric("📸 Photos", summary[3] or 0)
+        with sum_col5:
+            if summary[4]:
+                last_visit = summary[4][:10]
+                st.metric("📅 Last Visit", last_visit)
+            else:
+                st.metric("📅 Last Visit", "Never")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    else:
+        st.error("❌ Patient not found in database.")
 
     conn.close()
 
