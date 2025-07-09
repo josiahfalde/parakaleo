@@ -33,4 +33,4 @@ dist/
 node_modules/
 
 .pythonlibs
-store.json
+store.jsonclinic_database.db
