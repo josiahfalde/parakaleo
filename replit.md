@@ -261,6 +261,13 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Implemented pregnancy test editing with result selection and optional notes
   - Added save/cancel functionality with proper validation and real-time WebSocket updates
   - Enhanced lab workflow to support error correction when results are input incorrectly
+- July 9, 2025. Enhanced WebSocket synchronization debugging
+  - Added visual connection status indicators when iPads connect to sync server
+  - Enhanced console logging to track patient registration message flow
+  - Added detailed broadcast debugging to identify synchronization issues
+  - Improved WebSocket server logging to track message reception and broadcast counts
+  - Enhanced client-side debugging with clear console messages for registration updates
+  - Added connection troubleshooting to resolve iPad synchronization problems
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed

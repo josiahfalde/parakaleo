@@ -62,12 +62,18 @@ async def handle_client(websocket):
                 timestamp = datetime.now().strftime("%H:%M:%S")
                 broadcast_message = f"{message}"
                 
+                # Log the message type for debugging
+                if "new_patient" in message or "new_name_registered" in message or "new_family_registered" in message:
+                    logger.info(f"🚨 PATIENT REGISTRATION MESSAGE RECEIVED: {message}")
+                
                 # Send to all clients except sender
                 disconnected = set()
+                broadcast_count = 0
                 for client in connected_clients:
                     if client != websocket:
                         try:
                             await client.send(broadcast_message)
+                            broadcast_count += 1
                         except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
                             disconnected.add(client)
                         except Exception as e:
@@ -77,7 +83,7 @@ async def handle_client(websocket):
                 # Remove disconnected clients
                 connected_clients.difference_update(disconnected)
                 
-                logger.info(f"Broadcasted: {message} to {len(connected_clients)-1} clients")
+                logger.info(f"Broadcasted: {message} to {broadcast_count} clients (total connected: {len(connected_clients)})")
                 
     except (websockets.exceptions.ConnectionClosed, websockets.exceptions.ConnectionClosedError):
         logger.info(f"Client {client_ip} connection closed normally")

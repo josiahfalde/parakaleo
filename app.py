@@ -162,6 +162,23 @@ ws_connect_script = """
           
           // Send a ping to maintain connection
           ws.send("ping:iPad_connected");
+          
+          // Show connection status to user
+          const connectionStatus = document.createElement('div');
+          connectionStatus.style.cssText = `
+            position: fixed; top: 10px; left: 10px; z-index: 9999;
+            background: #10b981; color: white; padding: 8px 16px;
+            border-radius: 6px; font-weight: bold; font-size: 14px;
+          `;
+          connectionStatus.textContent = '✅ Connected to sync server';
+          document.body.appendChild(connectionStatus);
+          
+          // Remove connection status after 3 seconds
+          setTimeout(() => {
+            if (connectionStatus.parentNode) {
+              connectionStatus.parentNode.removeChild(connectionStatus);
+            }
+          }, 3000);
         };
         
         ws.onmessage = function(event) {
@@ -181,6 +198,7 @@ ws_connect_script = """
           if (updateData.includes("new_patient") || updateData.includes("new_name_registered") || updateData.includes("new_family_registered")) {
             shouldReload = true;
             notificationText = "New patient registered";
+            console.log("🚨 PATIENT REGISTRATION UPDATE DETECTED:", updateData);
           } else if (updateData.includes("vitals_complete")) {
             shouldReload = true;
             notificationText = "Vital signs completed";
@@ -280,8 +298,13 @@ def broadcast_to_clients(message: str):
     try:
         html(f"""
         <script>
+        console.log("🚨 BROADCASTING MESSAGE:", '{message}');
         if (window.ws && window.ws.readyState === WebSocket.OPEN) {{
             window.ws.send('{message}');
+            console.log("✅ Message sent to WebSocket server");
+        }} else {{
+            console.log("❌ WebSocket not connected, cannot send message");
+            console.log("WebSocket readyState:", window.ws ? window.ws.readyState : "undefined");
         }}
         </script>
         """, height=0)
