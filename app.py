@@ -525,6 +525,17 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        # Add teaching columns if they don't exist (for database migration)
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN teaching_completed TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            cursor.execute("ALTER TABLE prescriptions ADD COLUMN teaching_notes TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         # Add oxygen saturation column if it doesn't exist
         try:
             cursor.execute(
@@ -6105,8 +6116,8 @@ def pharmacy_interface():
     
     lab_input_label = f"Lab Input ({pending_lab_count})" if pending_lab_count > 0 else "Lab Input"
     
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Ready to Fill", "Lab Results", lab_input_label, "Filled Prescriptions"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Ready to Fill", "Lab Results", lab_input_label, "Awaiting Teaching", "Filled Prescriptions"])
 
     with tab1:
         pending_prescriptions()
@@ -6118,6 +6129,9 @@ def pharmacy_interface():
         lab_results_input()
 
     with tab4:
+        awaiting_teaching()
+
+    with tab5:
         filled_prescriptions()
 
 
@@ -6245,7 +6259,7 @@ def pending_prescriptions():
                 for member in family_data:
                     cursor.execute('''
                         UPDATE prescriptions 
-                        SET status = 'filled', filled_time = ? 
+                        SET status = 'awaiting_teaching', filled_time = ? 
                         WHERE visit_id = ? AND status = 'pending' AND awaiting_lab = 'no'
                     ''', (datetime.now().isoformat(), member['visit_id']))
                     
@@ -6430,12 +6444,12 @@ def pending_prescriptions():
                     conn = sqlite3.connect(db.db_name)
                     cursor = conn.cursor()
 
-                    # Mark all prescriptions as filled
+                    # Mark all prescriptions as awaiting teaching
                     for prescription_id in prescription_ids:
                         cursor.execute(
                             '''
                             UPDATE prescriptions 
-                            SET status = 'filled', filled_time = ? 
+                            SET status = 'awaiting_teaching', filled_time = ? 
                             WHERE id = ?
                         ''', (datetime.now().isoformat(), prescription_id))
 
@@ -7103,6 +7117,116 @@ Chemical Parameters:
                                 st.error("Please enter test results before submitting.")
     else:
         st.info("No pending lab tests for today.")
+
+
+def awaiting_teaching():
+    st.markdown("### Medication Teaching")
+    st.info("Patients who have filled prescriptions and are awaiting medication teaching.")
+    
+    conn = sqlite3.connect(db.db_name)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT p.id, p.visit_id, p.medication_name, p.dosage, p.frequency, p.duration, 
+               p.indication, p.instructions, p.filled_time, pt.name, v.patient_id
+        FROM prescriptions p
+        JOIN visits v ON p.visit_id = v.visit_id
+        JOIN patients pt ON v.patient_id = pt.patient_id
+        WHERE p.status = 'awaiting_teaching' AND DATE(p.filled_time) = DATE('now')
+        ORDER BY p.filled_time
+    ''')
+    
+    awaiting_teaching_prescriptions = cursor.fetchall()
+    conn.close()
+    
+    if awaiting_teaching_prescriptions:
+        # Group prescriptions by patient for better organization
+        patients = {}
+        for prescription in awaiting_teaching_prescriptions:
+            patient_id = prescription[10]
+            patient_name = prescription[9]
+            
+            if patient_id not in patients:
+                patients[patient_id] = {
+                    'name': patient_name,
+                    'visit_id': prescription[1],
+                    'prescriptions': [],
+                    'filled_time': prescription[8]
+                }
+            
+            patients[patient_id]['prescriptions'].append(prescription)
+        
+        for patient_id, patient_data in patients.items():
+            with st.expander(f"📚 {patient_data['name']} (ID: {patient_id}) - {len(patient_data['prescriptions'])} medications to teach", expanded=True):
+                st.markdown(f"**Patient:** {patient_data['name']}")
+                st.markdown(f"**Prescriptions filled:** {patient_data['filled_time'][:16].replace('T', ' ')}")
+                
+                # Display all medications for this patient
+                for prescription in patient_data['prescriptions']:
+                    medication_name = prescription[2]
+                    dosage = prescription[3]
+                    frequency = prescription[4]
+                    duration = prescription[5]
+                    indication = prescription[6]
+                    instructions = prescription[7]
+                    
+                    st.markdown(f"""
+                    <div style="background: #fef3c7; border: 1px solid #d97706; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                        <h5 style="color: #92400e; margin: 0 0 8px 0; font-size: 16px;">📚 {medication_name}</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Dosage:</strong> {dosage}</p>
+                            <p style="margin: 0; color: #78350f; font-size: 14px;"><strong>Frequency:</strong> {frequency}</p>
+                        </div>
+                        <p style="margin: 0 0 8px 0; color: #78350f; font-size: 14px;"><strong>Duration:</strong> {duration}</p>
+                        {f'<p style="margin: 0 0 8px 0; color: #d97706; font-size: 14px; background: #fef3c7; padding: 4px 8px; border-radius: 4px;"><strong>For:</strong> {indication}</p>' if indication else ''}
+                        {f'<p style="margin: 0 0 8px 0; color: #78350f; font-size: 13px; font-style: italic;"><strong>Instructions:</strong> {instructions}</p>' if instructions else ''}
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Teaching completion button
+                st.markdown("---")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown("**Teaching Notes (optional):**")
+                    teaching_notes = st.text_area("Record any additional teaching notes for this patient", 
+                                                 key=f"teaching_notes_{patient_id}", 
+                                                 placeholder="Patient understood all medication instructions...")
+                with col2:
+                    st.markdown("**Complete Teaching:**")
+                    if st.button(f"✅ Teaching Complete", 
+                               key=f"complete_teaching_{patient_id}", 
+                               type="primary", 
+                               use_container_width=True):
+                        # Update all prescriptions for this patient to 'filled' status
+                        conn = sqlite3.connect(db.db_name)
+                        cursor = conn.cursor()
+                        
+                        # Mark all prescriptions as fully completed (taught)
+                        cursor.execute('''
+                            UPDATE prescriptions 
+                            SET status = 'filled', teaching_completed = ?, teaching_notes = ?
+                            WHERE visit_id = ? AND status = 'awaiting_teaching'
+                        ''', (datetime.now().isoformat(), teaching_notes, patient_data['visit_id']))
+                        
+                        # Update visit status to completed
+                        cursor.execute('''
+                            UPDATE visits 
+                            SET status = 'completed', completion_time = ?
+                            WHERE visit_id = ?
+                        ''', (datetime.now().isoformat(), patient_data['visit_id']))
+                        
+                        conn.commit()
+                        conn.close()
+                        
+                        # Broadcast completion to all connected devices
+                        broadcast_to_clients(f"patient_teaching_complete:{patient_data['name']}:medications_taught")
+                        
+                        st.success(f"✅ Medication teaching completed for {patient_data['name']}! Patient visit is now complete.")
+                        st.rerun()
+                
+                st.markdown("---")
+    else:
+        st.info("No patients awaiting medication teaching.")
 
 
 def filled_prescriptions():

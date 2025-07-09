@@ -273,6 +273,15 @@ This is a comprehensive Streamlit-based medical clinic charting application desi
   - Updated all urinalysis forms (input, editing, and display) to include bilirubin
   - Enhanced lab workflow with comprehensive 11-parameter urinalysis panel
   - Updated urinalysis headings from "10-Parameter" to "11-Parameter" throughout system
+- July 9, 2025. Implemented medication teaching workflow
+  - Added "Awaiting Teaching" tab to pharmacy interface between Lab Input and Filled Prescriptions
+  - Created two-stage prescription workflow: Fill prescriptions → Teach medications → Complete visit
+  - Modified prescription filling to change status from 'filled' to 'awaiting_teaching'
+  - Added awaiting_teaching() function for medication education documentation
+  - Enhanced prescriptions table with teaching_completed and teaching_notes columns
+  - Implemented teaching completion workflow that marks prescriptions as fully 'filled' and visits as 'completed'
+  - Added WebSocket notifications for teaching completion across all devices
+  - Created visual medication cards showing dosage, frequency, duration, and indications for teaching
 - July 7, 2025. Consultation form improvements and auto-save implementation
   - Removed allergies field from doctor consultation page per user request
   - Implemented auto-save functionality for consultations - no manual save button needed
