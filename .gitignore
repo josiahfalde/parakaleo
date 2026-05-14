@@ -33,5 +33,4 @@ dist/
 node_modules/
 
 .pythonlibs
-store.jsonclinic_database.db
-clinic_database.db
+store.json

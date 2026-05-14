@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["glibcLocales", "openssh"]
+packages = ["cargo", "freetype", "glibcLocales", "lcms2", "libiconv", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "openssh", "openssl", "pkg-config", "rustc", "tcl", "tk", "zlib", "sqlite"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -58,3 +58,23 @@ externalPort = 80
 [[ports]]
 localPort = 6789
 externalPort = 3000
+
+[[ports]]
+localPort = 36793
+externalPort = 3003
+
+[[ports]]
+localPort = 37709
+externalPort = 5000
+
+[[ports]]
+localPort = 39685
+externalPort = 4200
+
+[[ports]]
+localPort = 41343
+externalPort = 3002
+
+[[ports]]
+localPort = 41921
+externalPort = 3001
